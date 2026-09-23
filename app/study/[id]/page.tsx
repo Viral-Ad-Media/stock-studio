@@ -4,6 +4,7 @@ import { marked } from "marked";
 
 marked.use({ breaks: true });
 import { sql, CaseStudy, VARIANTS } from "@/lib/db";
+import { currentWorkspaceId } from "@/lib/workspace";
 import AutoRefresh from "@/components/AutoRefresh";
 import StudyActions from "@/components/StudyActions";
 import { ArrowLeft } from "lucide-react";
@@ -11,14 +12,17 @@ import { ArrowLeft } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function StudyPage({ params }: { params: { id: string } }) {
+  const ws = await currentWorkspaceId();
+  if (!ws) notFound();
+
   const [study] = (await sql`
-    SELECT * FROM case_studies WHERE id = ${Number(params.id)}
+    SELECT * FROM case_studies WHERE id = ${Number(params.id)} AND workspace_id = ${ws}
   `) as unknown as CaseStudy[];
   if (!study) notFound();
 
   const sources = study.sources_json ?? [];
   const updates = (await sql`
-    SELECT * FROM case_studies WHERE parent_id = ${study.id} ORDER BY id DESC
+    SELECT * FROM case_studies WHERE parent_id = ${study.id} AND workspace_id = ${ws} ORDER BY id DESC
   `) as unknown as CaseStudy[];
   const variantLabel = VARIANTS.find((v) => v.value === study.variant)?.label ?? study.variant;
 

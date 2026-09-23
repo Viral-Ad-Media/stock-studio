@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { sql, CaseStudy, VARIANTS } from "@/lib/db";
+import { currentWorkspaceId } from "@/lib/workspace";
 import AutoRefresh from "@/components/AutoRefresh";
 import QueuePanel, { QueueJob } from "@/components/QueuePanel";
 import { ArrowRight } from "lucide-react";
@@ -18,26 +19,32 @@ function variantLabel(v: string) {
 }
 
 export default async function Dashboard() {
-  const pendingJobs = (await sql`
-    SELECT j.id, j.type, j.status, j.created_at,
-           COALESCE(cs.ticker, w.ticker) AS ticker,
-           cs.variant AS variant
-    FROM jobs j
-    LEFT JOIN case_studies cs ON cs.id = (j.payload->>'case_study_id')::bigint
-    LEFT JOIN watchlist w ON w.id = (j.payload->>'watchlist_id')::bigint
-    WHERE j.status IN ('pending','running')
-    ORDER BY j.id
-  `) as unknown as QueueJob[];
-  const studies = (await sql`
-    SELECT * FROM case_studies ORDER BY id DESC LIMIT 50
-  `) as unknown as CaseStudy[];
+  const ws = await currentWorkspaceId();
+
+  const pendingJobs = ws
+    ? ((await sql`
+        SELECT j.id, j.type, j.status, j.created_at,
+               COALESCE(cs.ticker, w.ticker) AS ticker,
+               cs.variant AS variant
+        FROM jobs j
+        LEFT JOIN case_studies cs ON cs.id = (j.payload->>'case_study_id')::bigint
+        LEFT JOIN watchlist w ON w.id = (j.payload->>'watchlist_id')::bigint
+        WHERE j.status IN ('pending','running') AND j.workspace_id = ${ws}
+        ORDER BY j.id
+      `) as unknown as QueueJob[])
+    : [];
+  const studies = ws
+    ? ((await sql`
+        SELECT * FROM case_studies WHERE workspace_id = ${ws} ORDER BY id DESC LIMIT 50
+      `) as unknown as CaseStudy[])
+    : [];
 
   return (
     <div>
       <AutoRefresh />
       <h1 className="text-2xl font-bold text-slate-100 mb-1">Dashboard</h1>
       <p className="text-sm text-slate-500 mb-6">
-        Fact-checked stock case studies, built by the Claude Code engine.
+        Fact-checked stock case studies, built by the research engine.
       </p>
 
       <QueuePanel jobs={pendingJobs} />

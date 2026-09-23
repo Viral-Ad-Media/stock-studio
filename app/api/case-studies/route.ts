@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { currentWorkspaceId } from "@/lib/workspace";
 
 export async function POST(req: Request) {
+  const ws = await currentWorkspaceId();
+  if (!ws) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
   const body = await req.json();
   const ticker = String(body.ticker ?? "").trim().toUpperCase();
   if (!ticker) {
@@ -17,7 +21,7 @@ export async function POST(req: Request) {
 
   if (variant === "movers_digest") {
     const [pending] = await sql`
-      SELECT id FROM jobs WHERE type = 'movers_digest' AND status IN ('pending','running')
+      SELECT id FROM jobs WHERE type = 'movers_digest' AND status IN ('pending','running') AND workspace_id = ${ws}
     `;
     if (pending) {
       return NextResponse.json({ error: "A movers digest is already queued" }, { status: 409 });
@@ -26,13 +30,13 @@ export async function POST(req: Request) {
 
   const id = await sql.begin(async (tx) => {
     const [study] = await tx`
-      INSERT INTO case_studies (ticker, company, variant, status, notes, parent_id)
-      VALUES (${ticker}, ${body.company ? String(body.company).trim() : null}, ${variant}, 'queued',
+      INSERT INTO case_studies (workspace_id, ticker, company, variant, status, notes, parent_id)
+      VALUES (${ws}, ${ticker}, ${body.company ? String(body.company).trim() : null}, ${variant}, 'queued',
               ${body.notes ? String(body.notes).trim() : null}, ${body.parent_id ?? null})
       RETURNING id
     `;
     await tx`
-      INSERT INTO jobs (type, payload) VALUES (${jobType}, ${sql.json({ case_study_id: study.id })})
+      INSERT INTO jobs (workspace_id, type, payload) VALUES (${ws}, ${jobType}, ${sql.json({ case_study_id: study.id })})
     `;
     return study.id;
   });
