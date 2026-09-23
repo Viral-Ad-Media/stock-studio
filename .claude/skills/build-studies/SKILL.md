@@ -62,6 +62,7 @@ Never invent missing quarters, metrics, forecasts, or multiples. If a metric is 
 - `comparison` — the ticker field holds multiple tickers ("AAPL vs MSFT"); markdown table across growth, margins, valuation, moat + 2-3 sentences on who looks best-positioned.
 - `earnings_update` — a **delta, not a rebuild**: headline numbers vs estimates, what changed since the parent study (its content is in the job context as `parent_study`), market reaction if known, updated per-card verdicts if the thesis shifted.
 - `one_candle` — intraday setup check using the **one-candle trading methodology** (see below), not a business-quality study.
+- `davinci_model` — liquidity-sweep setup check using the **Da Vinci liquidity model** (see below), not a business-quality study.
 - `movers_digest` — the morning **market movers digest** (job type `movers_digest`, see below).
 
 ## Market movers digest jobs (`variant = movers_digest`)
@@ -91,6 +92,35 @@ If the `anthropic-skills:one-candle-trading` skill is available, invoke it — i
 **Hard safety rules for this variant**: educational analysis of a framework only — never place, recommend, or urge a live trade, never connect to a brokerage, never promise profitability. If the user's notes ask for a live buy/sell command, output the checklist and risk criteria instead of a directive. Close with: *"Educational framework analysis — not a trade recommendation. Paper trade / backtest and follow your own risk rules."* (this replaces the standard footer for this variant).
 
 **Quality check before completing each job**: as-of line present · ticker/quarter correct · claims cited · matching periods for growth math · conflicting figures shown side by side · risks + change-my-mind triggers specific · closing line punchy but not hype.
+
+## Da Vinci liquidity model jobs (`variant = davinci_model`)
+
+**Source and epistemic framing — read before writing anything**: this is a single trader's proprietary, self-named framework ("the Da Vinci model") taught in one YouTube interview (Chart Fanatics channel, guest trader). It is **not** an official, industry-standard, or independently backtested strategy — no win-rate statistics, sample size, or backtest data were given, only the source trader's own claims ("incredible" win rate, occasional 1:10+ R:R). Every `davinci_model` study must say plainly, near the top, that this is one trader's taught framework, not a verified edge, and must not repeat his win-rate/R:R claims as if they were established fact — attribute them explicitly ("the source trader claims...").
+
+**Get real data first**: `npm run history -- <TICKER> [--interval 1m|5m|15m|30m|60m|1d|1wk] [--range 1d|5d|1mo|3mo|6mo|1y|2y|5y]` (run from this project folder) fetches a real OHLC series at the requested interval/range from Yahoo's public chart API. Pick the interval/range from the user's notes if given (the model is fractal — it can be evaluated on any timeframe); otherwise default to `--interval 5m --range 5d` for an intraday read. Yahoo may return less history than requested — check `first_candle_time`/`last_candle_time` in the output, don't assume the full range was honored. Identify every swing high/low, sweep, and reaction **strictly from the fetched candles** — never invent a swing point or a sweep that isn't actually in the data. If data is unavailable or insufficient to evaluate the model, fail the job rather than fabricating structure.
+
+**The methodology** (evaluate strictly from the fetched candles; mirror the steps for a bearish setup by inverting highs/lows and buyers/sellers):
+
+1. **Opposing-side liquidity swept first.** Price must first trade through (sweep) a prior swing low from the left (for a bullish setup) — this is what validates looking for a buy at all. (Bearish: a prior swing high swept.)
+2. **Reaction begins, inducing early counter-trend entries.** Price reacts off that sweep and starts moving in the new direction, drawing in early buyers (bullish) or sellers (bearish) who are trading the reaction itself.
+3. **"Engineered liquidity" point prints.** Price forms a new local low that *respects* (stays above) the swept low — i.e. it doesn't make a new low — before continuing the reaction. This local low is the engineered-liquidity point: the market "communicating" that resting liquidity (stops of the early buyers from step 2) is building there. **No engineered-liquidity point forming = the model is not active — do not force a setup that isn't there.**
+4. **Model activates.** Once step 3's reaction off that point is confirmed, start watching for the actual entry.
+5. **Engineered-liquidity point gets swept.** Price runs back down and trades through the engineered-liquidity low from step 3, trapping the early buyers from step 2 (and any retail traders who bought there off structure/Fibonacci/an order block).
+6. **Entry** — right at/after that sweep in step 5. The source trader is explicit that waiting for extra confirmation (e.g. a fair value gap at that low) is unnecessary "over-refining" that causes missed entries for this model; don't add a stricter bar than the source teaches.
+7. **Stop loss** — just beyond the swept engineered-liquidity point from step 5.
+8. **Target** — the original opposing-side liquidity from step 1 (or, if already swept, the next untaken liquidity pool in that direction). Do not reverse directional bias until that level is meaningfully taken out.
+
+**Invalidation ≠ wrong direction.** If price sweeps the engineered-liquidity point but the move fails (stopped out before reaching target), the source trader's rule is: that doesn't invalidate the directional idea by itself — it may just mean the entry was early. Wait for a **fresh** instance of steps 2–5 (a new set of early counter-trend traders getting induced and swept) before considering re-entry. Only mark the setup fully invalidated if the opposing higher-level structure that justified the direction is itself broken.
+
+**Not a pure pattern trade.** The source trader is explicit that spotting this shape alone is not sufficient grounds to trade it — there must be independent directional logic (e.g. higher-timeframe structure, other intact highs/lows) supporting the trade direction. Say so in the study, and don't manufacture that independent logic if the fetched data doesn't support it — report "insufficient information" instead.
+
+**Fractal/multi-timeframe use** (per the source): a higher-timeframe instance of the model can set overall bias while a lower-timeframe instance nested inside that move provides the entry — this stacking is where the source trader claims R:R gets most extreme. If you fetch multiple timeframes for one ticker, say explicitly which timeframe is being used for bias vs. entry.
+
+**Output** using the same Setup Analysis shape as `one_candle` — verdict (valid setup / invalid setup / insufficient information), key levels (the step-1 opposing liquidity, the step-3 engineered-liquidity point, the target), a step-by-step confirmation table (steps 1–8 above, pass/fail/unclear with the exact candle timestamps and prices from the fetched data), and the trade plan **only if the setup is fully valid through step 5**. Open with the usual "As of [date]" line, and state the instrument, timeframe/interval, and date range evaluated explicitly. Include the source attribution line near the top (see framing note above).
+
+**Hard safety rules for this variant** (same spirit as `one_candle`): educational analysis of a framework only — never place, recommend, or urge a live trade, never connect to a brokerage, never promise profitability, never repeat the source trader's win-rate or R:R claims as verified fact. If the user's notes ask for a live buy/sell command, output the checklist and risk criteria instead of a directive. Close with: *"Educational breakdown of a trader-taught liquidity framework — not a verified trading edge, not a trade recommendation. Paper trade / backtest and follow your own risk rules."* (this replaces the standard footer for this variant, same as `one_candle`'s).
+
+**Quality check before completing each job**: as-of line present · source attribution present and claims properly hedged · instrument/timeframe/date range stated · every swing point and sweep traceable to an actual candle in the fetched data · steps 1–8 evaluated in order with clear pass/fail/unclear · independent directional logic addressed (present, absent, or unknown) · no live trade directive.
 
 ## Watchlist jobs
 

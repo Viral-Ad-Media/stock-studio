@@ -8,6 +8,7 @@
     "start": "next start -p 3200",
     "engine": "tsx scripts/engine.ts",
     "candles": "tsx scripts/candles.ts",
+    "history": "tsx scripts/history.ts",
     "movers": "tsx scripts/movers.ts"
   },
   "dependencies": {
