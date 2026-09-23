@@ -52,6 +52,7 @@ export const VARIANTS: { value: string; label: string; hint: string }[] = [
   { value: "script", label: "Video script", hint: "Voiceover lines + on-screen text per card" },
   { value: "comparison", label: "Comparison", hint: "Two or more tickers, side by side" },
   { value: "one_candle", label: "One-candle setup check", hint: "Opening 5-min range → FVG → retest → engulfing checklist (intraday, educational)" },
+  { value: "davinci_model", label: "Da Vinci liquidity model check", hint: "Engineered-liquidity sweep → reaction → retest → entry, as taught in a specific trader interview (educational)" },
   { value: "earnings_update", label: "Earnings reaction", hint: "Post-earnings delta vs. the prior study" },
   { value: "movers_digest", label: "Market movers digest", hint: "Today's top gainers & losers with a short story on each" },
 ];

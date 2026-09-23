@@ -65,6 +65,24 @@ educational framework analysis: no live trade directives, no brokerage connectio
 profitability promises; its footer is "Educational framework analysis — not a trade
 recommendation."
 
+## Da Vinci liquidity model checks
+
+The `davinci_model` study variant runs a **single trader's self-named "Da Vinci model"** (taught in
+one YouTube interview — not an official or backtested strategy; every study must say so plainly and
+attribute the source trader's win-rate/R:R claims rather than repeating them as fact): sweep of
+opposing-side liquidity → reaction → an "engineered liquidity" swing point that respects the swept
+level → that point gets swept, trapping early counter-trend traders → entry there → stop beyond it
+→ target the original opposing liquidity. Fractal across timeframes — a higher-timeframe instance
+can set bias while a lower-timeframe instance provides entry. Real data comes from:
+
+```bash
+npm run history -- <TICKER> [--interval 1m|5m|15m|30m|60m|1d|1wk] [--range 1d|5d|1mo|3mo|6mo|1y|2y|5y]
+```
+
+Never invent a swing point or sweep that isn't in the fetched candles. Strictly educational, same
+"no trade directive" rules as `one_candle`; its footer is "Educational breakdown of a trader-taught
+liquidity framework — not a verified trading edge, not a trade recommendation."
+
 ## Market movers digest
 
 The `movers_digest` variant (ticker `MARKET`, job type `movers_digest`) is a morning digest of
@@ -106,5 +124,5 @@ Hosted on Vercel (project `stock-studio`). The deployment is gated by a shared p
 (`ADMIN_PASSWORD` env; middleware sets a `stocks_key` cookie) — set it in the Vercel dashboard and
 redeploy to lock it down; unset, the app is open (fine for local dev, not for production). No
 other external services or API keys — all research happens through Claude Code's own web tools
-(WebSearch/WebFetch) plus the unauthenticated Yahoo Finance endpoints used by `npm run candles`
-and `npm run movers`.
+(WebSearch/WebFetch) plus the unauthenticated Yahoo Finance endpoints used by `npm run candles`,
+`npm run history`, and `npm run movers`.
