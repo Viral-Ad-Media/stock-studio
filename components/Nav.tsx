@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LayoutDashboard, FilePlus2, Eye, CandlestickChart } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 const links = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -10,8 +11,16 @@ const links = [
   { href: "/watchlist", label: "Watchlist", icon: Eye },
 ];
 
-export default function Nav() {
+export default function Nav({ userEmail }: { userEmail: string | null }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function signOut() {
+    await createClient().auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
+
   return (
     <nav className="w-56 shrink-0 border-r border-ink-700 bg-ink-900 p-4 flex flex-col gap-1">
       <div className="flex items-center gap-2 px-2 py-3 mb-4">
@@ -38,9 +47,15 @@ export default function Nav() {
           </Link>
         );
       })}
-      <div className="mt-auto px-3 py-3 text-[11px] text-slate-600 leading-relaxed">
-        Engine: Claude Code drains the jobs queue — run{" "}
-        <code className="text-emerald-500">/build-studies</code> in this folder.
+      <div className="mt-auto pt-3 border-t border-ink-800">
+        {userEmail && <div className="px-3 py-1 text-[11px] text-slate-500 truncate">{userEmail}</div>}
+        <button
+          onClick={signOut}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-ink-800 hover:text-slate-200"
+        >
+          <LogOut className="w-4 h-4" />
+          Sign out
+        </button>
       </div>
     </nav>
   );

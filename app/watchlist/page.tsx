@@ -1,13 +1,17 @@
 import { sql, WatchlistRow } from "@/lib/db";
+import { currentWorkspaceId } from "@/lib/workspace";
 import AutoRefresh from "@/components/AutoRefresh";
 import WatchlistClient from "@/components/WatchlistClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function WatchlistPage() {
-  const rows = (await sql`
-    SELECT * FROM watchlist ORDER BY updated_at DESC
-  `) as unknown as WatchlistRow[];
+  const ws = await currentWorkspaceId();
+  const rows = ws
+    ? ((await sql`
+        SELECT * FROM watchlist WHERE workspace_id = ${ws} ORDER BY updated_at DESC
+      `) as unknown as WatchlistRow[])
+    : [];
 
   return (
     <div>

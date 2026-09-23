@@ -1,41 +1,56 @@
+import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 
-// Simple shared-password gate: /api/login sets a cookie holding the SHA-256 of
-// ADMIN_PASSWORD; everything else requires it. Keeps the hosted studio off
-// the open internet.
-
-async function expectedToken(): Promise<string | null> {
-  const pw = process.env.ADMIN_PASSWORD;
-  if (!pw) return null; // no password configured → gate disabled (local dev)
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(pw));
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
+// Real auth gate: requires a valid Supabase session. Refreshes the session
+// cookie on every request (required by @supabase/ssr so server components
+// always see a fresh token) and redirects signed-out users to /login.
 export async function middleware(req: NextRequest) {
-  const token = await expectedToken();
-  if (!token) {
-    // Fail closed in production: an unconfigured studio must not be publicly
-    // writable. Local dev (no ADMIN_PASSWORD) stays open.
+  let res = NextResponse.next({ request: req });
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    // Unconfigured deployment must not be silently open.
     if (process.env.NODE_ENV === "production") {
       return new NextResponse(
-        "Locked: set the ADMIN_PASSWORD environment variable in Vercel and redeploy.",
+        "Locked: set NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY and redeploy.",
         { status: 503 }
       );
     }
-    return NextResponse.next();
+    return res;
   }
-  if (req.cookies.get("stocks_key")?.value === token) return NextResponse.next();
 
-  if (req.nextUrl.pathname.startsWith("/api/")) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const supabase = createServerClient(url, key, {
+    cookies: {
+      getAll() {
+        return req.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value));
+        res = NextResponse.next({ request: req });
+        cookiesToSet.forEach(({ name, value, options }) => res.cookies.set(name, value, options));
+      },
+    },
+  });
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    if (req.nextUrl.pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+    const login = req.nextUrl.clone();
+    login.pathname = "/login";
+    return NextResponse.redirect(login);
   }
-  const login = req.nextUrl.clone();
-  login.pathname = "/login";
-  return NextResponse.redirect(login);
+
+  return res;
 }
 
 export const config = {
-  matcher: ["/((?!login|api/login|_next/static|_next/image|favicon.ico|assets).*)"],
+  matcher: [
+    "/((?!login|signup|auth/callback|_next/static|_next/image|favicon.ico|assets).*)",
+  ],
 };

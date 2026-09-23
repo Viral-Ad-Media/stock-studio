@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { currentWorkspaceId } from "@/lib/workspace";
 
 export async function POST(req: Request) {
+  const ws = await currentWorkspaceId();
+  if (!ws) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
   const body = await req.json();
   const ticker = String(body.ticker ?? "").trim().toUpperCase();
   if (!ticker) {
@@ -10,15 +14,15 @@ export async function POST(req: Request) {
 
   const id = await sql.begin(async (tx) => {
     const [row] = await tx`
-      INSERT INTO watchlist (ticker, company, case_study_id)
-      VALUES (${ticker}, ${body.company ?? null}, ${body.case_study_id ?? null})
-      ON CONFLICT (ticker) DO UPDATE SET
+      INSERT INTO watchlist (workspace_id, ticker, company, case_study_id)
+      VALUES (${ws}, ${ticker}, ${body.company ?? null}, ${body.case_study_id ?? null})
+      ON CONFLICT (workspace_id, ticker) DO UPDATE SET
         company = COALESCE(excluded.company, watchlist.company),
         case_study_id = COALESCE(excluded.case_study_id, watchlist.case_study_id),
         updated_at = now()
       RETURNING id
     `;
-    await tx`INSERT INTO jobs (type, payload) VALUES ('watchlist_entry', ${sql.json({ watchlist_id: row.id })})`;
+    await tx`INSERT INTO jobs (workspace_id, type, payload) VALUES (${ws}, 'watchlist_entry', ${sql.json({ watchlist_id: row.id })})`;
     return row.id;
   });
 
@@ -26,32 +30,38 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  const ws = await currentWorkspaceId();
+  if (!ws) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
   const body = await req.json();
   const id = Number(body.id);
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   if (body.status_tag) {
-    await sql`UPDATE watchlist SET status_tag = ${String(body.status_tag)}, updated_at = now() WHERE id = ${id}`;
+    await sql`UPDATE watchlist SET status_tag = ${String(body.status_tag)}, updated_at = now() WHERE id = ${id} AND workspace_id = ${ws}`;
   }
   if (body.requeue) {
     const [existing] = await sql`
-      SELECT id FROM jobs WHERE type = 'watchlist_entry' AND status = 'pending'
+      SELECT id FROM jobs WHERE type = 'watchlist_entry' AND status = 'pending' AND workspace_id = ${ws}
       AND (payload->>'watchlist_id')::bigint = ${id}
     `;
     if (!existing) {
-      await sql`INSERT INTO jobs (type, payload) VALUES ('watchlist_entry', ${sql.json({ watchlist_id: id })})`;
+      await sql`INSERT INTO jobs (workspace_id, type, payload) VALUES (${ws}, 'watchlist_entry', ${sql.json({ watchlist_id: id })})`;
     }
   }
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(req: Request) {
+  const ws = await currentWorkspaceId();
+  if (!ws) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
   const id = Number(new URL(req.url).searchParams.get("id"));
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
   await sql.begin(async (tx) => {
-    await tx`DELETE FROM watchlist WHERE id = ${id}`;
+    await tx`DELETE FROM watchlist WHERE id = ${id} AND workspace_id = ${ws}`;
     await tx`
-      DELETE FROM jobs WHERE status = 'pending' AND type = 'watchlist_entry'
+      DELETE FROM jobs WHERE status = 'pending' AND type = 'watchlist_entry' AND workspace_id = ${ws}
       AND (payload->>'watchlist_id')::bigint = ${id}
     `;
   });
