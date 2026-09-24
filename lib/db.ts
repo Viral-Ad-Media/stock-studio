@@ -34,13 +34,12 @@ declare global {
   var __stocksSql: ReturnType<typeof postgres> | undefined;
 }
 
-function createClient() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not set");
+function createClient(url: string | undefined = process.env.DATABASE_URL, envName = "DATABASE_URL", max = 5) {
+  if (!url) throw new Error(`${envName} is not set`);
   return postgres(url, {
     ssl: "require",
     prepare: false, // required for Supabase transaction pooler
-    max: 5,
+    max,
     types: {
       bigint: {
         to: 20,
@@ -63,5 +62,25 @@ export const sql = new Proxy(function () {} as unknown as ReturnType<typeof post
   apply: (_target, _thisArg, args) => (getClient() as any)(...args),
   get: (_target, prop) => (getClient() as any)[prop],
 }) as ReturnType<typeof postgres>;
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __stocksBillingSql: ReturnType<typeof postgres> | undefined;
+}
+
+// Separate connection for the Stripe webhook only, as the stocks_billing role:
+// the one role allowed to call fulfill_checkout / refund_payment (the app's
+// stocks_app role can't). Never use this anywhere else.
+export const billingSql = new Proxy(function () {} as unknown as ReturnType<typeof postgres>, {
+  apply: (_target, _thisArg, args) => (getBillingClient() as any)(...args),
+  get: (_target, prop) => (getBillingClient() as any)[prop],
+}) as ReturnType<typeof postgres>;
+
+function getBillingClient() {
+  if (!globalThis.__stocksBillingSql) {
+    globalThis.__stocksBillingSql = createClient(process.env.BILLING_DATABASE_URL, "BILLING_DATABASE_URL", 2);
+  }
+  return globalThis.__stocksBillingSql;
+}
 
 export * from "./shared";

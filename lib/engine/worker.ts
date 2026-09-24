@@ -1,11 +1,12 @@
+import type { TransactionSql } from "postgres";
 import { sql } from "@/lib/db";
-import { refundJobCredits } from "@/lib/billing";
 import { fetchOpeningCandle, fetchHistory, fetchMovers } from "@/lib/marketdata";
 import {
   researchWithWebSearch,
   writeFromData,
   extractStructured,
   isPermanentAnthropicFailure,
+  PermanentJobError,
 } from "./anthropic";
 import {
   systemPromptWithWebSearch,
@@ -21,18 +22,30 @@ import {
 
 const MAX_ATTEMPTS = 3;
 // Total wall-clock this invocation may spend, kept under the route's
-// maxDuration (300s). A new job is only claimed if a worst-case job still
-// fits in what's left — otherwise a claim at t=239s would run past the
-// host's kill and the job would sit "running" until the stale-lock window.
+// maxDuration (300s). Every Anthropic/Yahoo call is bounded by this deadline
+// (lib/engine/anthropic.ts), so a job either finishes or fails cleanly inside
+// the invocation instead of being killed mid-flight.
 const INVOCATION_BUDGET_MS = Number(process.env.ENGINE_INVOCATION_BUDGET_MS ?? 280_000);
-const WORST_CASE_JOB_MS = Number(process.env.ENGINE_WORST_CASE_JOB_MS ?? 200_000);
+// Don't start another job with less than this left — it would only time out.
+const MIN_CLAIM_MS = Number(process.env.ENGINE_MIN_CLAIM_MS ?? 150_000);
 // General research variants (full, memo, watchlist, movers…) depend on the
 // hosted web_search tool, whose output quality hasn't been validated against
 // the interactive /build-studies bar yet. Off by default: those jobs stay
 // pending for the manual path; only OHLC-only variants are automated.
 const INCLUDE_WEB_RESEARCH = process.env.ENGINE_WEB_RESEARCH === "1";
 
-type CaseStudyMeta = { company?: string | null; as_of_date: string; corrections_md?: string | null };
+// What customers see on a failed study. Raw error text (API bodies, config
+// hints) stays in jobs.result for the operator.
+const GENERIC_FAILURE = "We couldn't build this report. Your credits have been refunded.";
+
+type Job = {
+  id: number;
+  type: string;
+  payload: { case_study_id?: number; watchlist_id?: number };
+  attempts: number;
+};
+type Tx = TransactionSql<{}>;
+type CaseStudyMeta = { company?: string | null; as_of_date?: string | null; corrections_md?: string | null };
 type WatchlistEntry = {
   company?: string | null;
   as_of_date: string;
@@ -42,10 +55,74 @@ type WatchlistEntry = {
   status_tag: "watching" | "building_conviction" | "pass";
 };
 
-async function processCaseStudy(job: any) {
-  const caseStudyId = job.payload.case_study_id;
-  const [study] = await sql`SELECT * FROM case_studies WHERE id = ${caseStudyId}`;
-  if (!study) throw new Error(`case_studies row ${caseStudyId} not found`);
+// The study row was deleted while its job was running. The research was
+// already paid for, so this fails the job without a refund.
+class StudyGoneError extends Error {}
+
+// Notes are free text ("check Monday's session"); only an explicit
+// YYYY-MM-DD in them selects a session date. Otherwise: latest session.
+function sessionDateFromNotes(notes: string | null): string | undefined {
+  return notes?.match(/\b\d{4}-\d{2}-\d{2}\b/)?.[0];
+}
+
+// If structured extraction fails, the study itself is still good — take the
+// "As of" date straight from its first line rather than redoing the research.
+function fallbackMeta(content: string): CaseStudyMeta {
+  const m = content.match(/As of\**:?\**\s*\**\s*([A-Z][a-z]+\.? \d{1,2}, \d{4})/);
+  return { as_of_date: m?.[1] ?? null };
+}
+
+async function studyMeta(content: string, deadline: number): Promise<CaseStudyMeta> {
+  try {
+    return await extractStructured<CaseStudyMeta>({
+      researchedText: content,
+      instructions: CASE_STUDY_META_TOOL.instructions,
+      toolName: CASE_STUDY_META_TOOL.toolName,
+      schema: CASE_STUDY_META_TOOL.schema,
+      deadline,
+    });
+  } catch (err) {
+    console.warn("engine: meta extraction failed, using fallback", err);
+    return fallbackMeta(content);
+  }
+}
+
+async function markDone(tx: Tx, jobId: number) {
+  await tx`UPDATE jobs SET status = 'done', result = 'ok', locked_at = NULL, updated_at = now() WHERE id = ${jobId}`;
+}
+
+async function writeStudy(
+  job: Job,
+  caseStudyId: number,
+  content: string,
+  sources: { title: string; url: string }[],
+  meta: CaseStudyMeta
+) {
+  // Study and job flip together — no window where the study is ready but the
+  // job still looks unfinished.
+  await sql.begin(async (tx) => {
+    const updated = await tx`
+      UPDATE case_studies SET
+        status = 'ready', content_md = ${content}, error = NULL,
+        company = COALESCE(${meta.company ?? null}, company),
+        as_of_date = COALESCE(${meta.as_of_date ?? null}, as_of_date),
+        sources_json = COALESCE(${sources.length ? sql.json(sources) : null}, sources_json),
+        corrections_md = COALESCE(${meta.corrections_md ?? null}, corrections_md),
+        updated_at = now()
+      WHERE id = ${caseStudyId}
+      RETURNING id
+    `;
+    if (!updated.length) throw new StudyGoneError(`case_studies row ${caseStudyId} was deleted`);
+    await markDone(tx, job.id);
+  });
+}
+
+async function processCaseStudy(job: Job, deadline: number) {
+  const caseStudyId = job.payload.case_study_id!;
+  const [study] = await sql`
+    SELECT id, ticker, company, variant, notes, parent_id FROM case_studies WHERE id = ${caseStudyId}
+  `;
+  if (!study) throw new StudyGoneError(`case_studies row ${caseStudyId} not found`);
 
   let parentStudyMarkdown: string | null = null;
   if (job.type === "earnings_update" && study.parent_id) {
@@ -57,10 +134,11 @@ async function processCaseStudy(job: any) {
   let sources: { title: string; url: string }[] = [];
 
   if (study.variant === "one_candle") {
-    const data = await fetchOpeningCandle(study.ticker, study.notes ?? undefined);
+    const data = await fetchOpeningCandle(study.ticker, sessionDateFromNotes(study.notes));
     const res = await writeFromData({
       system: systemPromptFromDataOnly(),
       prompt: oneCandlePrompt(study.ticker, study.notes, data),
+      deadline,
     });
     content = res.text;
   } else if (study.variant === "davinci_model") {
@@ -68,6 +146,7 @@ async function processCaseStudy(job: any) {
     const res = await writeFromData({
       system: systemPromptFromDataOnly(),
       prompt: davinciModelPrompt(study.ticker, study.notes, data),
+      deadline,
     });
     content = res.text;
   } else {
@@ -80,129 +159,130 @@ async function processCaseStudy(job: any) {
         notes: study.notes,
         parentStudyMarkdown,
       }),
+      deadline,
     });
     content = res.text;
     sources = res.sources;
   }
 
-  const meta = await extractStructured<CaseStudyMeta>({
-    researchedText: content,
-    instructions: CASE_STUDY_META_TOOL.instructions,
-    toolName: CASE_STUDY_META_TOOL.toolName,
-    schema: CASE_STUDY_META_TOOL.schema,
-  });
-
-  await sql`
-    UPDATE case_studies SET
-      status = 'ready', content_md = ${content}, error = NULL,
-      company = COALESCE(${meta.company ?? null}, company),
-      as_of_date = COALESCE(${meta.as_of_date ?? null}, as_of_date),
-      sources_json = COALESCE(${sources.length ? sql.json(sources) : null}, sources_json),
-      corrections_md = COALESCE(${meta.corrections_md ?? null}, corrections_md),
-      updated_at = now()
-    WHERE id = ${caseStudyId}
-  `;
+  await writeStudy(job, caseStudyId, content, sources, await studyMeta(content, deadline));
 }
 
-async function processMoversDigest(job: any) {
-  const caseStudyId = job.payload.case_study_id;
+async function processMoversDigest(job: Job, deadline: number) {
   const moversData = await fetchMovers(5);
   const res = await researchWithWebSearch({
     system: systemPromptWithWebSearch(),
     prompt: moversDigestPrompt(moversData),
+    deadline,
   });
-  const meta = await extractStructured<CaseStudyMeta>({
-    researchedText: res.text,
-    instructions: CASE_STUDY_META_TOOL.instructions,
-    toolName: CASE_STUDY_META_TOOL.toolName,
-    schema: CASE_STUDY_META_TOOL.schema,
-  });
-
-  await sql`
-    UPDATE case_studies SET
-      status = 'ready', content_md = ${res.text}, error = NULL,
-      as_of_date = COALESCE(${meta.as_of_date ?? null}, as_of_date),
-      sources_json = COALESCE(${res.sources.length ? sql.json(res.sources) : null}, sources_json),
-      updated_at = now()
-    WHERE id = ${caseStudyId}
-  `;
+  const meta = await studyMeta(res.text, deadline);
+  await writeStudy(job, job.payload.case_study_id!, res.text, res.sources, { as_of_date: meta.as_of_date });
 }
 
-async function processWatchlistEntry(job: any) {
-  const watchlistId = job.payload.watchlist_id;
-  const [row] = await sql`SELECT * FROM watchlist WHERE id = ${watchlistId}`;
-  if (!row) throw new Error(`watchlist row ${watchlistId} not found`);
+async function processWatchlistEntry(job: Job, deadline: number) {
+  const watchlistId = job.payload.watchlist_id!;
+  const [row] = await sql`SELECT id, ticker, company FROM watchlist WHERE id = ${watchlistId}`;
+  if (!row) throw new StudyGoneError(`watchlist row ${watchlistId} not found`);
 
   const research = await researchWithWebSearch({
     system: systemPromptWithWebSearch(),
     prompt: watchlistResearchPrompt(row.ticker, row.company),
+    deadline,
   });
   const entry = await extractStructured<WatchlistEntry>({
     researchedText: research.text,
     instructions: WATCHLIST_ENTRY_TOOL.instructions,
     toolName: WATCHLIST_ENTRY_TOOL.toolName,
     schema: WATCHLIST_ENTRY_TOOL.schema,
+    deadline,
   });
+  const triggers = Array.isArray(entry.triggers) ? entry.triggers.map(String) : null;
+  const statusTag = ["watching", "building_conviction", "pass"].includes(entry.status_tag) ? entry.status_tag : null;
 
-  await sql`
-    UPDATE watchlist SET
-      thesis = ${entry.thesis},
-      snapshot = COALESCE(${entry.snapshot ?? null}, snapshot),
-      triggers_json = COALESCE(${entry.triggers ? sql.json(entry.triggers) : null}, triggers_json),
-      as_of_date = COALESCE(${entry.as_of_date ?? null}, as_of_date),
-      company = COALESCE(${entry.company ?? null}, company),
-      status_tag = COALESCE(${entry.status_tag ?? null}, status_tag),
-      updated_at = now()
-    WHERE id = ${watchlistId}
-  `;
+  await sql.begin(async (tx) => {
+    const updated = await tx`
+      UPDATE watchlist SET
+        thesis = ${String(entry.thesis)},
+        snapshot = COALESCE(${entry.snapshot ?? null}, snapshot),
+        triggers_json = COALESCE(${triggers ? sql.json(triggers) : null}, triggers_json),
+        as_of_date = COALESCE(${entry.as_of_date ?? null}, as_of_date),
+        company = COALESCE(${entry.company ?? null}, company),
+        status_tag = COALESCE(${statusTag}, status_tag),
+        updated_at = now()
+      WHERE id = ${watchlistId}
+      RETURNING id
+    `;
+    if (!updated.length) throw new StudyGoneError(`watchlist row ${watchlistId} was deleted`);
+    await markDone(tx, job.id);
+  });
 }
 
-async function processJob(job: any) {
+async function processJob(job: Job, deadline: number) {
   if (job.type === "build_case_study" || job.type === "earnings_update") {
-    await processCaseStudy(job);
+    await processCaseStudy(job, deadline);
   } else if (job.type === "movers_digest") {
-    await processMoversDigest(job);
+    await processMoversDigest(job, deadline);
   } else if (job.type === "watchlist_entry") {
-    await processWatchlistEntry(job);
+    await processWatchlistEntry(job, deadline);
   } else {
-    throw new Error(`Unknown job type: ${job.type}`);
+    throw new PermanentJobError(`Unknown job type: ${job.type}`);
   }
 }
 
-async function failJob(job: any, err: unknown) {
-  const message = (err instanceof Error ? err.message : String(err)).slice(0, 2000);
-  await sql`UPDATE jobs SET status = 'error', result = ${message}, updated_at = now() WHERE id = ${job.id}`;
-  const payload = job.payload as Record<string, any>;
-  if (payload.case_study_id) {
-    await sql`UPDATE case_studies SET status = 'error', error = ${message}, updated_at = now() WHERE id = ${payload.case_study_id}`;
-  }
-  // The credits charged at queue time go back — the customer got nothing.
-  await refundJobCredits(job.id);
+async function failJob(job: Job, err: unknown, refund: boolean) {
+  const raw = (err instanceof Error ? err.message : String(err)).slice(0, 2000);
+  const shown = err instanceof PermanentJobError && !/API_KEY/.test(raw) ? `${raw}. Your credits have been refunded.` : GENERIC_FAILURE;
+  await sql.begin(async (tx) => {
+    await tx`UPDATE jobs SET status = 'error', result = ${raw}, locked_at = NULL, updated_at = now() WHERE id = ${job.id}`;
+    if (job.payload.case_study_id) {
+      await tx`
+        UPDATE case_studies SET status = 'error', error = ${refund ? shown : "This report was deleted while it was being built."},
+        updated_at = now() WHERE id = ${job.payload.case_study_id}
+      `;
+    }
+    // The credits charged at queue time go back — the customer got nothing.
+    if (refund) await tx`SELECT refund_job_credits(${job.id})`;
+  });
+}
+
+async function retryLater(job: Job, err: unknown) {
+  const raw = (err instanceof Error ? err.message : String(err)).slice(0, 2000);
+  await sql.begin(async (tx) => {
+    await tx`
+      UPDATE jobs SET status = 'pending', locked_at = NULL, result = ${`attempt ${job.attempts} failed: ${raw}`},
+      updated_at = now() WHERE id = ${job.id}
+    `;
+    if (job.payload.case_study_id) {
+      await tx`UPDATE case_studies SET status = 'queued', updated_at = now() WHERE id = ${job.payload.case_study_id}`;
+    }
+  });
 }
 
 export async function runWorkerLoop() {
-  const startedAt = Date.now();
+  const deadline = Date.now() + INVOCATION_BUDGET_MS;
   const processed: { job_id: number; status: "done" | "error" | "retrying" }[] = [];
 
-  while (Date.now() - startedAt + WORST_CASE_JOB_MS < INVOCATION_BUDGET_MS) {
-    const [job] = await sql`
+  while (deadline - Date.now() >= MIN_CLAIM_MS) {
+    const [job] = (await sql`
       SELECT * FROM claim_job(max_attempts => ${MAX_ATTEMPTS}, include_web_research => ${INCLUDE_WEB_RESEARCH})
-    `;
+    `) as unknown as (Job | { id: null })[];
     if (!job || job.id == null) break; // nothing left to claim
 
     try {
-      await processJob(job);
-      await sql`UPDATE jobs SET status = 'done', result = 'ok', updated_at = now() WHERE id = ${job.id}`;
+      await processJob(job, deadline);
       processed.push({ job_id: job.id, status: "done" });
     } catch (err) {
-      const permanent = isPermanentAnthropicFailure(err);
-      if (permanent || job.attempts >= MAX_ATTEMPTS) {
-        await failJob(job, err);
+      console.error(`engine: job ${job.id} attempt ${job.attempts} failed`, err);
+      if (err instanceof StudyGoneError) {
+        await failJob(job, err, false);
+        processed.push({ job_id: job.id, status: "error" });
+      } else if (isPermanentAnthropicFailure(err) || job.attempts >= MAX_ATTEMPTS) {
+        await failJob(job, err, true);
         processed.push({ job_id: job.id, status: "error" });
       } else {
         // Back to pending — the trigger/cron backstop (or this same loop,
         // if there's budget left) will pick it up again.
-        await sql`UPDATE jobs SET status = 'pending', locked_at = NULL, updated_at = now() WHERE id = ${job.id}`;
+        await retryLater(job, err);
         processed.push({ job_id: job.id, status: "retrying" });
       }
     }
