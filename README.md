@@ -197,7 +197,7 @@ other direction, the CLI refuses to claim a job the worker is holding.
 | **Trial** | Every signup gets 30 days plus 5 starter credits. The Postgres trigger `stocks.handle_new_user()` grants them server-side; nothing is read from client metadata. |
 | **Access** | `hasAccess = access_granted OR trial_ends_at > now()`. After the trial, a one-time Stripe payment sets `access_granted`. |
 | **Credits** | Charged **at queue time** in the same transaction as the job INSERT. If the balance is short the charge raises (SQLSTATE `SS402`) and the job never exists; the API returns 402. |
-| **Refunds** | Failed jobs (worker or CLI `fail`) and jobs removed from the queue are refunded automatically and idempotently. |
+| **Refunds** | Failed jobs (worker or CLI `fail`) are refunded automatically and idempotently. Jobs can be removed from the queue, and refunded, only while still `pending`. Once running, a job can't be cancelled. |
 | **Purchases** | `/billing` opens a hosted Stripe Checkout, either the access fee or a credit pack. |
 
 **The Stripe webhook is the only thing that grants access or purchased credits.**
@@ -247,6 +247,17 @@ watch the balance update.
     (Stripe signature).
 - **Checking user-supplied ids**: an id the user sends that points at another row (`parent_id`,
   `case_study_id`) is checked against the caller's workspace before it's used.
+- **Untrusted content**: study markdown is AI output built from web pages and user notes.
+  - It is always rendered through `renderMarkdown()` ([`lib/markdown.ts`](lib/markdown.ts)), a
+    sanitize-html allowlist that removes raw HTML, scripts and non-http(s) links.
+  - Source links go through `safeHttpUrl()`.
+  - User notes reach prompts only as delimited data blocks.
+  - The manual engine works one claimed job at a time; `pending` lists no customer text.
+- **Input validation**: [`lib/validate.ts`](lib/validate.ts) enforces the ticker format, known
+  variants, and length caps (notes up to 8,000 characters, company up to 200).
+- **Headers**: [`next.config.mjs`](next.config.mjs) sets a CSP that allows scripts only from the
+  app and network calls only to the app and Supabase, plus `frame-ancestors 'none'`,
+  `X-Frame-Options`, `nosniff` and `Referrer-Policy`.
 
 ---
 
@@ -285,8 +296,8 @@ All scripts read `DATABASE_URL` from `.env.local`.
 
 ```bash
 # Engine queue contract — the only way to mutate the queue by hand
-npm run engine -- pending                                    # pending/running jobs + context (JSON)
-npm run engine -- claim <jobId>                              # mark running; study shows "building"
+npm run engine -- pending                                    # pending/running job ids + labels (no customer text)
+npm run engine -- claim <jobId>                              # mark running; prints that one job's context
 npm run engine -- complete <jobId> --content s.md --meta m.json
 npm run engine -- fail <jobId> --message "why"              # also refunds the job's credits
 
@@ -386,6 +397,7 @@ These rules are non-negotiable and apply to every variant and both engine modes:
 |---|---|
 | Jobs sit in `pending` forever | Either `engine_webhook_url` in Vault is still the placeholder, or the job is a web-research variant and `ENGINE_WEB_RESEARCH` is off (run `/build-studies`). |
 | Job shows `error: Worker invocation died N times` | Runs keep getting killed (timeout or out of memory). Check the host's function logs, then consider raising `maxDuration` or lowering `ENGINE_WORST_CASE_JOB_MS`. |
+| Browser console shows a CSP violation | The page is calling an origin not in `connect-src` in `next.config.mjs`; add it there. |
 | API returns 402 | The trial has ended without an unlock (`code: no_access`) or the balance is too low (`code: no_credits`). Both are handled on `/billing`. |
 | Paid, but no access or credits | The webhook isn't reaching the app. Check the Stripe dashboard's delivery log, `STRIPE_WEBHOOK_SECRET`, and that the event carries Stock Studio metadata. |
 | Production returns 503 "Locked" | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` aren't set. |
