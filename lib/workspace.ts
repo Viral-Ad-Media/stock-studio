@@ -2,7 +2,7 @@ import { cache } from "react";
 import { sql } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
 
-export type SessionUser = { id: string; email: string | null };
+export type SessionUser = { id: string; email: string | null; name: string | null };
 
 // Supabase Auth session → user id/email. Cached per request.
 export const currentUser = cache(async (): Promise<SessionUser | null> => {
@@ -11,7 +11,15 @@ export const currentUser = cache(async (): Promise<SessionUser | null> => {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
-  return { id: user.id, email: user.email ?? null };
+  // Display name: our signup form's first/last name, or Google's profile.
+  const md = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 100) : null);
+  const name =
+    str([str(md.first_name), str(md.last_name)].filter(Boolean).join(" ")) ??
+    str(md.full_name) ??
+    str(md.name) ??
+    str([str(md.given_name), str(md.family_name)].filter(Boolean).join(" "));
+  return { id: user.id, email: user.email ?? null, name };
 });
 
 // Resolves the signed-in user's active workspace id via the app's own

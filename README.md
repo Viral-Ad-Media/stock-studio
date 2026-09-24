@@ -23,6 +23,7 @@ opens with an "As of [date]" line and ends with a "Not investment advice" line.
 - [Environment variables](#environment-variables)
 - [The research engine](#the-research-engine)
 - [Billing](#billing)
+- [Accounts & sign-in](#accounts--sign-in)
 - [Multi-tenancy & security](#multi-tenancy--security)
 - [Database](#database)
 - [CLI scripts](#cli-scripts)
@@ -237,6 +238,22 @@ watch the balance update.
 
 ---
 
+## Accounts & sign-in
+
+- **Sign up** asks for first name, last name, email and a password (at least 8 characters,
+  including a letter and a number). The names go into Supabase Auth user metadata and are used only
+  for display; nothing security-relevant is read from them. Supabase sends a confirmation email,
+  which can be re-sent from the "check your email" screen.
+- **Log in** with email and password, or **Continue with Google**.
+- **Remember me** is on by default, which keeps you signed in on that device. Unchecked, the
+  login is kept only for the browser session: the `ss_remember=0` flag makes every auth cookie a
+  session cookie (`lib/auth-cookies.ts`).
+- **Forgot password**: `/forgot-password` sends a reset link. It shows the same response whether
+  or not the account exists, so it can't be used to find registered emails. The link goes through
+  `/auth/callback` to `/reset-password`, where the new password is set.
+- The shared UI is in `components/auth/`: `AuthShell`, `PasswordInput` (show/hide toggle),
+  `GoogleButton` and `OrDivider`.
+
 ## Multi-tenancy & security
 
 - **Workspace scoping in app code**: every tenant table (`case_studies`, `jobs`, `watchlist`,
@@ -390,7 +407,15 @@ supabase/migrations/    SQL for recent migrations
      `checkout.session.completed`, `checkout.session.async_payment_succeeded` and
      `charge.refunded`.
    - Set `STRIPE_WEBHOOK_SECRET`.
-4. **Supabase Auth**: add the deploy URL (and `/auth/callback`) to the allowed redirect URLs.
+4. **Supabase Auth** (dashboard → Authentication):
+   - **URL Configuration:** set the Site URL to your deploy URL, and add
+     `https://<host>/auth/callback` (plus `http://localhost:3200/auth/callback` for dev) to the
+     redirect allowlist. Email confirmation, password reset and Google all return through it.
+   - **Google sign-in:** enable the Google provider with a Google Cloud OAuth client. Its
+     authorized redirect URI is `https://nxwehsafitrcoenbrkyv.supabase.co/auth/v1/callback`.
+     Until it's enabled, the Google button shows "Google sign-in isn't set up yet".
+   - **Emails:** the confirm-signup and reset-password templates work as is. Set up custom SMTP
+     before launch, because Supabase's built-in sender is heavily rate-limited.
 5. **Smoke test**:
    - Sign up and confirm the trial credits appear.
    - Queue a `one_candle` study and confirm it builds without any Claude Code session running.

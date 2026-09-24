@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut, CreditCard, Menu, X } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, setRememberMe } from "@/lib/supabase/client";
 
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -13,11 +13,11 @@ const links = [
   { href: "/billing", label: "Billing", icon: CreditCard },
 ];
 
-type Props = { userEmail: string | null; credits: number | null };
+type Props = { userEmail: string | null; userName: string | null; credits: number | null };
 
 // Sidebar from md up; on phones a top bar with a menu button that opens the
 // same links in a drawer (the fixed 224px sidebar left ~100px for content).
-export default function Nav({ userEmail, credits }: Props) {
+export default function Nav({ userEmail, userName, credits }: Props) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -55,7 +55,7 @@ export default function Nav({ userEmail, credits }: Props) {
             onClick={(e) => e.stopPropagation()}
           >
             <NavLinks pathname={pathname} credits={credits} />
-            <Account userEmail={userEmail} />
+            <Account userEmail={userEmail} userName={userName} />
           </nav>
         </div>
       )}
@@ -68,7 +68,7 @@ export default function Nav({ userEmail, credits }: Props) {
           <Brand withTagline />
         </div>
         <NavLinks pathname={pathname} credits={credits} />
-        <Account userEmail={userEmail} />
+        <Account userEmail={userEmail} userName={userName} />
       </nav>
     </>
   );
@@ -115,16 +115,18 @@ function NavLinks({ pathname, credits }: { pathname: string; credits: number | n
   );
 }
 
-function Account({ userEmail }: { userEmail: string | null }) {
+function Account({ userEmail, userName }: { userEmail: string | null; userName: string | null }) {
   const router = useRouter();
   async function signOut() {
     await createClient().auth.signOut();
+    setRememberMe(true); // clear the session-only flag
     router.push("/login");
     router.refresh();
   }
   return (
     <div className="mt-auto border-t border-ink-800 pt-3">
-      {userEmail && <div className="truncate px-3 py-1 text-xs text-fg-subtle">{userEmail}</div>}
+      {userName && <div className="truncate px-3 pt-1 text-sm text-slate-200">{userName}</div>}
+      {userEmail && <div className="truncate px-3 pb-1 text-xs text-fg-subtle">{userEmail}</div>}
       <button
         type="button"
         onClick={signOut}

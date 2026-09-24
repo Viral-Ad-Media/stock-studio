@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { REMEMBER_COOKIE, applyRemember, rememberFromCookieValue } from "@/lib/auth-cookies";
 
 // Server-side Supabase client — used ONLY for auth (session lookup, sign
 // in/out, PKCE code exchange). All actual data reads/writes go through
@@ -22,7 +23,10 @@ export async function createClient() {
       },
       setAll(cookiesToSet) {
         try {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+          const remember = rememberFromCookieValue(cookieStore.get(REMEMBER_COOKIE)?.value);
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, applyRemember(options, remember))
+          );
         } catch {
           // Called from a Server Component with no response to attach to
           // (middleware already refreshes the session on every request).
