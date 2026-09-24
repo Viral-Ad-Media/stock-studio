@@ -21,7 +21,9 @@ export async function GET(request: Request) {
   }
 
   const login = new URL("/login", origin);
-  login.searchParams.set("error", "auth_callback_failed");
+  // OAuth providers report cancel/deny as ?error=...; everything else is a
+  // bad or expired link.
+  login.searchParams.set("error", searchParams.get("error") ? "oauth_failed" : "auth_callback_failed");
   return NextResponse.redirect(login);
 }
 

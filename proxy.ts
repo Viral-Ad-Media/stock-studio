@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
+import { REMEMBER_COOKIE, applyRemember, rememberFromCookieValue } from "@/lib/auth-cookies";
 
 // Real auth gate: requires a valid Supabase session. Refreshes the session
 // cookie on every request (required by @supabase/ssr so server components
@@ -28,7 +29,8 @@ export async function proxy(req: NextRequest) {
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value));
         res = NextResponse.next({ request: req });
-        cookiesToSet.forEach(({ name, value, options }) => res.cookies.set(name, value, options));
+        const remember = rememberFromCookieValue(req.cookies.get(REMEMBER_COOKIE)?.value);
+        cookiesToSet.forEach(({ name, value, options }) => res.cookies.set(name, value, applyRemember(options, remember)));
       },
     },
   });

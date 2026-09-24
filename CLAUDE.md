@@ -173,6 +173,14 @@ so just move on.
    network calls only to the app and Supabase — add an origin there if the browser must reach a new
    service.
 
+## Auth
+
+Supabase Auth: email + password (signup collects first/last name into user metadata — display
+only, never trusted for anything else), Google OAuth, and password reset (`/forgot-password` →
+email link → `/auth/callback?next=/reset-password` → `/reset-password`). "Remember me" unchecked sets
+`ss_remember=0`, which makes the browser client, server client and `proxy.ts` write auth cookies as
+session cookies (`lib/auth-cookies.ts`). Shared UI lives in `components/auth/`.
+
 ## UI rules
 
 - Use the shared classes in `app/globals.css`: `btn-primary`, `btn-secondary`, `icon-btn` (36px hit
@@ -204,7 +212,7 @@ npm run dev        # app on http://localhost:3200 (needs DATABASE_URL in .env.lo
 
 Hosted on Vercel (project `stock-studio`) or Render. Next.js 16: the auth gate is `proxy.ts`
 (Next 16's rename of `middleware.ts`); it requires a Supabase session on every
-route except `/login`, `/signup`, `/auth/callback`, `/api/engine/*` (shared-secret auth) and
+route except `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/auth/callback`, `/api/engine/*` (shared-secret auth) and
 `/api/billing/webhook` (Stripe-signature auth); an unconfigured production deploy returns 503
 rather than running open. Env vars: see `.env.example` (Supabase, `ANTHROPIC_API_KEY`,
 `ENGINE_WEBHOOK_SECRET`, Stripe keys + price ids, and `NEXT_PUBLIC_APP_URL` — set it in production:
