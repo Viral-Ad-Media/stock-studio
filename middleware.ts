@@ -49,8 +49,20 @@ export async function middleware(req: NextRequest) {
   return res;
 }
 
+// Allowlist of protected paths — everything else (marketing pages, login,
+// signup, auth callback, the engine webhook) is public by default. Safer
+// than a denylist now that public routes outnumber protected ones.
 export const config = {
   matcher: [
-    "/((?!login|signup|auth/callback|api/engine|api/billing/webhook|_next/static|_next/image|favicon.ico|assets).*)",
+    "/dashboard/:path*",
+    "/new/:path*",
+    "/watchlist/:path*",
+    "/study/:path*",
+    "/api/case-studies/:path*",
+    "/api/jobs/:path*",
+    "/api/watchlist/:path*",
+    "/billing/:path*",
+    // Checkout needs a session; /api/billing/webhook stays public (Stripe-signature auth).
+    "/api/billing/checkout/:path*",
   ],
 };

@@ -7,16 +7,12 @@ import { sql } from "@/lib/db";
 // migration) — the stocks_app role has no direct INSERT/UPDATE on the ledger,
 // payments, or profiles.access_granted, so don't try to add one here.
 
-// 1 credit = 1 standard report. Deeper formats cost more.
-const CREDIT_COSTS: Record<string, number> = { memo: 2, comparison: 2 };
-export function creditCost(variant: string): number {
-  return CREDIT_COSTS[variant] ?? 1;
-}
+export { creditCost } from "@/lib/shared";
 
 // Credits granted per purchased pack (the pack's price lives in Stripe,
 // STRIPE_PRICE_CREDIT_PACK). The count is stamped into the Checkout Session
 // metadata by our own server, so the webhook never trusts a client number.
-export const CREDITS_PER_PACK = Number(process.env.STRIPE_CREDITS_PER_PACK ?? 20);
+export const CREDITS_PER_PACK = Number(process.env.STRIPE_CREDITS_PER_PACK ?? 10);
 
 export type BillingState = {
   accessGranted: boolean;

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { VARIANTS, HIDDEN_FORM_VARIANTS } from "@/lib/shared";
+import { VARIANTS, HIDDEN_FORM_VARIANTS, creditCost } from "@/lib/shared";
 
 export default function NewStudy() {
   const router = useRouter();
@@ -23,7 +23,7 @@ export default function NewStudy() {
       body: JSON.stringify({ ticker, company, variant, notes }),
     });
     if (res.ok) {
-      router.push("/");
+      router.push("/dashboard");
       router.refresh();
     } else {
       setError((await res.json()).error ?? "Something went wrong");
@@ -35,7 +35,7 @@ export default function NewStudy() {
     <div className="max-w-2xl">
       <h1 className="text-2xl font-bold text-slate-100 mb-1">New case study</h1>
       <p className="text-sm text-slate-500 mb-6">
-        Queues a job for the research engine. Costs 1 credit (deep memos and comparisons cost 2) —
+        Queues a job for the research engine. This format costs {creditCost(variant)} credits —
         refunded automatically if the build fails.
       </p>
 
@@ -102,7 +102,7 @@ export default function NewStudy() {
           disabled={busy || !ticker.trim()}
           className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium px-5 py-2.5 rounded-lg"
         >
-          {busy ? "Queuing…" : "Queue for the engine"}
+          {busy ? "Queuing…" : `Queue for the engine · ${creditCost(variant)} credits`}
         </button>
       </form>
     </div>

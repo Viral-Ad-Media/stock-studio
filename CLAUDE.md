@@ -120,7 +120,8 @@ catalyst — "no clear catalyst reported" is a valid story.
 - Trial is server-granted in `stocks.handle_new_user()` (30 days + 5 starter credits) — never
   from client metadata. `hasAccess = access_granted OR trial_ends_at > now()`.
 - Credits are charged **at queue time**, inside the same transaction as the job INSERT, via
-  `stocks.charge_job_credits()` (`lib/billing.ts`: 1 credit per report, 2 for `memo`/`comparison`).
+  `stocks.charge_job_credits()`; per-format costs live in `CREDIT_COSTS` (`lib/shared.ts`), which
+  `/pricing` also renders — change prices there only.
   Failed jobs (worker or CLI `fail`) and jobs removed from the queue are refunded via
   `stocks.refund_job_credits()` (idempotent).
 - **Invariant: the Stripe webhook (`app/api/billing/webhook`, signature-verified) is the only

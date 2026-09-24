@@ -46,8 +46,9 @@ export default async function BillingPage({ searchParams }: { searchParams: { ch
       {searchParams.checkout === "success" && <AutoRefresh />}
       <h1 className="text-2xl font-bold text-slate-100 mb-1">Billing</h1>
       <p className="text-sm text-slate-500 mb-6">
-        Every report costs credits when you queue it (deep memos and comparisons cost 2, everything else 1).
-        Failed or removed reports are refunded automatically.
+        Every report costs credits when you queue it — see{" "}
+        <a href="/pricing" className="text-emerald-400 hover:underline">pricing</a> for the per-format
+        schedule. Failed or removed reports are refunded automatically.
       </p>
 
       {searchParams.checkout === "success" && (
