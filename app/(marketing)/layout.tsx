@@ -8,23 +8,21 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-ink-800">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <CandlestickChart className="w-6 h-6 text-emerald-400" />
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+          <Link href="/" className="flex shrink-0 items-center gap-2 whitespace-nowrap">
+            <CandlestickChart className="w-6 h-6 text-emerald-400" aria-hidden />
             <span className="font-bold text-slate-100">Stock Studio</span>
           </Link>
-          <nav className="flex items-center gap-6 text-sm">
-            <Link href="/pricing" className="text-slate-400 hover:text-slate-200">
+          <nav aria-label="Main" className="flex items-center gap-3 sm:gap-6 text-sm whitespace-nowrap">
+            <Link href="/pricing" className="hidden sm:inline text-slate-400 hover:text-slate-200">
               Pricing
             </Link>
             <Link href="/login" className="text-slate-400 hover:text-slate-200">
               Sign in
             </Link>
-            <Link
-              href="/signup"
-              className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded-lg"
-            >
-              Start free trial
+            <Link href="/signup" className="btn-primary text-sm px-3 py-2 sm:px-4">
+              <span className="sm:hidden">Try free</span>
+              <span className="hidden sm:inline">Start free trial</span>
             </Link>
           </nav>
         </div>
@@ -33,7 +31,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       <main className="flex-1">{children}</main>
 
       <footer className="border-t border-ink-800 mt-auto">
-        <div className="max-w-6xl mx-auto px-6 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-sm text-slate-500">
+        <div className="max-w-6xl mx-auto px-6 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-sm text-fg-subtle">
           <div className="flex items-center gap-2">
             <CandlestickChart className="w-4 h-4 text-emerald-400" />
             <span>Stock Studio</span>
@@ -49,7 +47,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
               Privacy Policy
             </Link>
           </nav>
-          <p className="text-xs text-slate-600 max-w-md">
+          <p className="text-xs text-fg-subtle max-w-md">
             Educational business analysis, not personalized investment advice.
           </p>
         </div>

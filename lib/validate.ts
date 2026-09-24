@@ -1,9 +1,9 @@
-import { VARIANTS } from "@/lib/shared";
+import { VARIANTS, MAX_NOTES } from "@/lib/shared";
 
 // Request-body validation for routes that queue paid work. Every field here
 // ends up in an engine prompt, so shape and size are bounded.
 
-export const MAX_NOTES = 8_000;
+export { MAX_NOTES };
 export const MAX_COMPANY = 200;
 const TICKER_RE = /^[A-Z0-9.^\-]{1,12}( VS [A-Z0-9.^\-]{1,12}){0,3}$/;
 const VARIANT_VALUES = new Set(VARIANTS.map((v) => v.value));

@@ -15,9 +15,9 @@ export default async function WatchlistPage() {
 
   return (
     <div>
-      <AutoRefresh />
+      {rows.some((r) => !r.thesis) && <AutoRefresh />}
       <h1 className="text-2xl font-bold text-slate-100 mb-1">Watchlist</h1>
-      <p className="text-sm text-slate-500 mb-6">
+      <p className="text-sm text-fg-subtle mb-6">
         Compact tracker entries — thesis, triggers to watch, and a status tag. The engine fills and
         refreshes them.
       </p>

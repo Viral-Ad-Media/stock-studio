@@ -9,7 +9,7 @@ export default function TermsPage() {
       </div>
 
       <h1>Terms of Service</h1>
-      <p className="text-sm text-slate-500">Last updated: [DATE]</p>
+      <p className="text-sm text-fg-subtle">Last updated: [DATE]</p>
 
       <h2>1. What Stock Studio is</h2>
       <p>
