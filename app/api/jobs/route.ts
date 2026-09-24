@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { currentWorkspaceId } from "@/lib/workspace";
+import { refundJobCredits } from "@/lib/billing";
 
 // Remove a job from the queue. Ready studies are never touched — if the job's
 // study hasn't been built yet, the placeholder row goes with it.
@@ -27,5 +28,7 @@ export async function DELETE(req: Request) {
       `;
     }
   });
+  // The report was never delivered — its queue-time charge goes back.
+  await refundJobCredits(id);
   return NextResponse.json({ ok: true });
 }

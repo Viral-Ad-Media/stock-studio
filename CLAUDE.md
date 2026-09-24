@@ -3,11 +3,28 @@
 Stock case-study studio, hosted so it's reachable from anywhere. The Next.js app (local dev on
 port 3200, deployed on Vercel) is the visual cockpit; the database is hosted Postgres (Supabase,
 isolated `stocks` schema — same shared project as Facebook Ads Studio's `fbads` schema, different
-app, different role). **Claude Code is the research engine** — running on any machine with
-`DATABASE_URL` in `.env.local`, it drains the `jobs` queue using live web research
-(WebSearch/WebFetch) and the Stock Case Study Builder methodology
-(`anthropic-skills:stock-case-study-builder` — invoke it when available; `/build-studies` embeds
-the load-bearing rules as a fallback).
+app, different role). It is a multi-tenant SaaS: Supabase Auth accounts, one workspace per
+signup, Stripe billing (30-day trial → one-time access fee → per-report credits).
+
+## The engine runs in two modes
+
+1. **Automated worker (default for supported variants).** `app/api/engine/run` is POSTed by a
+   Postgres trigger on every `jobs` INSERT (`pg_net`) and by a `pg_cron` backstop every minute
+   (URL + shared secret in Supabase Vault: `engine_webhook_url`, `engine_webhook_secret`;
+   header `x-engine-secret` = `ENGINE_WEBHOOK_SECRET`). `lib/engine/worker.ts` claims jobs via
+   `stocks.claim_job()` (`FOR UPDATE SKIP LOCKED`, 6-min stale lock, dead-letters after 3
+   attempts) and calls the Anthropic API directly. System prompts are read from
+   `.claude/skills/build-studies/SKILL.md` — the same file the manual skill follows.
+   **Only OHLC-only variants (`one_candle`, `davinci_model`) are automated by default.** General
+   research variants need the hosted `web_search` tool, whose output hasn't been validated
+   against the interactive bar yet; set `ENGINE_WEB_RESEARCH=1` to automate them once it has.
+2. **Manual fallback — Claude Code as the engine.** Running on any machine with `DATABASE_URL`
+   in `.env.local`, `/build-studies` drains whatever the worker doesn't take, using live
+   WebSearch/WebFetch and the Stock Case Study Builder methodology
+   (`anthropic-skills:stock-case-study-builder` — invoke it when available; `/build-studies`
+   embeds the load-bearing rules as a fallback). The CLI refuses to claim a job the automated
+   worker holds (`locked_at` set); manual claims leave `locked_at` NULL so the worker never
+   steals them.
 
 ## The two skills
 
@@ -30,7 +47,10 @@ same state.
   with search_path=stocks, Supabase transaction pooler → `prepare: false`). Local dev needs
   `.env.local` (see `.env.example`).
 
-Tables: `case_studies` (the output; `parent_id` links earnings updates to the original study;
+Tables: every tenant table carries `workspace_id`; **every app query filters by
+`currentWorkspaceId()` (`lib/workspace.ts`) — never inline that lookup.** RLS is on as
+defense-in-depth. `workspaces`, `workspace_members`, `profiles` (trial/access), `credits_ledger`
+and `payments` (billing), `case_studies` (the output; `parent_id` links earnings updates to the original study;
 `sources_json`/`corrections_md` are JSONB/text), `jobs` (the queue: pending → running →
 done/error; `payload` is JSONB), `watchlist` (`triggers_json` is JSONB), `settings`. The `stocks`
 schema is revoked from the anon/authenticated API roles — only `stocks_app` and admin roles can
@@ -42,7 +62,7 @@ touch it.
 npm run engine -- pending                                   # list pending jobs + context (JSON)
 npm run engine -- claim <jobId>                             # mark running (UI shows "building")
 npm run engine -- complete <jobId> --content s.md --meta m.json
-npm run engine -- fail <jobId> --message "why"
+npm run engine -- fail <jobId> --message "why"             # also refunds the job's credits
 ```
 
 Markdown goes through `--content` files (scratchpad), metadata through `--meta` JSON — this avoids
@@ -95,10 +115,27 @@ npm run movers -- --count 5    # Yahoo day-gainers/day-losers screeners (no API 
 Queued from the dashboard button or by the weekday-morning scheduled task. Never invent a
 catalyst — "no clear catalyst reported" is a valid story.
 
+## Billing
+
+- Trial is server-granted in `stocks.handle_new_user()` (30 days + 5 starter credits) — never
+  from client metadata. `hasAccess = access_granted OR trial_ends_at > now()`.
+- Credits are charged **at queue time**, inside the same transaction as the job INSERT, via
+  `stocks.charge_job_credits()` (`lib/billing.ts`: 1 credit per report, 2 for `memo`/`comparison`).
+  Failed jobs (worker or CLI `fail`) and jobs removed from the queue are refunded via
+  `stocks.refund_job_credits()` (idempotent).
+- **Invariant: the Stripe webhook (`app/api/billing/webhook`, signature-verified) is the only
+  thing that grants access or purchased credits**, via `stocks.fulfill_checkout()` /
+  `stocks.refund_payment()` (idempotent on the Checkout Session id). The `stocks_app` role has no
+  INSERT/UPDATE on `credits_ledger`/`payments` or on `profiles.access_granted` — enforced by
+  GRANT/REVOKE, not app logic. Any new SECURITY DEFINER function must `REVOKE ALL ... FROM
+  PUBLIC, anon, authenticated` in the same migration that creates it.
+- Migrations are applied with the Supabase MCP `apply_migration`; newer ones are also kept in
+  `supabase/migrations/` for review.
+
 ## Queue hygiene
 
 Jobs can be removed from the queue in the dashboard (X button) — that deletes the job and its
-unbuilt placeholder study. Ready studies are never deleted this way. The engine must still
+unbuilt placeholder study, and refunds its credits. Ready studies are never deleted this way. The engine must still
 `complete` or `fail` every job it claims; a job that disappears mid-run was deleted by the user,
 so just move on.
 
@@ -120,9 +157,11 @@ so just move on.
 npm run dev        # app on http://localhost:3200 (needs DATABASE_URL in .env.local)
 ```
 
-Hosted on Vercel (project `stock-studio`). The deployment is gated by a shared password
-(`ADMIN_PASSWORD` env; middleware sets a `stocks_key` cookie) — set it in the Vercel dashboard and
-redeploy to lock it down; unset, the app is open (fine for local dev, not for production). No
-other external services or API keys — all research happens through Claude Code's own web tools
-(WebSearch/WebFetch) plus the unauthenticated Yahoo Finance endpoints used by `npm run candles`,
-`npm run history`, and `npm run movers`.
+Hosted on Vercel (project `stock-studio`). `middleware.ts` requires a Supabase session on every
+route except `/login`, `/signup`, `/auth/callback`, `/api/engine/*` (shared-secret auth) and
+`/api/billing/webhook` (Stripe-signature auth); an unconfigured production deploy returns 503
+rather than running open. Env vars: see `.env.example` (Supabase, `ANTHROPIC_API_KEY`,
+`ENGINE_WEBHOOK_SECRET`, Stripe keys + price ids). After deploying, set the Vault secret
+`engine_webhook_url` to `https://<host>/api/engine/run` — until then the trigger/cron POST to a
+placeholder and nothing is automated. Market data comes from the unauthenticated Yahoo Finance
+endpoints (`lib/marketdata.ts`, also behind `npm run candles` / `history` / `movers`).

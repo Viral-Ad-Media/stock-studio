@@ -2,16 +2,17 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut } from "lucide-react";
+import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut, CreditCard } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 const links = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/new", label: "New study", icon: FilePlus2 },
   { href: "/watchlist", label: "Watchlist", icon: Eye },
+  { href: "/billing", label: "Billing", icon: CreditCard },
 ];
 
-export default function Nav({ userEmail }: { userEmail: string | null }) {
+export default function Nav({ userEmail, credits }: { userEmail: string | null; credits: number | null }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -44,6 +45,11 @@ export default function Nav({ userEmail }: { userEmail: string | null }) {
           >
             <Icon className="w-4 h-4" />
             {label}
+            {href === "/billing" && credits !== null && (
+              <span className={`ml-auto text-[11px] ${credits > 0 ? "text-slate-500" : "text-red-400"}`}>
+                {credits} cr
+              </span>
+            )}
           </Link>
         );
       })}
