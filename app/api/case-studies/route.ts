@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireAppAccess, insufficientCreditsResponse } from "@/lib/access";
+import { queueLimitResponse } from "@/lib/limits";
 import { creditCost, chargeJobCredits, isInsufficientCredits, isDuplicateOpenJob } from "@/lib/billing";
 import { parseTicker, parseVariant, parseOptionalText, isInvalid, MAX_NOTES, MAX_COMPANY } from "@/lib/validate";
 
@@ -8,6 +9,8 @@ export async function POST(req: Request) {
   const gate = await requireAppAccess();
   if (!gate.ok) return gate.response;
   const { ws } = gate;
+  const limited = await queueLimitResponse(ws);
+  if (limited) return limited;
 
   const body = await req.json().catch(() => ({}));
   const ticker = parseTicker(body.ticker);
