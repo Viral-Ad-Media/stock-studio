@@ -368,8 +368,13 @@ supabase/migrations/    SQL for recent migrations
 
 ## Deployment
 
-1. **Vercel**: deploy the repo and set the env vars above. `next.config.mjs` adds
-   `SKILL.md` to the `/api/engine/run` bundle, since the worker reads it at runtime.
+1. **Host**: deploy the repo and set the env vars above.
+   - **Vercel**: `next.config.mjs` adds `SKILL.md` to the `/api/engine/run` bundle, since the
+     worker reads it at runtime.
+   - **Render** (or any host that assigns a port): build `npm install && npm run build`, start
+     `npm run start`. The start script listens on `0.0.0.0:$PORT` (3200 when `PORT` is unset), so
+     Render's port scan finds it. A hard-coded port fails the deploy with "failed to detect open
+     port".
 2. **Point the worker at the deploy**: in Supabase Vault, set `engine_webhook_url` to
    `https://<host>/api/engine/run`, and make `engine_webhook_secret` equal
    `ENGINE_WEBHOOK_SECRET`. Until then the trigger and cron POST to a placeholder and nothing is

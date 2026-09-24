@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3200",
     "build": "next build",
-    "start": "next start -p 3200",
+    "start": "next start -H 0.0.0.0 -p ${PORT:-3200}",
     "engine": "tsx scripts/engine.ts",
     "candles": "tsx scripts/candles.ts",
     "history": "tsx scripts/history.ts",
