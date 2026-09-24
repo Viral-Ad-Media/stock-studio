@@ -1,8 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { marked } from "marked";
-
-marked.use({ breaks: true });
+import { renderMarkdown, safeHttpUrl } from "@/lib/markdown";
 import { sql, CaseStudy, VARIANTS } from "@/lib/db";
 import { currentWorkspaceId } from "@/lib/workspace";
 import AutoRefresh from "@/components/AutoRefresh";
@@ -67,7 +65,7 @@ export default async function StudyPage({ params }: { params: { id: string } }) 
           </div>
           <div
             className="markdown text-sm"
-            dangerouslySetInnerHTML={{ __html: marked.parse(study.corrections_md) as string }}
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(study.corrections_md) }}
           />
         </div>
       )}
@@ -75,7 +73,7 @@ export default async function StudyPage({ params }: { params: { id: string } }) 
       {study.content_md && (
         <article
           className="markdown card p-8"
-          dangerouslySetInnerHTML={{ __html: marked.parse(study.content_md) as string }}
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(study.content_md) }}
         />
       )}
 
@@ -83,13 +81,20 @@ export default async function StudyPage({ params }: { params: { id: string } }) 
         <div className="card p-4 mt-4">
           <div className="text-xs uppercase tracking-wide text-slate-500 mb-2 font-medium">Sources</div>
           <ul className="space-y-1 text-sm">
-            {sources.map((s, i) => (
-              <li key={i}>
-                <a href={s.url} target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline">
-                  {s.title || s.url}
-                </a>
-              </li>
-            ))}
+            {sources.map((s, i) => {
+              const href = safeHttpUrl(s.url);
+              return (
+                <li key={i}>
+                  {href ? (
+                    <a href={href} target="_blank" rel="noopener noreferrer nofollow" className="text-emerald-400 hover:underline">
+                      {s.title || href}
+                    </a>
+                  ) : (
+                    <span className="text-slate-400">{s.title || String(s.url)}</span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

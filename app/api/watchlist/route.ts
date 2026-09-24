@@ -3,6 +3,7 @@ import { sql } from "@/lib/db";
 import { currentWorkspaceId } from "@/lib/workspace";
 import { requireAppAccess, insufficientCreditsResponse } from "@/lib/access";
 import { creditCost, chargeJobCredits, isInsufficientCredits, refundJobCredits } from "@/lib/billing";
+import { parseTicker, parseOptionalText, isInvalid, MAX_COMPANY, STATUS_TAGS } from "@/lib/validate";
 
 const WATCHLIST_COST = creditCost("watchlist_entry");
 
@@ -11,11 +12,11 @@ export async function POST(req: Request) {
   if (!gate.ok) return gate.response;
   const { ws } = gate;
 
-  const body = await req.json();
-  const ticker = String(body.ticker ?? "").trim().toUpperCase();
-  if (!ticker) {
-    return NextResponse.json({ error: "Ticker is required" }, { status: 400 });
-  }
+  const body = await req.json().catch(() => ({}));
+  const ticker = parseTicker(body.ticker);
+  if (isInvalid(ticker)) return NextResponse.json({ error: ticker.error }, { status: 400 });
+  const company = parseOptionalText(body.company, MAX_COMPANY, "Company");
+  if (isInvalid(company)) return NextResponse.json({ error: company.error }, { status: 400 });
 
   // Only link a study from this workspace.
   let caseStudyId: number | null = null;
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
     const id = await sql.begin(async (tx) => {
       const [row] = await tx`
         INSERT INTO watchlist (workspace_id, ticker, company, case_study_id)
-        VALUES (${ws}, ${ticker}, ${body.company ?? null}, ${caseStudyId})
+        VALUES (${ws}, ${ticker}, ${company}, ${caseStudyId})
         ON CONFLICT (workspace_id, ticker) DO UPDATE SET
           company = COALESCE(excluded.company, watchlist.company),
           case_study_id = COALESCE(excluded.case_study_id, watchlist.case_study_id),
@@ -61,6 +62,9 @@ export async function PATCH(req: Request) {
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   if (body.status_tag) {
+    if (!(STATUS_TAGS as readonly string[]).includes(String(body.status_tag))) {
+      return NextResponse.json({ error: "Unknown status" }, { status: 400 });
+    }
     await sql`UPDATE watchlist SET status_tag = ${String(body.status_tag)}, updated_at = now() WHERE id = ${id} AND workspace_id = ${ws}`;
   }
   if (body.requeue) {
