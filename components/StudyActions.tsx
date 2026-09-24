@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Copy, Check, RefreshCcw, Trash2, Eye } from "lucide-react";
+import { apiError } from "@/lib/shared";
 
 type Props = {
   study: {
@@ -18,77 +19,120 @@ export default function StudyActions({ study }: Props) {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function copyMd() {
     if (!study.content_md) return;
-    await navigator.clipboard.writeText(study.content_md);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(study.content_md);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setError("Couldn't copy to the clipboard");
+    }
+  }
+
+  // Runs one action; returns true when the API call succeeded.
+  async function act(key: string, request: () => Promise<Response>, fallback: string) {
+    setBusy(key);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await request();
+      if (!res.ok) {
+        setError(await apiError(res, fallback));
+        return false;
+      }
+      return true;
+    } catch {
+      setError(fallback);
+      return false;
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function queueEarningsUpdate() {
-    setBusy("earnings");
-    const res = await fetch("/api/case-studies", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ticker: study.ticker,
-        company: study.company,
-        variant: "earnings_update",
-        parent_id: study.id,
-      }),
-    });
-    if (!res.ok) alert((await res.json().catch(() => ({}))).error ?? "Couldn't queue the update");
-    setBusy(null);
-    router.refresh();
+    const ok = await act(
+      "earnings",
+      () =>
+        fetch("/api/case-studies", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ticker: study.ticker,
+            company: study.company,
+            variant: "earnings_update",
+            parent_id: study.id,
+          }),
+        }),
+      "Couldn't queue the update"
+    );
+    if (ok) {
+      setNotice("Earnings update queued.");
+      router.refresh();
+    }
   }
 
   async function addToWatchlist() {
-    setBusy("watch");
-    const res = await fetch("/api/watchlist", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ticker: study.ticker, company: study.company, case_study_id: study.id }),
-    });
-    setBusy(null);
-    if (!res.ok) {
-      alert((await res.json().catch(() => ({}))).error ?? "Couldn't add to the watchlist");
-      return;
-    }
-    router.push("/watchlist");
+    const ok = await act(
+      "watch",
+      () =>
+        fetch("/api/watchlist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticker: study.ticker, company: study.company, case_study_id: study.id }),
+        }),
+      "Couldn't add to the watchlist"
+    );
+    if (ok) router.push("/watchlist");
   }
 
   async function remove() {
-    if (!confirm(`Delete the ${study.ticker} study?`)) return;
-    await fetch(`/api/case-studies/${study.id}`, { method: "DELETE" });
-    router.push("/dashboard");
-    router.refresh();
+    if (!confirm(`Delete the ${study.ticker} study? This can't be undone.`)) return;
+    const ok = await act("delete", () => fetch(`/api/case-studies/${study.id}`, { method: "DELETE" }), "Couldn't delete the study");
+    if (ok) {
+      router.push("/dashboard");
+      router.refresh();
+    }
   }
 
-  const btn =
-    "inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-ink-600 bg-ink-800 hover:border-ink-500 text-slate-300 disabled:opacity-50";
+  const btn = "btn-secondary text-sm px-3 py-2";
 
   return (
-    <div className="flex flex-wrap gap-2 justify-end">
-      {study.status === "ready" && (
-        <>
-          <button onClick={copyMd} className={btn}>
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            {copied ? "Copied" : "Copy markdown"}
-          </button>
-          <button onClick={queueEarningsUpdate} disabled={busy !== null} className={btn}>
-            <RefreshCcw className="w-3.5 h-3.5" />
-            {busy === "earnings" ? "Queuing…" : "Queue earnings update"}
-          </button>
-          <button onClick={addToWatchlist} disabled={busy !== null} className={btn}>
-            <Eye className="w-3.5 h-3.5" />
-            {busy === "watch" ? "Adding…" : "Add to watchlist"}
-          </button>
-        </>
+    <div className="flex flex-col items-start gap-2 sm:items-end">
+      <div className="flex flex-wrap gap-2 sm:justify-end">
+        {study.status === "ready" && (
+          <>
+            <button onClick={copyMd} className={btn}>
+              {copied ? <Check className="h-4 w-4 text-emerald-400" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
+              {copied ? "Copied" : "Copy markdown"}
+            </button>
+            <button onClick={queueEarningsUpdate} disabled={busy !== null} className={btn}>
+              <RefreshCcw className="h-4 w-4" aria-hidden />
+              {busy === "earnings" ? "Queuing…" : "Queue earnings update"}
+            </button>
+            <button onClick={addToWatchlist} disabled={busy !== null} className={btn}>
+              <Eye className="h-4 w-4" aria-hidden />
+              {busy === "watch" ? "Adding…" : "Add to watchlist"}
+            </button>
+          </>
+        )}
+        <button onClick={remove} disabled={busy !== null} className={`${btn} hover:border-red-500/50 hover:text-red-400`}>
+          <Trash2 className="h-4 w-4" aria-hidden /> {busy === "delete" ? "Deleting…" : "Delete"}
+        </button>
+      </div>
+      {error && (
+        <p role="alert" className="text-sm text-red-400">
+          {error}
+        </p>
       )}
-      <button onClick={remove} className={`${btn} hover:border-red-500/50 hover:text-red-400`}>
-        <Trash2 className="w-3.5 h-3.5" /> Delete
-      </button>
+      {notice && (
+        <p role="status" className="text-sm text-emerald-400">
+          {notice}
+        </p>
+      )}
     </div>
   );
 }

@@ -60,6 +60,9 @@ export const VARIANTS: { value: string; label: string; hint: string }[] = [
 // Variants that aren't per-ticker studies and shouldn't appear in the New-study form.
 export const HIDDEN_FORM_VARIANTS = ["earnings_update", "movers_digest"];
 
+// Max length of a study's user notes — enforced by lib/validate.ts, shown by /new.
+export const MAX_NOTES = 8_000;
+
 // Credits charged per queued report (1 credit ≈ $1). Single source of truth for
 // both what's charged (lib/billing.ts) and what's shown (/pricing, /new).
 export const CREDIT_COSTS: Record<string, number> = {
@@ -80,4 +83,26 @@ const DEFAULT_CREDIT_COST = 5;
 
 export function creditCost(variant: string): number {
   return CREDIT_COSTS[variant] ?? DEFAULT_CREDIT_COST;
+}
+
+// "Sep 24, 2026". postgres.js returns timestamptz as Date objects, so never
+// String(date).slice(...) them (that renders "Thu Sep 24" with no year).
+export function formatDate(d: string | Date | null | undefined): string {
+  if (!d) return "";
+  const date = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(date.getTime())) return String(d);
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+export const STATUS_LABELS: Record<string, string> = {
+  queued: "Queued",
+  building: "Building",
+  ready: "Ready",
+  error: "Failed",
+};
+
+// Reads a JSON { error } from a failed API response, with a fallback.
+export async function apiError(res: Response, fallback: string): Promise<string> {
+  const body = await res.json().catch(() => null);
+  return (body && typeof body.error === "string" && body.error) || fallback;
 }

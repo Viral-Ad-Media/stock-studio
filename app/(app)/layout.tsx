@@ -6,14 +6,27 @@ import { getBillingState } from "@/lib/billing";
 // middleware-protected /dashboard, /new, /watchlist, /study/*, /billing routes.
 // Kept separate from the public marketing layout (app/(marketing)) so
 // logged-out visitors never see the app sidebar.
+// Every app page is per-user (session cookie) — never prerender. Without this
+// Next probes the layout at build time and the cookie read throws its
+// dynamic-rendering signal into our error handling.
+export const dynamic = "force-dynamic";
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await currentUser().catch(() => null);
-  const ws = user ? await currentWorkspaceId().catch(() => null) : null;
-  const billing = user && ws ? await getBillingState(user.id, ws).catch(() => null) : null;
+  // Nav chrome only — a failure here must not take the page down, but it
+  // shouldn't vanish silently either.
+  const logged = (label: string) => (err: unknown) => {
+    console.error(`app layout: ${label} failed`, err);
+    return null;
+  };
+  const user = await currentUser().catch(logged("currentUser"));
+  const ws = user ? await currentWorkspaceId().catch(logged("currentWorkspaceId")) : null;
+  const billing = user && ws ? await getBillingState(user.id, ws).catch(logged("getBillingState")) : null;
   return (
-    <div className="flex min-h-screen">
+    <div className="min-h-screen md:flex">
       <Nav userEmail={user?.email ?? null} credits={billing?.balance ?? null} />
-      <main className="flex-1 p-8 max-w-5xl mx-auto w-full">{children}</main>
+      <main id="main" className="w-full min-w-0 flex-1 p-4 sm:p-6 md:p-8 max-w-5xl mx-auto">
+        {children}
+      </main>
     </div>
   );
 }

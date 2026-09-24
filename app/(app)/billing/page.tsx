@@ -43,11 +43,11 @@ export default async function BillingPage({ searchParams }: { searchParams: { ch
   return (
     <div className="max-w-2xl">
       {/* Webhook fulfilment lands a few seconds after the redirect back. */}
-      {searchParams.checkout === "success" && <AutoRefresh />}
+      {searchParams.checkout === "success" && <AutoRefresh maxMs={60_000} />}
       <h1 className="text-2xl font-bold text-slate-100 mb-1">Billing</h1>
-      <p className="text-sm text-slate-500 mb-6">
+      <p className="text-sm text-fg-subtle mb-6">
         Every report costs credits when you queue it — see{" "}
-        <a href="/pricing" className="text-emerald-400 hover:underline">pricing</a> for the per-format
+        <a href="/pricing" className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300">pricing</a> for the per-format
         schedule. Failed or removed reports are refunded automatically.
       </p>
 
@@ -78,7 +78,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ch
                   {p.kind === "access" ? "Access unlock" : `${p.credits} credits`}
                   {p.status === "refunded" && <span className="text-red-400"> · refunded</span>}
                 </span>
-                <span className="text-slate-500">
+                <span className="text-fg-subtle">
                   ${(p.amount_cents / 100).toFixed(2)} · {fmtDate(p.created_at)}
                 </span>
               </div>
@@ -90,7 +90,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ch
       <h2 className="text-sm font-semibold text-slate-300 mb-2">Credit activity</h2>
       <div className="card divide-y divide-ink-700">
         {ledger.length === 0 ? (
-          <div className="px-4 py-3 text-sm text-slate-500">No activity yet.</div>
+          <div className="px-4 py-3 text-sm text-fg-subtle">No activity yet.</div>
         ) : (
           ledger.map((l, i) => (
             <div key={i} className="flex justify-between px-4 py-2.5 text-sm">
@@ -99,7 +99,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ch
                 <span className={l.delta > 0 ? "text-emerald-400" : "text-slate-300"}>
                   {l.delta > 0 ? `+${l.delta}` : l.delta}
                 </span>
-                <span className="text-slate-600 w-24 text-right">{fmtDate(l.created_at)}</span>
+                <span className="text-fg-subtle w-24 text-right">{fmtDate(l.created_at)}</span>
               </span>
             </div>
           ))
