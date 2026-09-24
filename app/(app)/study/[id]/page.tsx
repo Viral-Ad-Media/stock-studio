@@ -10,12 +10,13 @@ import { ArrowLeft, AlertTriangle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-export default async function StudyPage({ params }: { params: { id: string } }) {
+export default async function StudyPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const ws = await currentWorkspaceId();
   if (!ws) notFound();
 
   const [study] = (await sql`
-    SELECT * FROM case_studies WHERE id = ${Number(params.id)} AND workspace_id = ${ws}
+    SELECT * FROM case_studies WHERE id = ${Number(id)} AND workspace_id = ${ws}
   `) as unknown as CaseStudy[];
   if (!study) notFound();
 

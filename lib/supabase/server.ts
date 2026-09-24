@@ -8,8 +8,8 @@ import { cookies } from "next/headers";
 // to PostgREST at all, by design (see the migration's REVOKE on
 // anon/authenticated). This client only ever touches Supabase Auth
 // endpoints (GoTrue), which is separate infrastructure.
-export function createClient() {
-  const cookieStore = cookies();
+export async function createClient() {
+  const cookieStore = await cookies(); // async since Next 15
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) {

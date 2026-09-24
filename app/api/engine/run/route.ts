@@ -6,7 +6,7 @@ import { runWorkerLoop } from "@/lib/engine/worker";
 // pg_net) and a pg_cron backstop (every ~1 min) — see the
 // stocks_automated_worker migration. Not called by any client-facing code;
 // authenticated by a shared secret, not a user session, so this route is
-// excluded from middleware.ts's auth gate.
+// excluded from proxy.ts's auth gate.
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // tune to the actual deploy host's limit once chosen
 

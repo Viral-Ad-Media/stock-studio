@@ -6,7 +6,7 @@ export type SessionUser = { id: string; email: string | null };
 
 // Supabase Auth session → user id/email. Cached per request.
 export const currentUser = cache(async (): Promise<SessionUser | null> => {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

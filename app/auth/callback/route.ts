@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { appOrigin } from "@/lib/origin";
 
 // PKCE code exchange — Supabase Auth redirects here after email
-// confirmation / OAuth. Must stay public in middleware (excluded from the
+// confirmation / OAuth. Must stay public in proxy.ts (excluded from the
 // auth gate) or the code is never exchanged before the redirect to a
 // protected page bounces back to /login.
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  const origin = appOrigin(request);
   const code = searchParams.get("code");
   const next = safeNextPath(searchParams.get("next"), origin);
 
   if (code) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
       return NextResponse.redirect(new URL(next, origin));
