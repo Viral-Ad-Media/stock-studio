@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireAppAccess, insufficientCreditsResponse } from "@/lib/access";
-import { creditCost, chargeJobCredits, isInsufficientCredits } from "@/lib/billing";
+import { creditCost, chargeJobCredits, isInsufficientCredits, isDuplicateOpenJob } from "@/lib/billing";
 import { parseTicker, parseVariant, parseOptionalText, isInvalid, MAX_NOTES, MAX_COMPANY } from "@/lib/validate";
 
 export async function POST(req: Request) {
@@ -36,15 +36,6 @@ export async function POST(req: Request) {
     parentId = parent.id;
   }
 
-  if (variant === "movers_digest") {
-    const [pending] = await sql`
-      SELECT id FROM jobs WHERE type = 'movers_digest' AND status IN ('pending','running') AND workspace_id = ${ws}
-    `;
-    if (pending) {
-      return NextResponse.json({ error: "A movers digest is already queued" }, { status: 409 });
-    }
-  }
-
   try {
     const id = await sql.begin(async (tx) => {
       const [study] = await tx`
@@ -65,6 +56,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ id });
   } catch (err) {
     if (isInsufficientCredits(err)) return insufficientCreditsResponse();
+    // One open movers digest per workspace (unique index) — nothing charged.
+    if (isDuplicateOpenJob(err)) {
+      return NextResponse.json({ error: "A movers digest is already queued" }, { status: 409 });
+    }
     throw err;
   }
 }
