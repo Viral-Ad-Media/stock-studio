@@ -59,3 +59,25 @@ export const VARIANTS: { value: string; label: string; hint: string }[] = [
 
 // Variants that aren't per-ticker studies and shouldn't appear in the New-study form.
 export const HIDDEN_FORM_VARIANTS = ["earnings_update", "movers_digest"];
+
+// Credits charged per queued report (1 credit ≈ $1). Single source of truth for
+// both what's charged (lib/billing.ts) and what's shown (/pricing, /new).
+export const CREDIT_COSTS: Record<string, number> = {
+  quick_take: 2,
+  full: 5,
+  carousel: 5,
+  newsletter: 5,
+  script: 5,
+  memo: 8,
+  comparison: 3,
+  watchlist_entry: 3,
+  earnings_update: 3,
+  movers_digest: 3,
+  one_candle: 2,
+  davinci_model: 2,
+};
+const DEFAULT_CREDIT_COST = 5;
+
+export function creditCost(variant: string): number {
+  return CREDIT_COSTS[variant] ?? DEFAULT_CREDIT_COST;
+}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Check, ArrowRight } from "lucide-react";
+import { creditCost } from "@/lib/shared";
 
 export const metadata = {
   title: "Pricing — Stock Studio",
@@ -10,12 +11,13 @@ export const metadata = {
 // actual Stripe products (Phase 4 of the SaaS build) — confirm real
 // pricing before launch. The structure (trial → one-time unlock → credits)
 // is the decided model.
+// Credit figures come from the same table the billing code charges from.
 const CREDIT_COSTS = [
-  { variant: "Quick take", credits: 2 },
-  { variant: "Full 4-card study", credits: 5 },
-  { variant: "Deep research memo", credits: 8 },
-  { variant: "Comparison / watchlist entry", credits: 3 },
-  { variant: "Intraday setup check", credits: 2 },
+  { variant: "Quick take", credits: creditCost("quick_take") },
+  { variant: "Full 4-card study", credits: creditCost("full") },
+  { variant: "Deep research memo", credits: creditCost("memo") },
+  { variant: "Comparison / watchlist entry", credits: creditCost("comparison") },
+  { variant: "Intraday setup check", credits: creditCost("one_candle") },
 ];
 
 export default function PricingPage() {

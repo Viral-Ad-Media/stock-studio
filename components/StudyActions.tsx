@@ -28,7 +28,7 @@ export default function StudyActions({ study }: Props) {
 
   async function queueEarningsUpdate() {
     setBusy("earnings");
-    await fetch("/api/case-studies", {
+    const res = await fetch("/api/case-studies", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -38,18 +38,23 @@ export default function StudyActions({ study }: Props) {
         parent_id: study.id,
       }),
     });
+    if (!res.ok) alert((await res.json().catch(() => ({}))).error ?? "Couldn't queue the update");
     setBusy(null);
     router.refresh();
   }
 
   async function addToWatchlist() {
     setBusy("watch");
-    await fetch("/api/watchlist", {
+    const res = await fetch("/api/watchlist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ticker: study.ticker, company: study.company, case_study_id: study.id }),
     });
     setBusy(null);
+    if (!res.ok) {
+      alert((await res.json().catch(() => ({}))).error ?? "Couldn't add to the watchlist");
+      return;
+    }
     router.push("/watchlist");
   }
 

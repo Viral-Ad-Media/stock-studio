@@ -61,5 +61,8 @@ export const config = {
     "/api/case-studies/:path*",
     "/api/jobs/:path*",
     "/api/watchlist/:path*",
+    "/billing/:path*",
+    // Checkout needs a session; /api/billing/webhook stays public (Stripe-signature auth).
+    "/api/billing/checkout/:path*",
   ],
 };

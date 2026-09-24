@@ -20,12 +20,13 @@ export default function WatchlistClient({ rows }: { rows: WatchlistRow[] }) {
   async function add(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    await fetch("/api/watchlist", {
+    const res = await fetch("/api/watchlist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ticker }),
     });
-    setTicker("");
+    if (!res.ok) alert((await res.json().catch(() => ({}))).error ?? "Couldn't add ticker");
+    else setTicker("");
     setBusy(false);
     router.refresh();
   }
@@ -40,11 +41,12 @@ export default function WatchlistClient({ rows }: { rows: WatchlistRow[] }) {
   }
 
   async function refreshRow(id: number) {
-    await fetch("/api/watchlist", {
+    const res = await fetch("/api/watchlist", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, requeue: true }),
     });
+    if (!res.ok) alert((await res.json().catch(() => ({}))).error ?? "Couldn't queue a refresh");
     router.refresh();
   }
 
@@ -123,7 +125,7 @@ export default function WatchlistClient({ rows }: { rows: WatchlistRow[] }) {
                   <p className="text-sm text-slate-300">{r.thesis}</p>
                 ) : (
                   <p className="text-sm text-amber-400/70">
-                    Waiting for the engine — run <code>/build-studies</code>.
+                    Waiting for the research engine…
                   </p>
                 )}
                 {triggers.length > 0 && (

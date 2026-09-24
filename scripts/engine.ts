@@ -65,6 +65,11 @@ async function main() {
       console.error(`No job ${id}`);
       process.exit(1);
     }
+    if (job.status === "running" && job.locked_at) {
+      // Claimed by the automated worker (lib/engine/worker.ts) — don't double-run it.
+      console.error(`Job ${id} is being processed by the automated worker`);
+      process.exit(1);
+    }
     await sql`UPDATE jobs SET status = 'running', updated_at = now() WHERE id = ${id}`;
     const payload = job.payload as Record<string, any>;
     if (payload.case_study_id) {
@@ -133,6 +138,8 @@ async function main() {
     if (payload.case_study_id) {
       await sql`UPDATE case_studies SET status = 'error', error = ${message}, updated_at = now() WHERE id = ${payload.case_study_id}`;
     }
+    // Return the queue-time credit charge (no-op if the job was never charged).
+    await sql`SELECT refund_job_credits(${id})`;
     out({ ok: true, job_id: id, failed: true });
   } else {
     console.error("Usage: npm run engine -- <pending|claim|complete|fail> [args]");
