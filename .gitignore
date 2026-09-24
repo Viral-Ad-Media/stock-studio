@@ -1,4 +1,26 @@
+# dependencies
 node_modules/
+
+# next.js
 .next/
+out/
+
+# env files (never commit secrets)
+.env
 .env.local
-tsconfig.tsbuildinfo
+.env*.local
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# misc
+.DS_Store
+*.log
+
+
+# Internal engineering notes — kept local, not published.
+# Adding a path here does NOT untrack a file that is already tracked; this was paired with
+# `git rm --cached CLAUDE.md`, which stops tracking it while leaving the local copy alone.
+CLAUDE.md
+.claude/
