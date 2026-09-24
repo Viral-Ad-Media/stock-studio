@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { runWorkerLoop } from "@/lib/engine/worker";
 
@@ -10,10 +11,18 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300; // tune to the actual deploy host's limit once chosen
 
 export async function POST(req: NextRequest) {
-  const secret = req.headers.get("x-engine-secret");
-  if (!secret || secret !== process.env.ENGINE_WEBHOOK_SECRET) {
+  if (!secretMatches(req.headers.get("x-engine-secret"), process.env.ENGINE_WEBHOOK_SECRET)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const result = await runWorkerLoop();
   return NextResponse.json({ ok: true, ...result });
+}
+
+// Constant-time compare (hash first so lengths match). Fails closed when the
+// env var is unset or empty.
+function secretMatches(given: string | null, expected: string | undefined): boolean {
+  if (!given || !expected) return false;
+  const a = createHash("sha256").update(given).digest();
+  const b = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(a, b);
 }

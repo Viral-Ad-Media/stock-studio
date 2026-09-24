@@ -26,7 +26,8 @@ export default function QueuePanel({ jobs }: { jobs: QueueJob[] }) {
 
   async function removeJob(id: number) {
     setBusy(id);
-    await fetch(`/api/jobs?id=${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/jobs?id=${id}`, { method: "DELETE" });
+    if (!res.ok) alert((await res.json().catch(() => ({}))).error ?? "Couldn't remove the job");
     setBusy(null);
     router.refresh();
   }
@@ -81,14 +82,16 @@ export default function QueuePanel({ jobs }: { jobs: QueueJob[] }) {
                     )}
                   </span>
                 </div>
-                <button
-                  onClick={() => removeJob(j.id)}
-                  disabled={busy !== null}
-                  title="Remove from queue"
-                  className="p-1 rounded-md border border-ink-600 text-slate-500 hover:border-red-500/50 hover:text-red-400 disabled:opacity-50"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                {j.status === "pending" && (
+                  <button
+                    onClick={() => removeJob(j.id)}
+                    disabled={busy !== null}
+                    title="Remove from queue"
+                    className="p-1 rounded-md border border-ink-600 text-slate-500 hover:border-red-500/50 hover:text-red-400 disabled:opacity-50"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </li>
             ))}
           </ul>
