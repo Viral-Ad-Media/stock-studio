@@ -3,11 +3,11 @@ import { sql } from "@/lib/db";
 import { currentWorkspaceId } from "@/lib/workspace";
 import { refundJobCredits } from "@/lib/billing";
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const ws = await currentWorkspaceId();
   if (!ws) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const id = Number(params.id);
+  const id = Number((await params).id);
   await sql.begin(async (tx) => {
     // The study and its follow-ups (earnings updates) go together…
     const studies = await tx`

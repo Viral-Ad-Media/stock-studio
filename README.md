@@ -6,7 +6,7 @@ research engine builds the report, and the finished study appears in the app.
 The output is **educational business analysis, never personalized investment advice**. Every study
 opens with an "As of [date]" line and ends with a "Not investment advice" line.
 
-- **App**: Next.js 14 (App Router), Tailwind. Runs locally on port 3200 and is deployed on Vercel.
+- **App**: Next.js 16 (App Router, React 19), Tailwind. Runs locally on port 3200 and is deployed on Vercel or Render.
 - **Database**: hosted Postgres on Supabase, in an isolated `stocks` schema.
 - **Auth**: Supabase Auth. Each signup gets its own workspace.
 - **Billing**: Stripe. A 30-day trial, then a one-time access fee, then per-report credits.
@@ -135,7 +135,7 @@ All variables are listed in [`.env.example`](.env.example).
 | `DATABASE_URL` | everything | Supabase **transaction pooler**, `stocks_app` role (`stocks_app.<ref>` username). |
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | auth | From Project Settings → API. |
 | `SUPABASE_PROJECT_ID` | Claude Code skills | Used with the Supabase MCP `execute_sql` for read-only inspection. |
-| `NEXT_PUBLIC_APP_URL` | Stripe redirects | Optional; falls back to the request origin. |
+| `NEXT_PUBLIC_APP_URL` | login + Stripe redirects | **Set it in production**, e.g. `https://app.example.com`. Behind a host's proxy the server sees itself as `0.0.0.0:$PORT`. Without it, `appOrigin()` falls back to the forwarded `Host` header. |
 | `ANTHROPIC_API_KEY` | automated worker | |
 | `ENGINE_WEBHOOK_SECRET` | automated worker | Must equal the Vault secret `engine_webhook_secret`. |
 | `ENGINE_WEB_RESEARCH` | automated worker | `1` also automates web-research variants. Off by default ([why](#automated-worker)). |
@@ -253,7 +253,7 @@ watch the balance update.
 - **Function permissions**: every SECURITY DEFINER function revokes EXECUTE from PUBLIC, anon
   and authenticated **in the same migration that creates it**. New functions get PUBLIC EXECUTE
   by default in Postgres, so this step is easy to miss.
-- **Middleware** ([`middleware.ts`](middleware.ts)) protects an explicit list of paths:
+- **Proxy** ([`proxy.ts`](proxy.ts), Next 16's name for middleware) protects an explicit list of paths:
   - Session required: `/dashboard`, `/new`, `/watchlist`, `/study`, `/billing`, and the
     `case-studies`, `jobs`, `watchlist` and `billing/checkout` APIs.
   - Public: marketing pages, `/login`, `/signup` and `/auth/callback`.

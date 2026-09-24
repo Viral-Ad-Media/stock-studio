@@ -39,12 +39,10 @@ const securityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    // lib/engine/prompts.ts reads the methodology from the skill file at
-    // runtime — make sure serverless bundles actually contain it.
-    outputFileTracingIncludes: {
-      "/api/engine/run": ["./.claude/skills/build-studies/SKILL.md"],
-    },
+  // lib/engine/prompts.ts reads the methodology from the skill file at
+  // runtime — make sure serverless bundles actually contain it.
+  outputFileTracingIncludes: {
+    "/api/engine/run": ["./.claude/skills/build-studies/SKILL.md"],
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

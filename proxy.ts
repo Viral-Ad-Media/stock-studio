@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 // Real auth gate: requires a valid Supabase session. Refreshes the session
 // cookie on every request (required by @supabase/ssr so server components
 // always see a fresh token) and redirects signed-out users to /login.
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   let res = NextResponse.next({ request: req });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

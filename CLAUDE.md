@@ -202,11 +202,24 @@ so just move on.
 npm run dev        # app on http://localhost:3200 (needs DATABASE_URL in .env.local)
 ```
 
-Hosted on Vercel (project `stock-studio`). `middleware.ts` requires a Supabase session on every
+Hosted on Vercel (project `stock-studio`) or Render. Next.js 16: the auth gate is `proxy.ts`
+(Next 16's rename of `middleware.ts`); it requires a Supabase session on every
 route except `/login`, `/signup`, `/auth/callback`, `/api/engine/*` (shared-secret auth) and
 `/api/billing/webhook` (Stripe-signature auth); an unconfigured production deploy returns 503
 rather than running open. Env vars: see `.env.example` (Supabase, `ANTHROPIC_API_KEY`,
-`ENGINE_WEBHOOK_SECRET`, Stripe keys + price ids). After deploying, set the Vault secret
+`ENGINE_WEBHOOK_SECRET`, Stripe keys + price ids, and `NEXT_PUBLIC_APP_URL` — set it in production:
+absolute redirect URLs come from `appOrigin()` in `lib/origin.ts`, never `new URL(req.url).origin`,
+which is `0.0.0.0:$PORT` behind a host's proxy). After deploying, set the Vault secret
 `engine_webhook_url` to `https://<host>/api/engine/run` — until then the trigger/cron POST to a
 placeholder and nothing is automated. Market data comes from the unauthenticated Yahoo Finance
 endpoints (`lib/marketdata.ts`, also behind `npm run candles` / `history` / `movers`).
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
