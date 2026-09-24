@@ -139,8 +139,9 @@ All variables are listed in [`.env.example`](.env.example).
 | `ANTHROPIC_API_KEY` | automated worker | |
 | `ENGINE_WEBHOOK_SECRET` | automated worker | Must equal the Vault secret `engine_webhook_secret`. |
 | `ENGINE_WEB_RESEARCH` | automated worker | `1` also automates web-research variants. Off by default ([why](#automated-worker)). |
-| `ENGINE_INVOCATION_BUDGET_MS` / `ENGINE_WORST_CASE_JOB_MS` | automated worker | Optional tuning. Defaults: 280000 / 200000. |
+| `ENGINE_INVOCATION_BUDGET_MS` / `ENGINE_MIN_CLAIM_MS` | automated worker | Optional tuning: total budget per invocation, and the minimum time left to start another job. Defaults: 280000 / 150000. |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | billing | |
+| `BILLING_DATABASE_URL` | billing (webhook only) | Pooler URL for the `stocks_billing` role, the only role allowed to grant access or credits. Set its password first in the Supabase SQL editor: `ALTER ROLE stocks_billing WITH PASSWORD '…';`. |
 | `STRIPE_PRICE_ACCESS` | billing | Price id of the one-time access fee. |
 | `STRIPE_PRICE_CREDIT_PACK` | billing | Price id of one credit pack. |
 | `STRIPE_CREDITS_PER_PACK` | billing | Credits granted per pack. Default 10. |
@@ -160,14 +161,23 @@ The engine runs in two modes that share one jobs queue and one methodology file:
 - **Claiming jobs**: `stocks.claim_job()` uses `FOR UPDATE SKIP LOCKED`, so concurrent
   invocations never take the same job.
   - A job counts as stale after 6 minutes, longer than any single invocation can run.
-  - After 3 attempts a stale job is marked `error`.
-- **Time budget**: the worker ([`lib/engine/worker.ts`](lib/engine/worker.ts)) only claims
-  another job if a worst-case job still fits in the remaining time, which keeps it under the
-  route's 300s `maxDuration`.
+  - After 3 attempts a stale job is marked `error` and its credits are refunded.
+- **Time budget**: each invocation has a 280s deadline, under the route's 300s `maxDuration`.
+  - Every Anthropic call gets a timeout sized to what's left of that deadline (at most 170s,
+    and 30s for the extraction call). Yahoo fetches time out after 15s.
+  - The worker only starts another job if at least 150s remain.
+  - So a job finishes or fails cleanly instead of being killed mid-run.
 - **Anthropic client** ([`lib/engine/anthropic.ts`](lib/engine/anthropic.ts)):
   - `maxRetries: 0`, so the job's attempts counter is the only retry mechanism.
-  - A 170s timeout.
-  - Authentication and billing errors fail the job immediately instead of retrying.
+  - Only a response that ends naturally (`end_turn`) is published. Output cut off by the length
+    limit, or a refusal, fails the job and refunds it. A paused web-search turn (`pause_turn`)
+    is resumed.
+  - Auth, permission, not-found and bad-request errors (including a low Anthropic balance) fail
+    the job immediately. Rate limits, overloads and timeouts go back to the queue.
+  - The structured-field extraction runs without thinking and is validated. If it fails for a
+    study, the "As of" date is read from the study itself rather than repeating the research.
+- **Failures**: customers see "We couldn't build this report. Your credits have been refunded."
+  The raw error goes to `jobs.result` for the operator.
 - **Market data** ([`lib/marketdata.ts`](lib/marketdata.ts)) is real Yahoo Finance OHLC data and
   screener results. It's never fabricated; if the data isn't available, the job fails.
 
@@ -200,7 +210,9 @@ other direction, the CLI refuses to claim a job the worker is holding.
 | **Refunds** | Failed jobs (worker or CLI `fail`) are refunded automatically and idempotently. Jobs can be removed from the queue, and refunded, only while still `pending`. Once running, a job can't be cancelled. |
 | **Purchases** | `/billing` opens a hosted Stripe Checkout, either the access fee or a credit pack. |
 
-**The Stripe webhook is the only thing that grants access or purchased credits.**
+**The Stripe webhook is the only thing that grants access or purchased credits.** It connects as
+its own database account, `stocks_billing` (`BILLING_DATABASE_URL`). That is the only account
+allowed to execute the two grant functions; the app's own account can't.
 
 - `POST /api/billing/webhook` verifies the Stripe signature and handles three events:
   - `checkout.session.completed` and `checkout.session.async_payment_succeeded` call
@@ -284,8 +296,10 @@ which live in other schemas and use other roles.
 - `stocks_automated_worker` — `claim_job`, the trigger, the cron job.
 - `stocks_worker_hardening` — the claim fixes described above.
 - `stocks_billing` — the billing tables and functions.
+- `stocks_worker_billing_fixes` — refunds for jobs the worker gives up on, the one-open-job
+  indexes, and the `stocks_billing` role.
 
-The last two are also in [`supabase/migrations/`](supabase/migrations/) for review. Apply new
+The last three are also in [`supabase/migrations/`](supabase/migrations/) for review. Apply new
 migrations the same way and add their SQL to that folder.
 
 ---
@@ -354,8 +368,13 @@ supabase/migrations/    SQL for recent migrations
 
 ## Deployment
 
-1. **Vercel**: deploy the repo and set the env vars above. `next.config.mjs` adds
-   `SKILL.md` to the `/api/engine/run` bundle, since the worker reads it at runtime.
+1. **Host**: deploy the repo and set the env vars above.
+   - **Vercel**: `next.config.mjs` adds `SKILL.md` to the `/api/engine/run` bundle, since the
+     worker reads it at runtime.
+   - **Render** (or any host that assigns a port): build `npm install && npm run build`, start
+     `npm run start`. The start script listens on `0.0.0.0:$PORT` (3200 when `PORT` is unset), so
+     Render's port scan finds it. A hard-coded port fails the deploy with "failed to detect open
+     port".
 2. **Point the worker at the deploy**: in Supabase Vault, set `engine_webhook_url` to
    `https://<host>/api/engine/run`, and make `engine_webhook_secret` equal
    `ENGINE_WEBHOOK_SECRET`. Until then the trigger and cron POST to a placeholder and nothing is
@@ -396,9 +415,10 @@ These rules are non-negotiable and apply to every variant and both engine modes:
 | Symptom | Likely cause |
 |---|---|
 | Jobs sit in `pending` forever | Either `engine_webhook_url` in Vault is still the placeholder, or the job is a web-research variant and `ENGINE_WEB_RESEARCH` is off (run `/build-studies`). |
-| Job shows `error: Worker invocation died N times` | Runs keep getting killed (timeout or out of memory). Check the host's function logs, then consider raising `maxDuration` or lowering `ENGINE_WORST_CASE_JOB_MS`. |
+| Study shows "We couldn't build this report" | The job failed and its credits were refunded. The real reason is in `jobs.result`: for example a refusal, output over the length limit, repeated timeouts, or invocations killed 3 times. For kills, check the host's function logs and keep `ENGINE_INVOCATION_BUDGET_MS` below the route's `maxDuration`. |
 | Browser console shows a CSP violation | The page is calling an origin not in `connect-src` in `next.config.mjs`; add it there. |
 | API returns 402 | The trial has ended without an unlock (`code: no_access`) or the balance is too low (`code: no_credits`). Both are handled on `/billing`. |
+| Webhook returns 500 `BILLING_DATABASE_URL is not set` (or a login failure) | The webhook's database account isn't configured. Set a password on `stocks_billing` and `BILLING_DATABASE_URL`. Stripe keeps retrying, so nothing is lost. |
 | Paid, but no access or credits | The webhook isn't reaching the app. Check the Stripe dashboard's delivery log, `STRIPE_WEBHOOK_SECRET`, and that the event carries Stock Studio metadata. |
 | Production returns 503 "Locked" | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` aren't set. |
 | `DATABASE_URL is not set` from a CLI | `.env.local` is missing from the repo root. |
