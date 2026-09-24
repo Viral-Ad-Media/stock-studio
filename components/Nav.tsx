@@ -6,7 +6,7 @@ import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut } from "lucid
 import { createClient } from "@/lib/supabase/client";
 
 const links = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/new", label: "New study", icon: FilePlus2 },
   { href: "/watchlist", label: "Watchlist", icon: Eye },
 ];
@@ -31,7 +31,7 @@ export default function Nav({ userEmail }: { userEmail: string | null }) {
         </div>
       </div>
       {links.map(({ href, label, icon: Icon }) => {
-        const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+        const active = pathname.startsWith(href);
         return (
           <Link
             key={href}
