@@ -2,18 +2,22 @@ import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireAppAccess, insufficientCreditsResponse } from "@/lib/access";
 import { creditCost, chargeJobCredits, isInsufficientCredits } from "@/lib/billing";
+import { parseTicker, parseVariant, parseOptionalText, isInvalid, MAX_NOTES, MAX_COMPANY } from "@/lib/validate";
 
 export async function POST(req: Request) {
   const gate = await requireAppAccess();
   if (!gate.ok) return gate.response;
   const { ws } = gate;
 
-  const body = await req.json();
-  const ticker = String(body.ticker ?? "").trim().toUpperCase();
-  if (!ticker) {
-    return NextResponse.json({ error: "Ticker is required" }, { status: 400 });
-  }
-  const variant = String(body.variant ?? "full");
+  const body = await req.json().catch(() => ({}));
+  const ticker = parseTicker(body.ticker);
+  const variant = parseVariant(body.variant);
+  const company = parseOptionalText(body.company, MAX_COMPANY, "Company");
+  const notes = parseOptionalText(body.notes, MAX_NOTES, "Notes");
+  if (isInvalid(ticker)) return NextResponse.json({ error: ticker.error }, { status: 400 });
+  if (isInvalid(variant)) return NextResponse.json({ error: variant.error }, { status: 400 });
+  if (isInvalid(company)) return NextResponse.json({ error: company.error }, { status: 400 });
+  if (isInvalid(notes)) return NextResponse.json({ error: notes.error }, { status: 400 });
   const jobType =
     variant === "earnings_update"
       ? "earnings_update"
@@ -45,8 +49,8 @@ export async function POST(req: Request) {
     const id = await sql.begin(async (tx) => {
       const [study] = await tx`
         INSERT INTO case_studies (workspace_id, ticker, company, variant, status, notes, parent_id)
-        VALUES (${ws}, ${ticker}, ${body.company ? String(body.company).trim() : null}, ${variant}, 'queued',
-                ${body.notes ? String(body.notes).trim() : null}, ${parentId})
+        VALUES (${ws}, ${ticker}, ${company}, ${variant}, 'queued',
+                ${notes}, ${parentId})
         RETURNING id
       `;
       const [job] = await tx`
