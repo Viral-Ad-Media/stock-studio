@@ -25,7 +25,7 @@ export default function PricingPage() {
     <div className="max-w-5xl mx-auto px-6 py-16">
       <div className="text-center mb-14">
         <h1 className="text-3xl md:text-4xl font-bold text-slate-100 mb-3">Simple, usage-based pricing</h1>
-        <p className="text-slate-500 max-w-xl mx-auto">
+        <p className="text-fg-subtle max-w-xl mx-auto">
           Try everything free for 30 days. Unlock once, then pay only for the studies you
           actually queue.
         </p>
@@ -35,7 +35,7 @@ export default function PricingPage() {
         <div className="card p-8">
           <div className="text-sm font-medium text-emerald-400 mb-1">Free trial</div>
           <div className="text-3xl font-bold text-slate-100 mb-1">$0</div>
-          <div className="text-sm text-slate-500 mb-6">for 30 days</div>
+          <div className="text-sm text-fg-subtle mb-6">for 30 days</div>
           <ul className="space-y-3 text-sm text-slate-300 mb-8">
             {[
               "Full access to every study format",
@@ -49,7 +49,7 @@ export default function PricingPage() {
           </ul>
           <Link
             href="/signup"
-            className="inline-flex items-center gap-2 w-full justify-center bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-5 py-2.5 rounded-lg"
+            className="inline-flex items-center gap-2 w-full justify-center btn-primary font-medium px-5 py-2.5 rounded-lg"
           >
             Start free trial <ArrowRight className="w-4 h-4" />
           </Link>
@@ -58,9 +58,9 @@ export default function PricingPage() {
         <div className="card p-8 border-emerald-500/30">
           <div className="text-sm font-medium text-slate-400 mb-1">After your trial</div>
           <div className="text-3xl font-bold text-slate-100 mb-1">
-            $79 <span className="text-base font-normal text-slate-500">one-time</span>
+            $79 <span className="text-base font-normal text-fg-subtle">one-time</span>
           </div>
-          <div className="text-sm text-slate-500 mb-6">unlocks the app, then pay per study with credits</div>
+          <div className="text-sm text-fg-subtle mb-6">unlocks the app, then pay per study with credits</div>
           <ul className="space-y-3 text-sm text-slate-300 mb-8">
             {[
               "One-time unlock — no recurring subscription",
@@ -83,13 +83,13 @@ export default function PricingPage() {
 
       <div className="card p-8 mb-10">
         <h2 className="text-lg font-semibold text-slate-100 mb-1">How credits work</h2>
-        <p className="text-sm text-slate-500 mb-5">
+        <p className="text-sm text-fg-subtle mb-5">
           1 credit ≈ $1. Deeper research costs more because it does more — more sources checked,
           more figures cross-verified. You always see the cost before you queue a study.
         </p>
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-500 border-b border-ink-700">
+            <tr className="text-left text-fg-subtle border-b border-ink-700">
               <th className="pb-2 font-medium">Format</th>
               <th className="pb-2 font-medium text-right">Credits</th>
             </tr>
@@ -105,9 +105,9 @@ export default function PricingPage() {
         </table>
       </div>
 
-      <div className="text-center text-sm text-slate-500">
+      <div className="text-center text-sm text-fg-subtle">
         Questions about pricing?{" "}
-        <a href="mailto:support@stockstudio.app" className="text-emerald-400 hover:underline">
+        <a href="mailto:support@stockstudio.app" className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300">
           support@stockstudio.app
         </a>
       </div>

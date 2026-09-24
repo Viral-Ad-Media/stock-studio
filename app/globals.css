@@ -2,8 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  color-scheme: dark; /* native selects, scrollbars, autofill render dark */
+}
+
 body {
   @apply bg-ink-950 text-slate-200 antialiased;
+}
+
+/* One visible keyboard-focus style everywhere (WCAG 2.4.7). */
+:focus-visible {
+  outline: 2px solid theme("colors.emerald.400");
+  outline-offset: 2px;
+}
+
+@layer components {
+  /* Dark text on emerald: 7.6:1 at rest, 10:1 on hover (white-on-600 was 3.8:1). */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 font-medium text-ink-950
+      transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-ink-500 font-medium text-slate-200
+      transition-colors hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  /* 36px square minimum hit area for icon-only buttons. */
+  .icon-btn {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-lg border border-ink-500 text-slate-300
+      transition-colors disabled:opacity-60;
+  }
+  .input {
+    @apply w-full rounded-lg border border-ink-500 bg-ink-800 px-3 py-2 text-sm text-slate-100
+      placeholder:text-fg-subtle focus:border-emerald-400;
+  }
+  .field-label {
+    @apply mb-1 block text-sm text-slate-300;
+  }
 }
 
 .card {
@@ -15,7 +49,8 @@ body {
 }
 .markdown h1 { @apply text-2xl font-bold text-slate-100 mt-8 mb-3; }
 .markdown h2 { @apply text-xl font-bold text-slate-100 mt-8 mb-3 pb-2 border-b border-ink-700; }
-.markdown h3 { @apply text-lg font-semibold text-emerald-400 mt-6 mb-2; }
+/* Emerald is reserved for interactive elements — headings get a rule instead. */
+.markdown h3 { @apply text-lg font-semibold text-slate-100 mt-6 mb-2 border-l-2 border-emerald-500 pl-2; }
 .markdown h4 { @apply text-base font-semibold text-slate-100 mt-4 mb-2; }
 .markdown p { @apply my-3; }
 .markdown ul, .markdown ol { @apply my-3 pl-6 space-y-1; }
@@ -24,8 +59,9 @@ body {
 .markdown strong { @apply text-slate-100; }
 .markdown a { @apply text-emerald-400 underline underline-offset-2; }
 .markdown hr { @apply my-6 border-ink-700; }
-.markdown blockquote { @apply border-l-2 border-emerald-500 pl-4 my-4 text-slate-400 italic; }
+.markdown blockquote { @apply border-l-2 border-ink-500 pl-4 my-4 text-slate-400 italic; }
 .markdown code { @apply bg-ink-800 px-1.5 py-0.5 rounded text-sm text-emerald-300; }
-.markdown table { @apply w-full my-4 text-sm; }
+/* Wide tables scroll inside the article instead of widening the page on mobile. */
+.markdown table { @apply block w-full max-w-full overflow-x-auto my-4 text-sm; }
 .markdown th { @apply text-left border-b border-ink-600 px-3 py-2 text-slate-100; }
-.markdown td { @apply border-b border-ink-800 px-3 py-2; }
+.markdown td { @apply border-b border-ink-800 px-3 py-2 tabular-nums; }
