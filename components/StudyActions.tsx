@@ -61,7 +61,7 @@ export default function StudyActions({ study }: Props) {
   async function remove() {
     if (!confirm(`Delete the ${study.ticker} study?`)) return;
     await fetch(`/api/case-studies/${study.id}`, { method: "DELETE" });
-    router.push("/");
+    router.push("/dashboard");
     router.refresh();
   }
 
