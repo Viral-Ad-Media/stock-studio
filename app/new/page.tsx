@@ -35,8 +35,8 @@ export default function NewStudy() {
     <div className="max-w-2xl">
       <h1 className="text-2xl font-bold text-slate-100 mb-1">New case study</h1>
       <p className="text-sm text-slate-500 mb-6">
-        Queues a job for the engine. Run <code className="text-emerald-400">/build-studies</code> in
-        Claude Code to build it.
+        Queues a job for the research engine. Costs 1 credit (deep memos and comparisons cost 2) —
+        refunded automatically if the build fails.
       </p>
 
       <form onSubmit={submit} className="card p-6 space-y-5">

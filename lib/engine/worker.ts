@@ -1,4 +1,5 @@
 import { sql } from "@/lib/db";
+import { refundJobCredits } from "@/lib/billing";
 import { fetchOpeningCandle, fetchHistory, fetchMovers } from "@/lib/marketdata";
 import {
   researchWithWebSearch,
@@ -19,10 +20,17 @@ import {
 } from "./prompts";
 
 const MAX_ATTEMPTS = 3;
-// Keep comfortably under whatever the deploy host's function-duration limit
-// ends up being once actually deployed (see app/api/engine/run/route.ts's
-// maxDuration) — tune this alongside that once a host is chosen.
-const INVOCATION_BUDGET_MS = Number(process.env.ENGINE_INVOCATION_BUDGET_MS ?? 240_000);
+// Total wall-clock this invocation may spend, kept under the route's
+// maxDuration (300s). A new job is only claimed if a worst-case job still
+// fits in what's left — otherwise a claim at t=239s would run past the
+// host's kill and the job would sit "running" until the stale-lock window.
+const INVOCATION_BUDGET_MS = Number(process.env.ENGINE_INVOCATION_BUDGET_MS ?? 280_000);
+const WORST_CASE_JOB_MS = Number(process.env.ENGINE_WORST_CASE_JOB_MS ?? 200_000);
+// General research variants (full, memo, watchlist, movers…) depend on the
+// hosted web_search tool, whose output quality hasn't been validated against
+// the interactive /build-studies bar yet. Off by default: those jobs stay
+// pending for the manual path; only OHLC-only variants are automated.
+const INCLUDE_WEB_RESEARCH = process.env.ENGINE_WEB_RESEARCH === "1";
 
 type CaseStudyMeta = { company?: string | null; as_of_date: string; corrections_md?: string | null };
 type WatchlistEntry = {
@@ -168,14 +176,18 @@ async function failJob(job: any, err: unknown) {
   if (payload.case_study_id) {
     await sql`UPDATE case_studies SET status = 'error', error = ${message}, updated_at = now() WHERE id = ${payload.case_study_id}`;
   }
+  // The credits charged at queue time go back — the customer got nothing.
+  await refundJobCredits(job.id);
 }
 
 export async function runWorkerLoop() {
   const startedAt = Date.now();
   const processed: { job_id: number; status: "done" | "error" | "retrying" }[] = [];
 
-  while (Date.now() - startedAt < INVOCATION_BUDGET_MS) {
-    const [job] = await sql`SELECT * FROM claim_job()`;
+  while (Date.now() - startedAt + WORST_CASE_JOB_MS < INVOCATION_BUDGET_MS) {
+    const [job] = await sql`
+      SELECT * FROM claim_job(max_attempts => ${MAX_ATTEMPTS}, include_web_research => ${INCLUDE_WEB_RESEARCH})
+    `;
     if (!job || job.id == null) break; // nothing left to claim
 
     try {
@@ -190,7 +202,7 @@ export async function runWorkerLoop() {
       } else {
         // Back to pending — the trigger/cron backstop (or this same loop,
         // if there's budget left) will pick it up again.
-        await sql`UPDATE jobs SET status = 'pending', updated_at = now() WHERE id = ${job.id}`;
+        await sql`UPDATE jobs SET status = 'pending', locked_at = NULL, updated_at = now() WHERE id = ${job.id}`;
         processed.push({ job_id: job.id, status: "retrying" });
       }
     }
