@@ -7,7 +7,11 @@
 export type Candle = { t: string; o: number; h: number; l: number; c: number; v: number };
 
 async function yahooFetch(url: string, label: string) {
-  const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (stock-studio market data fetcher)" } });
+  // Bounded: the worker has a fixed per-invocation time budget.
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (stock-studio market data fetcher)" },
+    signal: AbortSignal.timeout(15_000),
+  });
   if (!res.ok) throw new Error(`Yahoo ${label} API returned ${res.status}`);
   const body: any = await res.json();
   return body;
@@ -20,6 +24,9 @@ export async function fetchOpeningCandle(ticker: string, date?: string) {
     ticker
   )}?interval=1m&includePrePost=false`;
   if (date) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(`${date}T00:00:00-05:00`).getTime())) {
+      throw new Error(`Invalid session date "${date}" — expected YYYY-MM-DD`);
+    }
     const start = Math.floor(new Date(`${date}T00:00:00-05:00`).getTime() / 1000);
     url += `&period1=${start}&period2=${start + 86400}`;
   } else {

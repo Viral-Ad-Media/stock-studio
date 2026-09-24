@@ -12,8 +12,11 @@ signup, Stripe billing (30-day trial → one-time access fee → per-report cred
    Postgres trigger on every `jobs` INSERT (`pg_net`) and by a `pg_cron` backstop every minute
    (URL + shared secret in Supabase Vault: `engine_webhook_url`, `engine_webhook_secret`;
    header `x-engine-secret` = `ENGINE_WEBHOOK_SECRET`). `lib/engine/worker.ts` claims jobs via
-   `stocks.claim_job()` (`FOR UPDATE SKIP LOCKED`, 6-min stale lock, dead-letters after 3
-   attempts) and calls the Anthropic API directly. System prompts are read from
+   `stocks.claim_job()` (`FOR UPDATE SKIP LOCKED`, 6-min stale lock, dead-letters **and refunds**
+   after 3 attempts) and calls the Anthropic API directly. Every call is bounded by the
+   invocation's deadline; only an `end_turn` response is published (`max_tokens`/`refusal` fail
+   the job and refund it; web-search `pause_turn` is resumed). Customers see a generic failure
+   message; the raw error goes to `jobs.result`. System prompts are read from
    `.claude/skills/build-studies/SKILL.md` — the same file the manual skill follows.
    **Only OHLC-only variants (`one_candle`, `davinci_model`) are automated by default.** General
    research variants need the hosted `web_search` tool, whose output hasn't been validated
@@ -63,6 +66,8 @@ npm run engine -- pending                                   # list pending job i
 npm run engine -- claim <jobId>                             # mark running (UI shows "building"), print that job's context
 npm run engine -- complete <jobId> --content s.md --meta m.json
 npm run engine -- fail <jobId> --message "why"             # also refunds the job's credits
+# claim/complete/fail are status-guarded: claim only pending (or your own interrupted manual
+# claim); complete/fail only a running manual claim — never a finished or worker-held job.
 ```
 
 Markdown goes through `--content` files (scratchpad), metadata through `--meta` JSON — this avoids
@@ -126,9 +131,14 @@ catalyst — "no clear catalyst reported" is a valid story.
   `stocks.refund_job_credits()` (idempotent).
 - **Invariant: the Stripe webhook (`app/api/billing/webhook`, signature-verified) is the only
   thing that grants access or purchased credits**, via `stocks.fulfill_checkout()` /
-  `stocks.refund_payment()` (idempotent on the Checkout Session id). The `stocks_app` role has no
-  INSERT/UPDATE on `credits_ledger`/`payments` or on `profiles.access_granted` — enforced by
-  GRANT/REVOKE, not app logic. Any new SECURITY DEFINER function must `REVOKE ALL ... FROM
+  `stocks.refund_payment()` (idempotent on the Checkout Session id). Those two functions are
+  executable **only by the `stocks_billing` role**, which the webhook alone uses
+  (`BILLING_DATABASE_URL`, `billingSql` in `lib/db.ts` — never use it anywhere else). The
+  `stocks_app` role has no INSERT/UPDATE on `credits_ledger`/`payments` or on
+  `profiles.access_granted`, and no EXECUTE on the grant functions — enforced by GRANT/REVOKE,
+  not app logic.
+- At most one open (pending/running) refresh per watchlist row and one open movers digest per
+  workspace — partial unique indexes on `jobs`; routes turn the `23505` into a 409 with no charge. Any new SECURITY DEFINER function must `REVOKE ALL ... FROM
   PUBLIC, anon, authenticated` in the same migration that creates it.
 - Migrations are applied with the Supabase MCP `apply_migration`; newer ones are also kept in
   `supabase/migrations/` for review.

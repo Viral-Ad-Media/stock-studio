@@ -8,15 +8,23 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   if (!ws) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const id = Number(params.id);
-  const removed = await sql.begin(async (tx) => {
-    await tx`DELETE FROM case_studies WHERE (id = ${id} OR parent_id = ${id}) AND workspace_id = ${ws}`;
-    return tx`
-      DELETE FROM jobs WHERE status = 'pending' AND workspace_id = ${ws}
-      AND (payload->>'case_study_id')::bigint = ${id}
+  await sql.begin(async (tx) => {
+    // The study and its follow-ups (earnings updates) go together…
+    const studies = await tx`
+      DELETE FROM case_studies WHERE (id = ${id} OR parent_id = ${id}) AND workspace_id = ${ws}
       RETURNING id
     `;
+    const ids = studies.map((s) => Number(s.id));
+    if (!ids.length) return;
+    // …and so do their not-yet-started jobs, refunded in the same
+    // transaction. Running jobs are left alone: the worker fails them
+    // without a refund when it finds the study gone.
+    const removed = await tx`
+      DELETE FROM jobs WHERE status = 'pending' AND workspace_id = ${ws}
+      AND (payload->>'case_study_id')::bigint = ANY(${ids}::bigint[])
+      RETURNING id
+    `;
+    for (const job of removed) await refundJobCredits(job.id, tx);
   });
-  // Pending (never built) jobs were paid for at queue time — refund them.
-  for (const job of removed) await refundJobCredits(job.id);
   return NextResponse.json({ ok: true });
 }

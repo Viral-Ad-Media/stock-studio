@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { currentWorkspaceId } from "@/lib/workspace";
 import { requireAppAccess, insufficientCreditsResponse } from "@/lib/access";
-import { creditCost, chargeJobCredits, isInsufficientCredits, refundJobCredits } from "@/lib/billing";
+import { creditCost, chargeJobCredits, isInsufficientCredits, isDuplicateOpenJob, refundJobCredits } from "@/lib/billing";
 import { parseTicker, parseOptionalText, isInvalid, MAX_COMPANY, STATUS_TAGS } from "@/lib/validate";
 
 const WATCHLIST_COST = creditCost("watchlist_entry");
@@ -49,6 +49,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ id });
   } catch (err) {
     if (isInsufficientCredits(err)) return insufficientCreditsResponse();
+    // Already tracked with a refresh queued or running (unique index) — no new charge.
+    if (isDuplicateOpenJob(err)) {
+      return NextResponse.json({ error: `${ticker} is already being researched` }, { status: 409 });
+    }
     throw err;
   }
 }
@@ -74,23 +78,21 @@ export async function PATCH(req: Request) {
 
     const [row] = await sql`SELECT id FROM watchlist WHERE id = ${id} AND workspace_id = ${ws}`;
     if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
-    const [existing] = await sql`
-      SELECT id FROM jobs WHERE type = 'watchlist_entry' AND status = 'pending' AND workspace_id = ${ws}
-      AND (payload->>'watchlist_id')::bigint = ${id}
-    `;
-    if (!existing) {
-      try {
-        await sql.begin(async (tx) => {
-          const [job] = await tx`
-            INSERT INTO jobs (workspace_id, type, payload) VALUES (${ws}, 'watchlist_entry', ${sql.json({ watchlist_id: id })})
-            RETURNING id
-          `;
-          await chargeJobCredits(tx, job.id, WATCHLIST_COST);
-        });
-      } catch (err) {
-        if (isInsufficientCredits(err)) return insufficientCreditsResponse();
-        throw err;
+    try {
+      await sql.begin(async (tx) => {
+        const [job] = await tx`
+          INSERT INTO jobs (workspace_id, type, payload) VALUES (${ws}, 'watchlist_entry', ${sql.json({ watchlist_id: id })})
+          RETURNING id
+        `;
+        await chargeJobCredits(tx, job.id, WATCHLIST_COST);
+      });
+    } catch (err) {
+      if (isInsufficientCredits(err)) return insufficientCreditsResponse();
+      // A refresh is already queued or running (unique index) — no double charge.
+      if (isDuplicateOpenJob(err)) {
+        return NextResponse.json({ error: "A refresh is already queued for this ticker" }, { status: 409 });
       }
+      throw err;
     }
   }
   return NextResponse.json({ ok: true });
@@ -102,15 +104,15 @@ export async function DELETE(req: Request) {
 
   const id = Number(new URL(req.url).searchParams.get("id"));
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  const removed = await sql.begin(async (tx) => {
+  await sql.begin(async (tx) => {
     await tx`DELETE FROM watchlist WHERE id = ${id} AND workspace_id = ${ws}`;
-    return tx`
+    const removed = await tx`
       DELETE FROM jobs WHERE status = 'pending' AND type = 'watchlist_entry' AND workspace_id = ${ws}
       AND (payload->>'watchlist_id')::bigint = ${id}
       RETURNING id
     `;
+    // Unbuilt refreshes that were paid for go back to the balance, same tx.
+    for (const job of removed) await refundJobCredits(job.id, tx);
   });
-  // Unbuilt refreshes that were paid for go back to the balance.
-  for (const job of removed) await refundJobCredits(job.id);
   return NextResponse.json({ ok: true });
 }

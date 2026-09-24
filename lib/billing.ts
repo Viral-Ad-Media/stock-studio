@@ -54,8 +54,17 @@ export async function chargeJobCredits(tx: TransactionSql<{}>, jobId: number, co
   await tx`SELECT charge_job_credits(${jobId}, ${cost})`;
 }
 
+// A second open job of a kind that allows only one (see the
+// jobs_one_open_* partial unique indexes) — the whole insert rolls back, so
+// nothing is charged.
+export function isDuplicateOpenJob(err: unknown): boolean {
+  return (err as { code?: string })?.code === "23505";
+}
+
 // Give a job's charge back (failed, or removed from the queue before it was
 // built). Idempotent and a no-op for jobs that were never charged.
-export async function refundJobCredits(jobId: number) {
-  await sql`SELECT refund_job_credits(${jobId})`;
+// Pass the tx to refund inside the same transaction as the delete that
+// triggered it, so a crash between the two can't lose the refund.
+export async function refundJobCredits(jobId: number, tx: TransactionSql<{}> | typeof sql = sql) {
+  await tx`SELECT refund_job_credits(${jobId})`;
 }
