@@ -38,21 +38,21 @@ export default function LandingPage() {
           valuation, and moat — verified against real filings and earnings releases, not
           generated from memory.
         </p>
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
           <Link
             href="/signup"
-            className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-6 py-3 rounded-lg"
+            className="btn-primary w-full whitespace-nowrap px-6 py-3 sm:w-auto"
           >
-            Start your free trial <ArrowRight className="w-4 h-4" />
+            Start your free trial <ArrowRight className="w-4 h-4" aria-hidden />
           </Link>
           <Link
             href="/pricing"
-            className="inline-flex items-center gap-2 border border-ink-600 hover:border-ink-500 text-slate-300 font-medium px-6 py-3 rounded-lg"
+            className="btn-secondary w-full whitespace-nowrap px-6 py-3 sm:w-auto"
           >
             See pricing
           </Link>
         </div>
-        <p className="text-xs text-slate-600 mt-4">
+        <p className="text-xs text-fg-subtle mt-4">
           30-day free trial. No card required to start. Educational analysis — not investment advice.
         </p>
       </section>
@@ -60,7 +60,7 @@ export default function LandingPage() {
       {/* What every study opens with */}
       <section className="max-w-4xl mx-auto px-6 pb-16">
         <div className="card p-6">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-500 mb-3">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-fg-subtle mb-3">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Every study, no exceptions
           </div>
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-sm text-slate-300">
@@ -77,7 +77,7 @@ export default function LandingPage() {
       {/* Formats */}
       <section className="max-w-5xl mx-auto px-6 pb-16">
         <h2 className="text-2xl font-bold text-slate-100 text-center mb-2">One engine, the format you need</h2>
-        <p className="text-slate-500 text-center mb-10 max-w-xl mx-auto">
+        <p className="text-fg-subtle text-center mb-10 max-w-xl mx-auto">
           Same fact-checking discipline underneath — pick the shape that fits how you'll use it.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -85,7 +85,7 @@ export default function LandingPage() {
             <div key={name} className="card p-5">
               <Icon className="w-5 h-5 text-emerald-400 mb-3" />
               <div className="font-medium text-slate-100 mb-1">{name}</div>
-              <div className="text-sm text-slate-500">{desc}</div>
+              <div className="text-sm text-fg-subtle">{desc}</div>
             </div>
           ))}
         </div>
@@ -105,7 +105,7 @@ export default function LandingPage() {
                 {n}
               </div>
               <div className="font-medium text-slate-100 mb-1">{t}</div>
-              <div className="text-sm text-slate-500">{d}</div>
+              <div className="text-sm text-fg-subtle">{d}</div>
             </div>
           ))}
         </div>
@@ -115,14 +115,14 @@ export default function LandingPage() {
       <section className="max-w-3xl mx-auto px-6 pb-24 text-center">
         <div className="card p-10">
           <h2 className="text-2xl font-bold text-slate-100 mb-2">Try it on a ticker you already know</h2>
-          <p className="text-slate-500 mb-6">
+          <p className="text-fg-subtle mb-6">
             The fastest way to trust it is to check its work against something you understand.
           </p>
           <Link
             href="/signup"
-            className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-6 py-3 rounded-lg"
+            className="btn-primary w-full whitespace-nowrap px-6 py-3 sm:w-auto"
           >
-            Start your free trial <ArrowRight className="w-4 h-4" />
+            Start your free trial <ArrowRight className="w-4 h-4" aria-hidden />
           </Link>
         </div>
       </section>

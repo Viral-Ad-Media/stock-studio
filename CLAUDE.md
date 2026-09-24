@@ -166,6 +166,17 @@ so just move on.
    network calls only to the app and Supabase — add an origin there if the browser must reach a new
    service.
 
+## UI rules
+
+- Use the shared classes in `app/globals.css`: `btn-primary`, `btn-secondary`, `icon-btn` (36px hit
+  area, always with an `aria-label`), `input`, `field-label`. Every form field has a real `<label>`.
+- Secondary text is `text-fg-subtle`, never `slate-500/600` (those fail WCAG contrast on the dark
+  background). Form-field borders are `border-ink-500`.
+- Errors render inline with `role="alert"` — no `alert()`. Status is icon + word
+  (`components/StatusBadge.tsx`), never color alone. Dates go through `formatDate()`.
+- Layouts work at 390px: the app shell swaps the sidebar for a top bar + drawer below `md`.
+- Only render `<AutoRefresh />` while something can still change.
+
 ## Content rules (non-negotiable)
 
 1. Educational business analysis, **never personalized investment advice** — every study ends with

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Terminal, X, Newspaper } from "lucide-react";
+import { Loader2, X, Newspaper } from "lucide-react";
+import { apiError } from "@/lib/shared";
 
 export type QueueJob = {
   id: number;
@@ -23,79 +24,87 @@ const TYPE_LABELS: Record<string, string> = {
 export default function QueuePanel({ jobs }: { jobs: QueueJob[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<number | "movers" | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  async function removeJob(id: number) {
-    setBusy(id);
-    const res = await fetch(`/api/jobs?id=${id}`, { method: "DELETE" });
-    if (!res.ok) alert((await res.json().catch(() => ({}))).error ?? "Couldn't remove the job");
-    setBusy(null);
-    router.refresh();
+  async function run(key: number | "movers", request: () => Promise<Response>, fallback: string) {
+    setBusy(key);
+    setError(null);
+    try {
+      const res = await request();
+      if (!res.ok) setError(await apiError(res, fallback));
+    } catch {
+      setError(fallback);
+    } finally {
+      setBusy(null);
+      router.refresh();
+    }
   }
 
-  async function queueMovers() {
-    setBusy("movers");
-    const res = await fetch("/api/case-studies", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ticker: "MARKET", variant: "movers_digest" }),
-    });
-    if (!res.ok && res.status !== 409) alert("Could not queue the digest");
-    setBusy(null);
-    router.refresh();
-  }
+  const removeJob = (id: number) =>
+    run(id, () => fetch(`/api/jobs?id=${id}`, { method: "DELETE" }), "Couldn't remove the job");
+
+  const queueMovers = () =>
+    run(
+      "movers",
+      () =>
+        fetch("/api/case-studies", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticker: "MARKET", variant: "movers_digest" }),
+        }),
+      "Couldn't queue the digest"
+    );
 
   return (
     <div className="mb-6 space-y-3">
-      <div className="flex justify-end">
-        <button
-          onClick={queueMovers}
-          disabled={busy !== null}
-          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-ink-600 bg-ink-800 hover:border-ink-500 text-slate-300 disabled:opacity-50"
-        >
-          <Newspaper className="w-3.5 h-3.5 text-emerald-400" />
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {error && (
+          <p role="alert" className="text-sm text-red-400">
+            {error}
+          </p>
+        )}
+        <button onClick={queueMovers} disabled={busy !== null} className="btn-secondary text-sm px-3 py-2">
+          <Newspaper className="h-4 w-4 text-emerald-400" aria-hidden />
           {busy === "movers" ? "Queuing…" : "Queue today's movers digest"}
         </button>
       </div>
 
       {jobs.length > 0 && (
-        <div className="card border-amber-500/30">
-          <div className="p-4 pb-2 flex items-center gap-3">
-            <Terminal className="w-5 h-5 text-amber-400 shrink-0" />
-            <div className="text-sm">
-              <span className="text-amber-400 font-medium">
-                {jobs.length} job{jobs.length > 1 ? "s" : ""} in the queue.
+        <section className="card" aria-labelledby="queue-heading">
+          <div className="flex items-center gap-3 p-4 pb-2">
+            <Loader2 className="h-5 w-5 shrink-0 text-sky-400 motion-safe:animate-spin" aria-hidden />
+            <h2 id="queue-heading" className="text-sm">
+              <span className="font-medium text-slate-100">
+                {jobs.length} report{jobs.length > 1 ? "s" : ""} in progress.
               </span>{" "}
-              <span className="text-slate-400">
-                Run <code className="text-emerald-400">/build-studies</code> in Claude Code to drain it.
-              </span>
-            </div>
+              <span className="text-slate-400">They usually start within a minute or two.</span>
+            </h2>
           </div>
-          <ul className="px-4 pb-3 divide-y divide-ink-800">
+          <ul className="divide-y divide-ink-800 px-4 pb-3">
             {jobs.map((j) => (
-              <li key={j.id} className="flex items-center justify-between py-2 text-sm">
-                <div className="flex items-center gap-3 min-w-0">
+              <li key={j.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <div className="flex min-w-0 items-center gap-3">
                   <span className="font-mono text-slate-200">{j.ticker ?? "—"}</span>
-                  <span className="text-slate-500 truncate">
+                  <span className="truncate text-fg-subtle">
                     {TYPE_LABELS[j.type] ?? j.type}
-                    {j.status === "running" && (
-                      <span className="text-sky-400"> · building now</span>
-                    )}
+                    {j.status === "running" && <span className="text-sky-400"> · building now</span>}
                   </span>
                 </div>
                 {j.status === "pending" && (
                   <button
                     onClick={() => removeJob(j.id)}
                     disabled={busy !== null}
+                    aria-label={`Remove ${j.ticker ?? "job"} from the queue and refund its credits`}
                     title="Remove from queue"
-                    className="p-1 rounded-md border border-ink-600 text-slate-500 hover:border-red-500/50 hover:text-red-400 disabled:opacity-50"
+                    className="icon-btn hover:border-red-500/50 hover:text-red-400"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <X className="h-4 w-4" aria-hidden />
                   </button>
                 )}
               </li>
             ))}
           </ul>
-        </div>
+        </section>
       )}
     </div>
   );

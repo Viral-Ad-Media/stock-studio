@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { VARIANTS, HIDDEN_FORM_VARIANTS, creditCost } from "@/lib/shared";
+import { VARIANTS, HIDDEN_FORM_VARIANTS, MAX_NOTES, creditCost, apiError } from "@/lib/shared";
 
 export default function NewStudy() {
   const router = useRouter();
@@ -17,92 +17,125 @@ export default function NewStudy() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const res = await fetch("/api/case-studies", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ticker, company, variant, notes }),
-    });
-    if (res.ok) {
-      router.push("/dashboard");
-      router.refresh();
-    } else {
-      setError((await res.json()).error ?? "Something went wrong");
-      setBusy(false);
+    try {
+      const res = await fetch("/api/case-studies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker, company, variant, notes }),
+      });
+      if (res.ok) {
+        router.push("/dashboard");
+        router.refresh();
+        return;
+      }
+      setError(await apiError(res, "Something went wrong"));
+    } catch {
+      setError("Couldn't reach the server — check your connection and try again.");
     }
+    setBusy(false);
   }
+
+  const formats = VARIANTS.filter((v) => !HIDDEN_FORM_VARIANTS.includes(v.value));
 
   return (
     <div className="max-w-2xl">
       <h1 className="text-2xl font-bold text-slate-100 mb-1">New case study</h1>
-      <p className="text-sm text-slate-500 mb-6">
-        Queues a job for the research engine. This format costs {creditCost(variant)} credits —
-        refunded automatically if the build fails.
+      <p className="text-sm text-fg-subtle mb-6">
+        Queues a report for the research engine. Credits are refunded automatically if the build fails.
       </p>
 
-      <form onSubmit={submit} className="card p-6 space-y-5">
-        <div className="grid grid-cols-2 gap-4">
-          <label className="block">
-            <span className="text-sm text-slate-400">Ticker *</span>
+      <form onSubmit={submit} className="card p-4 sm:p-6 space-y-5" aria-describedby={error ? "new-error" : undefined}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="ticker" className="field-label">
+              Ticker <span aria-hidden>*</span>
+            </label>
             <input
+              id="ticker"
               required
+              autoComplete="off"
               value={ticker}
               onChange={(e) => setTicker(e.target.value.toUpperCase())}
-              placeholder="NVDA — or 'AAPL vs MSFT' for comparisons"
-              className="mt-1 w-full bg-ink-800 border border-ink-600 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-emerald-500"
+              placeholder="NVDA, or AAPL vs MSFT"
+              aria-describedby="ticker-hint"
+              className="input font-mono"
             />
-          </label>
-          <label className="block">
-            <span className="text-sm text-slate-400">Company (optional)</span>
+            <p id="ticker-hint" className="mt-1 text-xs text-fg-subtle">
+              For comparisons, separate tickers with “vs”.
+            </p>
+          </div>
+          <div>
+            <label htmlFor="company" className="field-label">
+              Company (optional)
+            </label>
             <input
+              id="company"
+              maxLength={200}
               value={company}
               onChange={(e) => setCompany(e.target.value)}
               placeholder="NVIDIA Corporation"
-              className="mt-1 w-full bg-ink-800 border border-ink-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
+              className="input"
             />
-          </label>
-        </div>
-
-        <div>
-          <span className="text-sm text-slate-400 block mb-2">Format</span>
-          <div className="grid grid-cols-2 gap-2">
-            {VARIANTS.filter((v) => !HIDDEN_FORM_VARIANTS.includes(v.value)).map((v) => (
-              <button
-                type="button"
-                key={v.value}
-                onClick={() => setVariant(v.value)}
-                className={`text-left p-3 rounded-lg border text-sm transition-colors ${
-                  variant === v.value
-                    ? "border-emerald-500 bg-emerald-500/10"
-                    : "border-ink-600 bg-ink-800 hover:border-ink-500"
-                }`}
-              >
-                <div className="font-medium text-slate-200">{v.label}</div>
-                <div className="text-[11px] text-slate-500 mt-0.5">{v.hint}</div>
-              </button>
-            ))}
           </div>
         </div>
 
-        <label className="block">
-          <span className="text-sm text-slate-400">
+        <fieldset>
+          <legend className="field-label mb-2">Format</legend>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {formats.map((v) => (
+              <label
+                key={v.value}
+                className={`relative flex cursor-pointer gap-3 rounded-lg border p-3 text-sm transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-emerald-400 ${
+                  variant === v.value ? "border-emerald-500 bg-emerald-500/10" : "border-ink-500 bg-ink-800 hover:border-slate-400"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="variant"
+                  value={v.value}
+                  checked={variant === v.value}
+                  onChange={() => setVariant(v.value)}
+                  className="sr-only"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium text-slate-200">{v.label}</span>
+                  <span className="mt-0.5 block text-xs text-fg-subtle">{v.hint}</span>
+                </span>
+                <span className="shrink-0 text-xs tabular-nums text-slate-400">
+                  {creditCost(v.value)} cr
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <div>
+          <label htmlFor="notes" className="field-label">
             Raw notes (optional — the engine fact-checks these and flags corrections)
-          </span>
+          </label>
           <textarea
+            id="notes"
             value={notes}
+            maxLength={MAX_NOTES}
             onChange={(e) => setNotes(e.target.value)}
             rows={5}
             placeholder="e.g. Revenue accelerating 5 quarters straight, data center demand insane, moat = CUDA…"
-            className="mt-1 w-full bg-ink-800 border border-ink-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
+            aria-describedby="notes-count"
+            className="input"
           />
-        </label>
+          <p id="notes-count" className="mt-1 text-right text-xs tabular-nums text-fg-subtle">
+            {notes.length.toLocaleString()} / {MAX_NOTES.toLocaleString()}
+          </p>
+        </div>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && (
+          <p id="new-error" role="alert" className="text-sm text-red-400">
+            {error}
+          </p>
+        )}
 
-        <button
-          disabled={busy || !ticker.trim()}
-          className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium px-5 py-2.5 rounded-lg"
-        >
-          {busy ? "Queuing…" : `Queue for the engine · ${creditCost(variant)} credits`}
+        <button disabled={busy || !ticker.trim()} className="btn-primary w-full text-sm px-5 py-2.5 sm:w-auto">
+          {busy ? "Queuing…" : `Queue report · ${creditCost(variant)} credits`}
         </button>
       </form>
     </div>

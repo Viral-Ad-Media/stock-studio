@@ -10,7 +10,7 @@ export default function PrivacyPage() {
       </div>
 
       <h1>Privacy Policy</h1>
-      <p className="text-sm text-slate-500">Last updated: [DATE]</p>
+      <p className="text-sm text-fg-subtle">Last updated: [DATE]</p>
 
       <h2>1. What we collect</h2>
       <ul>
