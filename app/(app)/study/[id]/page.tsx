@@ -29,7 +29,7 @@ export default async function StudyPage({ params }: { params: { id: string } }) 
   return (
     <div>
       {study.status !== "ready" && <AutoRefresh />}
-      <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-300 mb-4">
+      <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-300 mb-4">
         <ArrowLeft className="w-4 h-4" /> Dashboard
       </Link>
 

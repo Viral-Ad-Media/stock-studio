@@ -23,7 +23,7 @@ export default function NewStudy() {
       body: JSON.stringify({ ticker, company, variant, notes }),
     });
     if (res.ok) {
-      router.push("/");
+      router.push("/dashboard");
       router.refresh();
     } else {
       setError((await res.json()).error ?? "Something went wrong");
