@@ -208,6 +208,8 @@ other direction, the CLI refuses to claim a job the worker is holding.
 | **Access** | `hasAccess = access_granted OR trial_ends_at > now()`. After the trial, a one-time Stripe payment sets `access_granted`. |
 | **Credits** | Charged **at queue time** in the same transaction as the job INSERT. If the balance is short the charge raises (SQLSTATE `SS402`) and the job never exists; the API returns 402. |
 | **Refunds** | Failed jobs (worker or CLI `fail`) are refunded automatically and idempotently. Jobs can be removed from the queue, and refunded, only while still `pending`. Once running, a job can't be cancelled. |
+| **Limits** | Per workspace, at most 10 reports in progress and 30 queued per hour (`lib/limits.ts`). |
+| **Sweep jobs** | Refreshes and earnings updates queued by `/refresh-watchlist` are free, because the customer didn't ask for them. |
 | **Purchases** | `/billing` opens a hosted Stripe Checkout, either the access fee or a credit pack. |
 
 **The Stripe webhook is the only thing that grants access or purchased credits.** It connects as
@@ -314,6 +316,9 @@ npm run engine -- pending                                    # pending/running j
 npm run engine -- claim <jobId>                              # mark running; prints that one job's context
 npm run engine -- complete <jobId> --content s.md --meta m.json
 npm run engine -- fail <jobId> --message "why"              # also refunds the job's credits
+npm run engine -- watchlist                                  # tracked tickers across workspaces (for the sweep)
+npm run engine -- queue-refresh <watchlistId>                # free, sweep-initiated watchlist refresh
+npm run engine -- queue-earnings <caseStudyId>               # free, sweep-initiated earnings update
 
 # Market data (Yahoo Finance, no key)
 npm run candles -- <TICKER> [--date YYYY-MM-DD]              # 1m OHLC + first 5-min candle (~30d history)
@@ -417,6 +422,7 @@ These rules are non-negotiable and apply to every variant and both engine modes:
 | Jobs sit in `pending` forever | Either `engine_webhook_url` in Vault is still the placeholder, or the job is a web-research variant and `ENGINE_WEB_RESEARCH` is off (run `/build-studies`). |
 | Study shows "We couldn't build this report" | The job failed and its credits were refunded. The real reason is in `jobs.result`: for example a refusal, output over the length limit, repeated timeouts, or invocations killed 3 times. For kills, check the host's function logs and keep `ENGINE_INVOCATION_BUDGET_MS` below the route's `maxDuration`. |
 | Browser console shows a CSP violation | The page is calling an origin not in `connect-src` in `next.config.mjs`; add it there. |
+| API returns 429 | The workspace hit a queue limit (`lib/limits.ts`): 10 reports in progress, or 30 queued in the last hour. The response says which one, with `Retry-After`. |
 | API returns 402 | The trial has ended without an unlock (`code: no_access`) or the balance is too low (`code: no_credits`). Both are handled on `/billing`. |
 | Webhook returns 500 `BILLING_DATABASE_URL is not set` (or a login failure) | The webhook's database account isn't configured. Set a password on `stocks_billing` and `BILLING_DATABASE_URL`. Stripe keeps retrying, so nothing is lost. |
 | Paid, but no access or credits | The webhook isn't reaching the app. Check the Stripe dashboard's delivery log, `STRIPE_WEBHOOK_SECRET`, and that the event carries Stock Studio metadata. |

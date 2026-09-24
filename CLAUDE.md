@@ -68,6 +68,9 @@ npm run engine -- complete <jobId> --content s.md --meta m.json
 npm run engine -- fail <jobId> --message "why"             # also refunds the job's credits
 # claim/complete/fail are status-guarded: claim only pending (or your own interrupted manual
 # claim); complete/fail only a running manual claim — never a finished or worker-held job.
+npm run engine -- watchlist                                 # /refresh-watchlist: tracked tickers, all workspaces
+npm run engine -- queue-refresh <watchlistId>               # free sweep-initiated refresh (row's workspace)
+npm run engine -- queue-earnings <caseStudyId>              # free sweep-initiated earnings update
 ```
 
 Markdown goes through `--content` files (scratchpad), metadata through `--meta` JSON — this avoids
@@ -137,6 +140,10 @@ catalyst — "no clear catalyst reported" is a valid story.
   `stocks_app` role has no INSERT/UPDATE on `credits_ledger`/`payments` or on
   `profiles.access_granted`, and no EXECUTE on the grant functions — enforced by GRANT/REVOKE,
   not app logic.
+- Sweep-queued jobs (`/refresh-watchlist` via `queue-refresh` / `queue-earnings`) are **not
+  charged** — the customer didn't ask for them.
+- Per-workspace queue limits (`lib/limits.ts`): at most 10 open jobs and 30 new jobs per hour →
+  429 with `Retry-After`. Applied to every customer route that queues a job.
 - At most one open (pending/running) refresh per watchlist row and one open movers digest per
   workspace — partial unique indexes on `jobs`; routes turn the `23505` into a 409 with no charge. Any new SECURITY DEFINER function must `REVOKE ALL ... FROM
   PUBLIC, anon, authenticated` in the same migration that creates it.
