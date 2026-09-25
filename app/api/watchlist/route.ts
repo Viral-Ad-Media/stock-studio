@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { currentWorkspaceId } from "@/lib/workspace";
 import { requireAppAccess, insufficientCreditsResponse } from "@/lib/access";
+import { queueLimitResponse } from "@/lib/limits";
 import { creditCost, chargeJobCredits, isInsufficientCredits, isDuplicateOpenJob, refundJobCredits } from "@/lib/billing";
 import { parseTicker, parseOptionalText, isInvalid, MAX_COMPANY, STATUS_TAGS } from "@/lib/validate";
 
@@ -11,6 +12,8 @@ export async function POST(req: Request) {
   const gate = await requireAppAccess();
   if (!gate.ok) return gate.response;
   const { ws } = gate;
+  const limited = await queueLimitResponse(ws);
+  if (limited) return limited;
 
   const body = await req.json().catch(() => ({}));
   const ticker = parseTicker(body.ticker);
@@ -75,6 +78,8 @@ export async function PATCH(req: Request) {
     // A refresh is a new paid job — same gate as POST.
     const gate = await requireAppAccess();
     if (!gate.ok) return gate.response;
+    const limited = await queueLimitResponse(ws);
+    if (limited) return limited;
 
     const [row] = await sql`SELECT id FROM watchlist WHERE id = ${id} AND workspace_id = ${ws}`;
     if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });

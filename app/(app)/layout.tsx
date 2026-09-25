@@ -23,7 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const billing = user && ws ? await getBillingState(user.id, ws).catch(logged("getBillingState")) : null;
   return (
     <div className="min-h-screen md:flex">
-      <Nav userEmail={user?.email ?? null} credits={billing?.balance ?? null} />
+      <Nav userEmail={user?.email ?? null} userName={user?.name ?? null} credits={billing?.balance ?? null} />
       <main id="main" className="w-full min-w-0 flex-1 p-4 sm:p-6 md:p-8 max-w-5xl mx-auto">
         {children}
       </main>

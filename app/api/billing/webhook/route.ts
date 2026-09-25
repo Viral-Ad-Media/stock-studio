@@ -4,7 +4,7 @@ import { billingSql } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 
 // Stripe webhook — the ONLY path that grants access or credits. Signature
-// verified against STRIPE_WEBHOOK_SECRET; excluded from middleware.ts's
+// verified against STRIPE_WEBHOOK_SECRET; excluded from proxy.ts's
 // session gate. Fulfilment is one Postgres RPC per event, idempotent on the
 // Checkout Session id, so a replay only observes the completed result.
 // Any DB failure returns 500 so Stripe retries. Runs as the stocks_billing

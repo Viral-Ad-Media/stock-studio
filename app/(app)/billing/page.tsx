@@ -21,7 +21,8 @@ function fmtDate(d: string | Date) {
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-export default async function BillingPage({ searchParams }: { searchParams: { checkout?: string } }) {
+export default async function BillingPage({ searchParams }: { searchParams: Promise<{ checkout?: string }> }) {
+  const { checkout } = await searchParams;
   const user = await currentUser();
   const ws = await currentWorkspaceId();
   if (!user || !ws) redirect("/login");
@@ -43,7 +44,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ch
   return (
     <div className="max-w-2xl">
       {/* Webhook fulfilment lands a few seconds after the redirect back. */}
-      {searchParams.checkout === "success" && <AutoRefresh maxMs={60_000} />}
+      {checkout === "success" && <AutoRefresh maxMs={60_000} />}
       <h1 className="text-2xl font-bold text-slate-100 mb-1">Billing</h1>
       <p className="text-sm text-fg-subtle mb-6">
         Every report costs credits when you queue it — see{" "}
@@ -51,7 +52,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ch
         schedule. Failed or removed reports are refunded automatically.
       </p>
 
-      {searchParams.checkout === "success" && (
+      {checkout === "success" && (
         <div className="card p-4 mb-4 text-sm text-emerald-400">
           Payment received — it can take a few seconds to show up here.
         </div>

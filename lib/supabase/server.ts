@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { REMEMBER_COOKIE, applyRemember, rememberFromCookieValue } from "@/lib/auth-cookies";
 
 // Server-side Supabase client — used ONLY for auth (session lookup, sign
 // in/out, PKCE code exchange). All actual data reads/writes go through
@@ -8,8 +9,8 @@ import { cookies } from "next/headers";
 // to PostgREST at all, by design (see the migration's REVOKE on
 // anon/authenticated). This client only ever touches Supabase Auth
 // endpoints (GoTrue), which is separate infrastructure.
-export function createClient() {
-  const cookieStore = cookies();
+export async function createClient() {
+  const cookieStore = await cookies(); // async since Next 15
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) {
@@ -22,7 +23,10 @@ export function createClient() {
       },
       setAll(cookiesToSet) {
         try {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+          const remember = rememberFromCookieValue(cookieStore.get(REMEMBER_COOKIE)?.value);
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, applyRemember(options, remember))
+          );
         } catch {
           // Called from a Server Component with no response to attach to
           // (middleware already refreshes the session on every request).
