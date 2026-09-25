@@ -6,7 +6,7 @@ research engine builds the report, and the finished study appears in the app.
 The output is **educational business analysis, never personalized investment advice**. Every study
 opens with an "As of [date]" line and ends with a "Not investment advice" line.
 
-- **App**: Next.js 14 (App Router), Tailwind. Runs locally on port 3200 and is deployed on Vercel.
+- **App**: Next.js 16 (App Router, React 19), Tailwind. Runs locally on port 3200 and is deployed on Vercel or Render.
 - **Database**: hosted Postgres on Supabase, in an isolated `stocks` schema.
 - **Auth**: Supabase Auth. Each signup gets its own workspace.
 - **Billing**: Stripe. A 30-day trial, then a one-time access fee, then per-report credits.
@@ -23,6 +23,7 @@ opens with an "As of [date]" line and ends with a "Not investment advice" line.
 - [Environment variables](#environment-variables)
 - [The research engine](#the-research-engine)
 - [Billing](#billing)
+- [Accounts & sign-in](#accounts--sign-in)
 - [Multi-tenancy & security](#multi-tenancy--security)
 - [Database](#database)
 - [CLI scripts](#cli-scripts)
@@ -135,7 +136,7 @@ All variables are listed in [`.env.example`](.env.example).
 | `DATABASE_URL` | everything | Supabase **transaction pooler**, `stocks_app` role (`stocks_app.<ref>` username). |
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | auth | From Project Settings → API. |
 | `SUPABASE_PROJECT_ID` | Claude Code skills | Used with the Supabase MCP `execute_sql` for read-only inspection. |
-| `NEXT_PUBLIC_APP_URL` | Stripe redirects | Optional; falls back to the request origin. |
+| `NEXT_PUBLIC_APP_URL` | login + Stripe redirects | **Set it in production**, e.g. `https://app.example.com`. Behind a host's proxy the server sees itself as `0.0.0.0:$PORT`. Without it, `appOrigin()` falls back to the forwarded `Host` header. |
 | `ANTHROPIC_API_KEY` | automated worker | |
 | `ENGINE_WEBHOOK_SECRET` | automated worker | Must equal the Vault secret `engine_webhook_secret`. |
 | `ENGINE_WEB_RESEARCH` | automated worker | `1` also automates web-research variants. Off by default ([why](#automated-worker)). |
@@ -208,6 +209,8 @@ other direction, the CLI refuses to claim a job the worker is holding.
 | **Access** | `hasAccess = access_granted OR trial_ends_at > now()`. After the trial, a one-time Stripe payment sets `access_granted`. |
 | **Credits** | Charged **at queue time** in the same transaction as the job INSERT. If the balance is short the charge raises (SQLSTATE `SS402`) and the job never exists; the API returns 402. |
 | **Refunds** | Failed jobs (worker or CLI `fail`) are refunded automatically and idempotently. Jobs can be removed from the queue, and refunded, only while still `pending`. Once running, a job can't be cancelled. |
+| **Limits** | Per workspace, at most 10 reports in progress and 30 queued per hour (`lib/limits.ts`). |
+| **Sweep jobs** | Refreshes and earnings updates queued by `/refresh-watchlist` are free, because the customer didn't ask for them. |
 | **Purchases** | `/billing` opens a hosted Stripe Checkout, either the access fee or a credit pack. |
 
 **The Stripe webhook is the only thing that grants access or purchased credits.** It connects as
@@ -235,6 +238,22 @@ watch the balance update.
 
 ---
 
+## Accounts & sign-in
+
+- **Sign up** asks for first name, last name, email and a password (at least 8 characters,
+  including a letter and a number). The names go into Supabase Auth user metadata and are used only
+  for display; nothing security-relevant is read from them. Supabase sends a confirmation email,
+  which can be re-sent from the "check your email" screen.
+- **Log in** with email and password, or **Continue with Google**.
+- **Remember me** is on by default, which keeps you signed in on that device. Unchecked, the
+  login is kept only for the browser session: the `ss_remember=0` flag makes every auth cookie a
+  session cookie (`lib/auth-cookies.ts`).
+- **Forgot password**: `/forgot-password` sends a reset link. It shows the same response whether
+  or not the account exists, so it can't be used to find registered emails. The link goes through
+  `/auth/callback` to `/reset-password`, where the new password is set.
+- The shared UI is in `components/auth/`: `AuthShell`, `PasswordInput` (show/hide toggle),
+  `GoogleButton` and `OrDivider`.
+
 ## Multi-tenancy & security
 
 - **Workspace scoping in app code**: every tenant table (`case_studies`, `jobs`, `watchlist`,
@@ -251,7 +270,7 @@ watch the balance update.
 - **Function permissions**: every SECURITY DEFINER function revokes EXECUTE from PUBLIC, anon
   and authenticated **in the same migration that creates it**. New functions get PUBLIC EXECUTE
   by default in Postgres, so this step is easy to miss.
-- **Middleware** ([`middleware.ts`](middleware.ts)) protects an explicit list of paths:
+- **Proxy** ([`proxy.ts`](proxy.ts), Next 16's name for middleware) protects an explicit list of paths:
   - Session required: `/dashboard`, `/new`, `/watchlist`, `/study`, `/billing`, and the
     `case-studies`, `jobs`, `watchlist` and `billing/checkout` APIs.
   - Public: marketing pages, `/login`, `/signup` and `/auth/callback`.
@@ -314,6 +333,9 @@ npm run engine -- pending                                    # pending/running j
 npm run engine -- claim <jobId>                              # mark running; prints that one job's context
 npm run engine -- complete <jobId> --content s.md --meta m.json
 npm run engine -- fail <jobId> --message "why"              # also refunds the job's credits
+npm run engine -- watchlist                                  # tracked tickers across workspaces (for the sweep)
+npm run engine -- queue-refresh <watchlistId>                # free, sweep-initiated watchlist refresh
+npm run engine -- queue-earnings <caseStudyId>               # free, sweep-initiated earnings update
 
 # Market data (Yahoo Finance, no key)
 npm run candles -- <TICKER> [--date YYYY-MM-DD]              # 1m OHLC + first 5-min candle (~30d history)
@@ -385,7 +407,15 @@ supabase/migrations/    SQL for recent migrations
      `checkout.session.completed`, `checkout.session.async_payment_succeeded` and
      `charge.refunded`.
    - Set `STRIPE_WEBHOOK_SECRET`.
-4. **Supabase Auth**: add the deploy URL (and `/auth/callback`) to the allowed redirect URLs.
+4. **Supabase Auth** (dashboard → Authentication):
+   - **URL Configuration:** set the Site URL to your deploy URL, and add
+     `https://<host>/auth/callback` (plus `http://localhost:3200/auth/callback` for dev) to the
+     redirect allowlist. Email confirmation, password reset and Google all return through it.
+   - **Google sign-in:** enable the Google provider with a Google Cloud OAuth client. Its
+     authorized redirect URI is `https://nxwehsafitrcoenbrkyv.supabase.co/auth/v1/callback`.
+     Until it's enabled, the Google button shows "Google sign-in isn't set up yet".
+   - **Emails:** the confirm-signup and reset-password templates work as is. Set up custom SMTP
+     before launch, because Supabase's built-in sender is heavily rate-limited.
 5. **Smoke test**:
    - Sign up and confirm the trial credits appear.
    - Queue a `one_candle` study and confirm it builds without any Claude Code session running.
@@ -417,6 +447,7 @@ These rules are non-negotiable and apply to every variant and both engine modes:
 | Jobs sit in `pending` forever | Either `engine_webhook_url` in Vault is still the placeholder, or the job is a web-research variant and `ENGINE_WEB_RESEARCH` is off (run `/build-studies`). |
 | Study shows "We couldn't build this report" | The job failed and its credits were refunded. The real reason is in `jobs.result`: for example a refusal, output over the length limit, repeated timeouts, or invocations killed 3 times. For kills, check the host's function logs and keep `ENGINE_INVOCATION_BUDGET_MS` below the route's `maxDuration`. |
 | Browser console shows a CSP violation | The page is calling an origin not in `connect-src` in `next.config.mjs`; add it there. |
+| API returns 429 | The workspace hit a queue limit (`lib/limits.ts`): 10 reports in progress, or 30 queued in the last hour. The response says which one, with `Retry-After`. |
 | API returns 402 | The trial has ended without an unlock (`code: no_access`) or the balance is too low (`code: no_credits`). Both are handled on `/billing`. |
 | Webhook returns 500 `BILLING_DATABASE_URL is not set` (or a login failure) | The webhook's database account isn't configured. Set a password on `stocks_billing` and `BILLING_DATABASE_URL`. Stripe keeps retrying, so nothing is lost. |
 | Paid, but no access or credits | The webhook isn't reaching the app. Check the Stripe dashboard's delivery log, `STRIPE_WEBHOOK_SECRET`, and that the event carries Stock Studio metadata. |

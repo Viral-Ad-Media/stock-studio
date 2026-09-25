@@ -5,6 +5,9 @@
  *   npm run engine -- claim <jobId>           mark a job running, print its full context (JSON)
  *   npm run engine -- complete <jobId> [--content <file.md>] [--meta <file.json>]
  *   npm run engine -- fail <jobId> --message "<why>"
+ *   npm run engine -- watchlist                    list tracked tickers (all workspaces) for the sweep
+ *   npm run engine -- queue-refresh <watchlistId>  queue a free, sweep-initiated watchlist refresh
+ *   npm run engine -- queue-earnings <caseStudyId> queue a free earnings update for a ready study
  *
  * `complete` semantics by job type:
  *   build_case_study / earnings_update / movers_digest — --content is required (the finished markdown).
@@ -179,8 +182,77 @@ async function main() {
       await tx`SELECT refund_job_credits(${id})`;
     });
     out({ ok: true, job_id: id, failed: true });
+  } else if (cmd === "watchlist") {
+    // For the /refresh-watchlist sweep: every tracked ticker, across all
+    // workspaces, with whether a refresh is already open. Ids and labels
+    // only — no thesis/snapshot text.
+    const rows = await sql`
+      SELECT w.id, w.ticker, w.company, w.status_tag, w.as_of_date, w.case_study_id,
+             EXISTS (
+               SELECT 1 FROM jobs j WHERE j.type = 'watchlist_entry' AND j.status IN ('pending','running')
+               AND j.workspace_id = w.workspace_id AND (j.payload->>'watchlist_id')::bigint = w.id
+             ) AS refresh_open
+      FROM watchlist w ORDER BY w.id
+    `;
+    out(rows);
+  } else if (cmd === "queue-refresh") {
+    // Sweep-initiated refresh: queued in the row's own workspace and not
+    // charged — the customer didn't ask for it.
+    const id = Number(process.argv[3]);
+    const [row] = await sql`SELECT id, workspace_id FROM watchlist WHERE id = ${id}`;
+    if (!row) {
+      console.error(`No watchlist row ${id}`);
+      process.exit(1);
+    }
+    try {
+      const [job] = await sql`
+        INSERT INTO jobs (workspace_id, type, payload)
+        VALUES (${row.workspace_id}, 'watchlist_entry', ${sql.json({ watchlist_id: id })})
+        RETURNING id
+      `;
+      out({ ok: true, job_id: job.id, watchlist_id: id });
+    } catch (err: any) {
+      if (err?.code !== "23505") throw err;
+      out({ ok: true, skipped: "a refresh is already queued or running", watchlist_id: id });
+    }
+  } else if (cmd === "queue-earnings") {
+    // Sweep-initiated earnings update for a study that just reported: a new
+    // earnings_update study linked to the parent, in the parent's workspace,
+    // not charged. Skipped if one is already open for that parent.
+    const parentId = Number(process.argv[3]);
+    const result = await sql.begin(async (tx) => {
+      const [parent] = await tx`
+        SELECT id, workspace_id, ticker, company FROM case_studies WHERE id = ${parentId} AND status = 'ready'
+      `;
+      if (!parent) return { error: `No ready case study ${parentId}` };
+      // Serialise against a concurrent sweep for the same workspace.
+      await tx`SELECT pg_advisory_xact_lock(hashtext('stocks_credits:' || ${parent.workspace_id}::text))`;
+      const [open] = await tx`
+        SELECT cs.id FROM case_studies cs
+        WHERE cs.parent_id = ${parentId} AND cs.variant = 'earnings_update' AND cs.status IN ('queued','building')
+      `;
+      if (open) return { ok: true, skipped: "an earnings update is already queued", case_study_id: open.id };
+      const [study] = await tx`
+        INSERT INTO case_studies (workspace_id, ticker, company, variant, status, parent_id)
+        VALUES (${parent.workspace_id}, ${parent.ticker}, ${parent.company}, 'earnings_update', 'queued', ${parentId})
+        RETURNING id
+      `;
+      const [job] = await tx`
+        INSERT INTO jobs (workspace_id, type, payload)
+        VALUES (${parent.workspace_id}, 'earnings_update', ${sql.json({ case_study_id: study.id })})
+        RETURNING id
+      `;
+      return { ok: true, job_id: job.id, case_study_id: study.id };
+    });
+    if ("error" in result) {
+      console.error(result.error);
+      process.exit(1);
+    }
+    out(result);
   } else {
-    console.error("Usage: npm run engine -- <pending|claim|complete|fail> [args]");
+    console.error(
+      "Usage: npm run engine -- <pending|claim|complete|fail|watchlist|queue-refresh|queue-earnings> [args]"
+    );
     process.exit(1);
   }
 

@@ -68,6 +68,9 @@ npm run engine -- complete <jobId> --content s.md --meta m.json
 npm run engine -- fail <jobId> --message "why"             # also refunds the job's credits
 # claim/complete/fail are status-guarded: claim only pending (or your own interrupted manual
 # claim); complete/fail only a running manual claim — never a finished or worker-held job.
+npm run engine -- watchlist                                 # /refresh-watchlist: tracked tickers, all workspaces
+npm run engine -- queue-refresh <watchlistId>               # free sweep-initiated refresh (row's workspace)
+npm run engine -- queue-earnings <caseStudyId>              # free sweep-initiated earnings update
 ```
 
 Markdown goes through `--content` files (scratchpad), metadata through `--meta` JSON — this avoids
@@ -137,6 +140,10 @@ catalyst — "no clear catalyst reported" is a valid story.
   `stocks_app` role has no INSERT/UPDATE on `credits_ledger`/`payments` or on
   `profiles.access_granted`, and no EXECUTE on the grant functions — enforced by GRANT/REVOKE,
   not app logic.
+- Sweep-queued jobs (`/refresh-watchlist` via `queue-refresh` / `queue-earnings`) are **not
+  charged** — the customer didn't ask for them.
+- Per-workspace queue limits (`lib/limits.ts`): at most 10 open jobs and 30 new jobs per hour →
+  429 with `Retry-After`. Applied to every customer route that queues a job.
 - At most one open (pending/running) refresh per watchlist row and one open movers digest per
   workspace — partial unique indexes on `jobs`; routes turn the `23505` into a 409 with no charge. Any new SECURITY DEFINER function must `REVOKE ALL ... FROM
   PUBLIC, anon, authenticated` in the same migration that creates it.
@@ -165,6 +172,14 @@ so just move on.
 4. Security headers (CSP, frame-ancestors, nosniff) live in `next.config.mjs`; the CSP allows
    network calls only to the app and Supabase — add an origin there if the browser must reach a new
    service.
+
+## Auth
+
+Supabase Auth: email + password (signup collects first/last name into user metadata — display
+only, never trusted for anything else), Google OAuth, and password reset (`/forgot-password` →
+email link → `/auth/callback?next=/reset-password` → `/reset-password`). "Remember me" unchecked sets
+`ss_remember=0`, which makes the browser client, server client and `proxy.ts` write auth cookies as
+session cookies (`lib/auth-cookies.ts`). Shared UI lives in `components/auth/`.
 
 ## UI rules
 
@@ -195,11 +210,24 @@ so just move on.
 npm run dev        # app on http://localhost:3200 (needs DATABASE_URL in .env.local)
 ```
 
-Hosted on Vercel (project `stock-studio`). `middleware.ts` requires a Supabase session on every
-route except `/login`, `/signup`, `/auth/callback`, `/api/engine/*` (shared-secret auth) and
+Hosted on Vercel (project `stock-studio`) or Render. Next.js 16: the auth gate is `proxy.ts`
+(Next 16's rename of `middleware.ts`); it requires a Supabase session on every
+route except `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/auth/callback`, `/api/engine/*` (shared-secret auth) and
 `/api/billing/webhook` (Stripe-signature auth); an unconfigured production deploy returns 503
 rather than running open. Env vars: see `.env.example` (Supabase, `ANTHROPIC_API_KEY`,
-`ENGINE_WEBHOOK_SECRET`, Stripe keys + price ids). After deploying, set the Vault secret
+`ENGINE_WEBHOOK_SECRET`, Stripe keys + price ids, and `NEXT_PUBLIC_APP_URL` — set it in production:
+absolute redirect URLs come from `appOrigin()` in `lib/origin.ts`, never `new URL(req.url).origin`,
+which is `0.0.0.0:$PORT` behind a host's proxy). After deploying, set the Vault secret
 `engine_webhook_url` to `https://<host>/api/engine/run` — until then the trigger/cron POST to a
 placeholder and nothing is automated. Market data comes from the unauthenticated Yahoo Finance
 endpoints (`lib/marketdata.ts`, also behind `npm run candles` / `history` / `movers`).
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

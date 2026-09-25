@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { currentUser, currentWorkspaceId } from "@/lib/workspace";
 import { getBillingState, CREDITS_PER_PACK } from "@/lib/billing";
 import { stripe, priceFor } from "@/lib/stripe";
+import { appOrigin } from "@/lib/origin";
 
 // Starts a hosted Stripe Checkout (redirect) for the one-time access fee or
 // a credit pack. Nothing is granted here — only the signature-verified
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const origin = process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin;
+  const origin = appOrigin(req);
   const metadata = {
     workspace_id: ws,
     user_id: user.id,
