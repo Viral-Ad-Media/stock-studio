@@ -32,6 +32,18 @@ export function adminErrorResponse(err: unknown): NextResponse {
   const status = e?.code === "SS400" ? 400 : e?.code === "SS403" ? 403 : e?.code === "SS404" ? 404 : 0;
   if (status) return NextResponse.json({ error: e.message ?? "Request failed" }, { status });
   console.error("admin action failed", err);
+  // Login rejected (28P01 wrong password / 28000 no password or not allowed) or
+  // the pooler refused the connection: say so, since it's a setup problem.
+  const msg = String(e?.message ?? "");
+  if (e?.code === "28P01" || e?.code === "28000" || /password authentication|authentication failed|tenant or user not found|ECONNREFUSED|ENOTFOUND/i.test(msg)) {
+    return NextResponse.json(
+      {
+        error:
+          "The admin database connection was rejected. Set a password on the stocks_admin role (ALTER ROLE stocks_admin WITH PASSWORD ...) and put that exact password in ADMIN_DATABASE_URL, with the user stocks_admin.<project ref>.",
+      },
+      { status: 503 }
+    );
+  }
   return NextResponse.json({ error: "The change couldn't be saved. Check the server logs." }, { status: 500 });
 }
 
