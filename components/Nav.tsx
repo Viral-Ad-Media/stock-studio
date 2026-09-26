@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut, CreditCard, Menu, X, Globe2, Radar, Sigma, HelpCircle } from "lucide-react";
+import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut, CreditCard, Menu, X, Globe2, Radar, Sigma, HelpCircle, ShieldCheck } from "lucide-react";
 import { useTour } from "@/components/guide/Tour";
+import ThemeToggle from "@/components/theme/ThemeToggle";
 import { getSupabase } from "@/lib/supabase/lazy";
 import { setRememberMe } from "@/lib/supabase/remember";
 
@@ -18,11 +19,11 @@ const links = [
   { href: "/billing", label: "Billing", icon: CreditCard, tour: "billing" },
 ];
 
-type Props = { userEmail: string | null; userName: string | null; credits: number | null };
+type Props = { userEmail: string | null; userName: string | null; credits: number | null; isAdmin?: boolean };
 
 // Sidebar from md up; on phones a top bar with a menu button that opens the
 // same links in a drawer (the fixed 224px sidebar left ~100px for content).
-export default function Nav({ userEmail, userName, credits }: Props) {
+export default function Nav({ userEmail, userName, credits, isAdmin = false }: Props) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -61,6 +62,8 @@ export default function Nav({ userEmail, userName, credits }: Props) {
           >
             <NavLinks pathname={pathname} credits={credits} />
             <HelpButton onStart={() => setOpen(false)} />
+            <ThemeToggle withLabel />
+            {isAdmin && <AdminLink />}
             <Account userEmail={userEmail} userName={userName} />
           </nav>
         </div>
@@ -75,6 +78,8 @@ export default function Nav({ userEmail, userName, credits }: Props) {
         </div>
         <NavLinks pathname={pathname} credits={credits} />
         <HelpButton />
+        <ThemeToggle withLabel />
+        {isAdmin && <AdminLink />}
         <Account userEmail={userEmail} userName={userName} />
       </nav>
     </>
@@ -120,6 +125,19 @@ function NavLinks({ pathname, credits }: { pathname: string; credits: number | n
         );
       })}
     </>
+  );
+}
+
+// Only rendered for platform admins; /admin re-checks on the server anyway.
+function AdminLink() {
+  return (
+    <Link
+      href="/admin"
+      className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-amber-300 hover:bg-ink-800 hover:text-amber-200"
+    >
+      <ShieldCheck className="h-4 w-4" aria-hidden />
+      Super admin
+    </Link>
   );
 }
 
