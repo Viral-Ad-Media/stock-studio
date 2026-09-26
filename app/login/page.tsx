@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createClient, setRememberMe } from "@/lib/supabase/client";
+import { getSupabase } from "@/lib/supabase/lazy";
+import { setRememberMe } from "@/lib/supabase/remember";
 import AuthShell from "@/components/auth/AuthShell";
 import PasswordInput from "@/components/auth/PasswordInput";
 import GoogleButton from "@/components/auth/GoogleButton";
@@ -38,7 +39,7 @@ export default function LoginPage() {
     setNotice(null);
     setRememberMe(remember);
     try {
-      const { error } = await createClient().auth.signInWithPassword({ email: email.trim(), password });
+      const { error } = await (await getSupabase()).auth.signInWithPassword({ email: email.trim(), password });
       if (error) {
         setError(
           /email not confirmed/i.test(error.message)
