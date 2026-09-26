@@ -209,9 +209,20 @@ export async function fetchMovers(count = 5, revalidateSec?: number) {
 
 export type DailyCloses = { symbol: string; dates: string[]; closes: number[] };
 
-// Daily closes (oldest first) for the market-context page and study track
-// records. Cached for `revalidateSec` in Next's data cache.
-export async function fetchDailyCloses(ticker: string, range = "1y", revalidateSec = 1800): Promise<DailyCloses> {
+// Daily OHLCV, oldest first. `closes` are raw (use them with opens/highs/lows);
+// `adjCloses` are split/dividend-adjusted (use them for returns).
+export type DailyBars = {
+  symbol: string;
+  dates: string[];
+  opens: number[];
+  highs: number[];
+  lows: number[];
+  closes: number[];
+  adjCloses: number[];
+  volumes: number[];
+};
+
+export async function fetchDailyBars(ticker: string, range = "1y", revalidateSec = 1800): Promise<DailyBars> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
     ticker
   )}?interval=1d&range=${encodeURIComponent(range)}&includePrePost=false`;
@@ -219,17 +230,31 @@ export async function fetchDailyCloses(ticker: string, range = "1y", revalidateS
   const result = body?.chart?.result?.[0];
   if (!result || body?.chart?.error) throw new Error(`No chart data for ${ticker}`);
   const ts: number[] = result.timestamp ?? [];
-  const raw: (number | null)[] = result.indicators?.adjclose?.[0]?.adjclose ?? result.indicators?.quote?.[0]?.close ?? [];
-  const dates: string[] = [];
-  const closes: number[] = [];
+  const q = result.indicators?.quote?.[0] ?? {};
+  const adj: (number | null)[] = result.indicators?.adjclose?.[0]?.adjclose ?? q.close ?? [];
+  const bars: DailyBars = { symbol: ticker, dates: [], opens: [], highs: [], lows: [], closes: [], adjCloses: [], volumes: [] };
+  const ok = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
   for (let i = 0; i < ts.length; i++) {
-    const c = raw[i];
-    if (c == null || !Number.isFinite(c)) continue;
-    dates.push(new Date(ts[i] * 1000).toISOString().slice(0, 10));
-    closes.push(c);
+    const [o, h, l, c, a] = [q.open?.[i], q.high?.[i], q.low?.[i], q.close?.[i], adj[i]];
+    // Skip half-filled rows (Yahoo emits nulls for halted/partial sessions).
+    if (!ok(o) || !ok(h) || !ok(l) || !ok(c)) continue;
+    bars.dates.push(new Date(ts[i] * 1000).toISOString().slice(0, 10));
+    bars.opens.push(o);
+    bars.highs.push(h);
+    bars.lows.push(l);
+    bars.closes.push(c);
+    bars.adjCloses.push(ok(a) ? a : c);
+    bars.volumes.push(ok(q.volume?.[i]) ? q.volume[i] : 0);
   }
-  if (closes.length === 0) throw new Error(`No daily closes returned for ${ticker}`);
-  return { symbol: ticker, dates, closes };
+  if (bars.closes.length === 0) throw new Error(`No daily bars returned for ${ticker}`);
+  return bars;
+}
+
+// Adjusted daily closes (oldest first) for the market-context page and study
+// track records. Same URL as fetchDailyBars, so both share one cache entry.
+export async function fetchDailyCloses(ticker: string, range = "1y", revalidateSec = 1800): Promise<DailyCloses> {
+  const b = await fetchDailyBars(ticker, range, revalidateSec);
+  return { symbol: b.symbol, dates: b.dates, closes: b.adjCloses };
 }
 
 // Runs `fn` over `items` with at most `limit` in flight; failures become null

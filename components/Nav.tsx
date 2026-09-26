@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut, CreditCard, Menu, X, Globe2 } from "lucide-react";
+import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut, CreditCard, Menu, X, Globe2, Radar, Sigma } from "lucide-react";
 import { createClient, setRememberMe } from "@/lib/supabase/client";
 
 const links = [
@@ -11,6 +11,8 @@ const links = [
   { href: "/new", label: "New study", icon: FilePlus2 },
   { href: "/watchlist", label: "Watchlist", icon: Eye },
   { href: "/market", label: "Market", icon: Globe2 },
+  { href: "/setups", label: "Setup bots", icon: Radar },
+  { href: "/gamma", label: "Gamma exposure", icon: Sigma },
   { href: "/billing", label: "Billing", icon: CreditCard },
 ];
 
