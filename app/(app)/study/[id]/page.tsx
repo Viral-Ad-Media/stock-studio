@@ -14,6 +14,16 @@ import { ArrowLeft, AlertTriangle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
+// Tab title names the ticker, e.g. "NWRB · Full 4-card study".
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const ws = await currentWorkspaceId();
+  const [row] = ws && Number(id) ? await sql`SELECT ticker, variant FROM case_studies WHERE id = ${Number(id)} AND workspace_id = ${ws}` : [];
+  if (!row) return { title: "Case study" };
+  const label = VARIANTS.find((v) => v.value === row.variant)?.label ?? "Case study";
+  return { title: `${row.ticker} · ${label}` };
+}
+
 export default async function StudyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ws = await currentWorkspaceId();

@@ -5,6 +5,8 @@ import AutoRefresh from "@/components/AutoRefresh";
 import WatchlistClient, { type ThesisHistoryEntry } from "@/components/WatchlistClient";
 import EarningsPanel, { EarningsPanelSkeleton } from "@/components/insights/EarningsPanel";
 
+export const metadata = { title: "Watchlist", description: "Tracked tickers with thesis status, triggers and a thesis timeline." };
+
 export const dynamic = "force-dynamic";
 
 export default async function WatchlistPage() {

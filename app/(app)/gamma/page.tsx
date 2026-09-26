@@ -6,6 +6,8 @@ import { parseTicker, isInvalid } from "@/lib/validate";
 import { formatDate } from "@/lib/shared";
 import GexChart from "@/components/gamma/GexChart";
 
+export const metadata = { title: "Gamma exposure", description: "A dealer-gamma model built from delayed options data." };
+
 export const dynamic = "force-dynamic";
 
 export default async function GammaPage({ searchParams }: { searchParams: Promise<{ symbol?: string }> }) {

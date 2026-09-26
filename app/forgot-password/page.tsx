@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { MailCheck } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { getSupabase } from "@/lib/supabase/lazy";
 import AuthShell from "@/components/auth/AuthShell";
 
 export default function ForgotPasswordPage() {
@@ -22,7 +22,7 @@ export default function ForgotPasswordPage() {
     setBusy(true);
     setError(null);
     try {
-      const { error } = await createClient().auth.resetPasswordForEmail(email.trim(), {
+      const { error } = await (await getSupabase()).auth.resetPasswordForEmail(email.trim(), {
         // The emailed link lands on /auth/callback, which exchanges the code for
         // a short-lived recovery session and forwards to /reset-password.
         redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,

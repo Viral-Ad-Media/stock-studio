@@ -1,19 +1,28 @@
-export const metadata = { title: "Terms of Service — Stock Studio" };
+import type { Metadata } from "next";
+import Link from "next/link";
+import Breadcrumbs from "@/components/marketing/Breadcrumbs";
+import { SITE } from "@/lib/site";
+
+export const metadata: Metadata = {
+  title: "Terms of Service",
+  description: "The terms that govern your use of Stock Studio: accounts, the free trial, credits, acceptable use and the educational, not-investment-advice nature of every study.",
+  alternates: { canonical: "/terms" },
+};
+
+const UPDATED = "September 26, 2026";
 
 export default function TermsPage() {
   return (
-    <div className="max-w-3xl mx-auto px-6 py-16 markdown">
-      <div className="card p-4 mb-8 border-amber-500/30 text-sm text-amber-400">
-        Template — has not been reviewed by a lawyer. Replace the bracketed placeholders and get
-        this reviewed before relying on it for a real launch.
-      </div>
+    <div className="mx-auto max-w-3xl px-6 py-12">
+      <Breadcrumbs items={[{ name: "Home", path: "/" }, { name: "Terms of Service", path: "/terms" }]} />
+      <div className="markdown">
 
       <h1>Terms of Service</h1>
-      <p className="text-sm text-fg-subtle">Last updated: [DATE]</p>
+      <p className="text-sm text-fg-subtle">Last updated: {UPDATED}</p>
 
       <h2>1. What Stock Studio is</h2>
       <p>
-        Stock Studio (&ldquo;we&rdquo;, &ldquo;us&rdquo;, the &ldquo;Service&rdquo;) generates
+        Stock Studio (the &ldquo;Service&rdquo;) is operated by {SITE.operator} (&ldquo;we&rdquo;, &ldquo;us&rdquo;). It generates
         educational business-analysis case studies about publicly traded companies. Content is
         produced by an automated research process using large language models, real-time web
         search, and public market data.
@@ -38,7 +47,7 @@ export default function TermsPage() {
       <h2>4. Trial, billing, and credits</h2>
       <p>
         New accounts receive a free trial period as described on our{" "}
-        <a href="/pricing">pricing page</a>. After the trial, continued use requires a one-time
+        <Link href="/pricing">pricing page</Link>. After the trial, continued use requires a one-time
         unlock fee and sufficient credit balance, both billed through our payment processor. Fees
         are non-refundable except where required by law or stated otherwise at checkout. We may
         change pricing prospectively with notice.
@@ -81,13 +90,19 @@ export default function TermsPage() {
       </p>
 
       <h2>10. Governing law</h2>
-      <p>These terms are governed by the laws of [JURISDICTION], without regard to conflict-of-law principles.</p>
+      <p>
+        These terms are governed by the laws of the jurisdiction in which {SITE.operator} is established, without
+        regard to conflict-of-law principles, except where the law of your country of residence gives you rights that
+        cannot be waived.
+      </p>
 
       <h2>11. Contact</h2>
       <p>
         Questions about these terms:{" "}
-        <a href="mailto:support@stockstudio.app">support@stockstudio.app</a>
+        <a href={`mailto:${SITE.email}`}>{SITE.email}</a>. Our <Link href="/privacy">Privacy Policy</Link> explains how
+        we handle your data.
       </p>
+      </div>
     </div>
   );
 }

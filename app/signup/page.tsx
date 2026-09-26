@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Check, MailCheck } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { getSupabase } from "@/lib/supabase/lazy";
 import AuthShell from "@/components/auth/AuthShell";
 import PasswordInput from "@/components/auth/PasswordInput";
 import GoogleButton from "@/components/auth/GoogleButton";
@@ -36,7 +36,7 @@ export default function SignupPage() {
     const first = firstName.trim().slice(0, NAME_MAX);
     const last = lastName.trim().slice(0, NAME_MAX);
     try {
-      const { error } = await createClient().auth.signUp({
+      const { error } = await (await getSupabase()).auth.signUp({
         email: email.trim(),
         password,
         options: {
@@ -60,7 +60,7 @@ export default function SignupPage() {
 
   async function resend() {
     setResent("sending");
-    const { error } = await createClient().auth.resend({
+    const { error } = await (await getSupabase()).auth.resend({
       type: "signup",
       email: email.trim(),
       options: { emailRedirectTo: `${window.location.origin}/auth/callback` },

@@ -1,6 +1,9 @@
 import { Radar, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { sql, formatDate } from "@/lib/db";
+import EmptyState from "@/components/guide/EmptyState";
 import { BOTS, botRecord, type Direction, type Level } from "@/lib/setups";
+
+export const metadata = { title: "Setup bots", description: "Rule-based pattern scans with a paper-tracked record." };
 
 export const dynamic = "force-dynamic";
 
@@ -45,9 +48,18 @@ export default async function SetupsPage() {
           {matches.length === 1 ? "match" : "matches"}
         </p>
       ) : (
-        <p className="card mb-6 p-4 text-sm text-slate-300" role="status">
-          The first scan runs automatically after the next market close.
-        </p>
+        <div className="mb-6">
+          <EmptyState
+            icon={Radar}
+            title="The first scan runs after the next market close"
+            body="Once a trading session has closed, the bots check about 100 large caps against each pattern below and list every match here. Nothing to set up."
+            tips={[
+              "Read each bot's definition below; a match means the stock fits that published rule, not that it will move.",
+              "Each match shows the pattern's own reference and failure levels.",
+              "Every match is followed afterwards, so each bot builds a track record over time.",
+            ]}
+          />
+        </div>
       )}
 
       <div className="space-y-4">
