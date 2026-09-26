@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import ThemeToggle from "@/components/theme/ThemeToggle";
 import { Gauge, Users, ListChecks, ScrollText, Server, ArrowLeft, ShieldCheck } from "lucide-react";
 
 const LINKS = [
@@ -41,6 +42,9 @@ export default function AdminNav({ email }: { email: string | null }) {
           );
         })}
         <li className="shrink-0 md:mt-4 md:border-t md:border-ink-800 md:pt-3">
+          <ThemeToggle withLabel />
+        </li>
+        <li className="shrink-0">
           <Link href="/dashboard" className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-slate-400 hover:bg-ink-800 hover:text-slate-200">
             <ArrowLeft className="h-4 w-4" aria-hidden /> Back to the app
           </Link>

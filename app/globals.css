@@ -2,8 +2,65 @@
 @tailwind components;
 @tailwind utilities;
 
-html {
+/* Theme palettes. Dark is the default; html[data-theme="light"] swaps every
+   token (set before first paint by the script in app/layout.tsx). Light
+   values are chosen for the same WCAG contrast as dark: text >=4.5:1 on the
+   surfaces it sits on, field borders >=3:1. */
+:root,
+html[data-theme="dark"] {
   color-scheme: dark; /* native selects, scrollbars, autofill render dark */
+  --ink-950: 10 14 20;
+  --ink-900: 15 20 32;
+  --ink-800: 22 29 46;
+  --ink-700: 31 41 64;
+  --ink-600: 43 58 92;
+  --ink-500: 91 109 150;
+  --fg-subtle: 131 145 167;
+  --slate-100: 241 245 249;
+  --slate-200: 226 232 240;
+  --slate-300: 203 213 225;
+  --slate-400: 148 163 184;
+  --emerald-300: 110 231 183;
+  --emerald-400: 52 211 153;
+  --emerald-500: 16 185 129;
+  --red-300: 252 165 165;
+  --red-400: 248 113 113;
+  --red-500: 239 68 68;
+  --amber-200: 253 230 138;
+  --amber-300: 252 211 77;
+  --amber-400: 251 191 36;
+  --amber-500: 245 158 11;
+  --sky-300: 125 211 252;
+  --sky-400: 56 189 248;
+  --sky-500: 14 165 233;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --ink-950: 244 246 249; /* page */
+  --ink-900: 255 255 255; /* cards, sidebar */
+  --ink-800: 238 241 246; /* inputs, hover */
+  --ink-700: 223 228 236; /* borders */
+  --ink-600: 203 211 223;
+  --ink-500: 122 134 154; /* field borders: 3.7:1 on white */
+  --fg-subtle: 84 96 115; /* 6.0:1 on white */
+  --slate-100: 15 23 42;
+  --slate-200: 30 41 59;
+  --slate-300: 51 65 85;
+  --slate-400: 71 85 105;
+  --emerald-300: 6 95 70; /* text on white 7.6:1 */
+  --emerald-400: 6 95 70;
+  --emerald-500: 4 120 87; /* primary button: near-white text 5.2:1 */
+  --red-300: 185 28 28;
+  --red-400: 185 28 28;
+  --red-500: 220 38 38;
+  --amber-200: 146 64 14;
+  --amber-300: 146 64 14;
+  --amber-400: 146 64 14;
+  --amber-500: 217 119 6;
+  --sky-300: 3 105 161;
+  --sky-400: 3 105 161;
+  --sky-500: 2 132 199;
 }
 
 body {
@@ -12,12 +69,13 @@ body {
 
 /* One visible keyboard-focus style everywhere (WCAG 2.4.7). */
 :focus-visible {
-  outline: 2px solid theme("colors.emerald.400");
+  outline: 2px solid rgb(var(--emerald-400));
   outline-offset: 2px;
 }
 
 @layer components {
-  /* Dark text on emerald: 7.6:1 at rest, 10:1 on hover (white-on-600 was 3.8:1). */
+  /* Page-colour text on emerald: dark theme 7.6:1 at rest, 10:1 on hover;
+     light theme near-white on deep green 5.2:1, darker on hover. */
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 font-medium text-ink-950
       transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60;

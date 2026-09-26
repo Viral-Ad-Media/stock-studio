@@ -242,6 +242,13 @@ session cookies (`lib/auth-cookies.ts`). Shared UI lives in `components/auth/`.
   area, always with an `aria-label`), `input`, `field-label`. Every form field has a real `<label>`.
 - Secondary text is `text-fg-subtle`, never `slate-500/600` (those fail WCAG contrast on the dark
   background). Form-field borders are `border-ink-500`.
+- Light / dark / system themes: every colour the UI uses (`ink`, `fg`, and the slate / emerald /
+  red / amber / sky shades in `tailwind.config.ts`) is a CSS variable in `app/globals.css`, with a
+  dark set (default) and a `html[data-theme="light"]` set of equal contrast. Style with those
+  tokens only — no `dark:` variants, no raw hex (except brand marks and the validated chart
+  palette). Using a new shade of one of those colours means adding it to both variable sets.
+  The preference lives in `localStorage` (`ss_theme`, `lib/theme.ts`) and is applied before
+  first paint by the inline script in `app/layout.tsx`; `ThemeToggle` cycles Dark → Light → System.
 - Errors render inline with `role="alert"` — no `alert()`. Status is icon + word
   (`components/StatusBadge.tsx`), never color alone. Dates go through `formatDate()`.
 - Layouts work at 390px: the app shell swaps the sidebar for a top bar + drawer below `md`.

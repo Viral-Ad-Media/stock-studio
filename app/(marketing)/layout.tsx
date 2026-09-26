@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CandlestickChart } from "lucide-react";
 import { SITE } from "@/lib/site";
+import ThemeToggle from "@/components/theme/ThemeToggle";
 
 // Public marketing chrome — completely separate from the authenticated
 // app's sidebar (app/(app)/layout.tsx). Logged-out visitors only ever see
@@ -57,6 +58,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             <Link href="/login" className="text-slate-300 hover:text-slate-100">
               Sign in
             </Link>
+            <ThemeToggle />
             <Link href="/signup" className="btn-primary px-3 py-2 text-sm sm:px-4">
               <span className="sm:hidden">Try free</span>
               <span className="hidden sm:inline">Start free trial</span>
