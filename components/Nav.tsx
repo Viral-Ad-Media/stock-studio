@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut, CreditCard, Menu, X, Globe2, Radar, Sigma, HelpCircle, ShieldCheck } from "lucide-react";
 import { useTour } from "@/components/guide/Tour";
+import ThemeToggle from "@/components/theme/ThemeToggle";
 import { getSupabase } from "@/lib/supabase/lazy";
 import { setRememberMe } from "@/lib/supabase/remember";
 
@@ -61,6 +62,7 @@ export default function Nav({ userEmail, userName, credits, isAdmin = false }: P
           >
             <NavLinks pathname={pathname} credits={credits} />
             <HelpButton onStart={() => setOpen(false)} />
+            <ThemeToggle withLabel />
             {isAdmin && <AdminLink />}
             <Account userEmail={userEmail} userName={userName} />
           </nav>
@@ -76,6 +78,7 @@ export default function Nav({ userEmail, userName, credits, isAdmin = false }: P
         </div>
         <NavLinks pathname={pathname} credits={credits} />
         <HelpButton />
+        <ThemeToggle withLabel />
         {isAdmin && <AdminLink />}
         <Account userEmail={userEmail} userName={userName} />
       </nav>

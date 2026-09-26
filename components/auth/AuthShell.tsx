@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CandlestickChart } from "lucide-react";
+import ThemeToggle from "@/components/theme/ThemeToggle";
 
 // Shared frame for login / signup / password pages.
 export default function AuthShell({
@@ -14,7 +15,8 @@ export default function AuthShell({
   footer?: React.ReactNode;
 }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-ink-950 p-4">
+    <main className="relative flex min-h-screen items-center justify-center bg-ink-950 p-4">
+      <ThemeToggle className="absolute right-4 top-4" />
       <div className="w-full max-w-md">
         <Link href="/" className="mb-6 flex items-center justify-center gap-2">
           <CandlestickChart className="h-7 w-7 text-emerald-400" aria-hidden />

@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { GexStrike } from "@/lib/gex";
 
 // Diverging polarity: one hue per sign around a zero baseline. Validated
-// (dataviz validate_palette.js, dark surface #0f1420): sky-600 / orange-600.
+// (dataviz validate_palette.js on the dark #0f1420 and light #ffffff surfaces): sky-600 / orange-600.
 const POS = "#0284c7";
 const NEG = "#ea580c";
 
