@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { createClient, setRememberMe } from "@/lib/supabase/client";
+import { getSupabase } from "@/lib/supabase/lazy";
+import { setRememberMe } from "@/lib/supabase/remember";
 
 // "Continue with Google" via Supabase OAuth (PKCE). Supabase sends the user to
 // Google, then back to /auth/callback, which exchanges the code for a session.
@@ -22,7 +23,7 @@ export default function GoogleButton({
   async function go() {
     setBusy(true);
     setRememberMe(remember);
-    const { error } = await createClient().auth.signInWithOAuth({
+    const { error } = await (await getSupabase()).auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
     });

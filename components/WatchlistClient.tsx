@@ -3,7 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { RefreshCcw, Trash2, Plus } from "lucide-react";
+import { RefreshCcw, Trash2, Plus, Eye } from "lucide-react";
+import Tooltip from "@/components/guide/Tooltip";
+import EmptyState from "@/components/guide/EmptyState";
 import { apiError, formatDate, type WatchlistRow } from "@/lib/shared";
 import ThesisStatusBadge from "@/components/insights/ThesisStatusBadge";
 
@@ -114,9 +116,17 @@ export default function WatchlistClient({
       </div>
 
       {rows.length === 0 ? (
-        <div className="card p-10 text-center text-fg-subtle text-sm">
-          Nothing tracked yet. Add a ticker — the engine writes the thesis, snapshot, and triggers.
-        </div>
+        <EmptyState
+          icon={Eye}
+          title="Start tracking a ticker"
+          body="Type a ticker in the box above and press Add. The research engine writes a one-line thesis, a price and valuation snapshot, and two or three triggers to watch."
+          tips={[
+            "Each refresh re-checks the thesis and marks it intact, weakening or broken, with the reason.",
+            "Earlier theses are kept as a timeline under each ticker.",
+            "Tracked tickers show their earnings dates here and on the dashboard.",
+            "Change the status tag (watching, building conviction, pass) any time from the menu next to each ticker.",
+          ]}
+        />
       ) : (
         <div className="space-y-3">
           {rows.map((r) => {
@@ -150,24 +160,28 @@ export default function WatchlistClient({
                         </option>
                       ))}
                     </select>
-                    <button
-                      onClick={() => refreshRow(r.id, r.ticker)}
-                      disabled={busy !== null}
-                      aria-label={`Refresh ${r.ticker}`}
-                      title="Queue a refresh"
-                      className="icon-btn hover:border-slate-400"
-                    >
-                      <RefreshCcw className={`h-4 w-4 ${busy === `refresh-${r.id}` ? "motion-safe:animate-spin" : ""}`} aria-hidden />
-                    </button>
-                    <button
-                      onClick={() => remove(r.id, r.ticker)}
-                      disabled={busy !== null}
-                      aria-label={`Remove ${r.ticker} from the watchlist`}
-                      title="Remove"
-                      className="icon-btn hover:border-red-500/50 hover:text-red-400"
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden />
-                    </button>
+                    <Tooltip align="end" text="Re-research and re-check the thesis (uses credits)">
+                      <button
+                        type="button"
+                        onClick={() => refreshRow(r.id, r.ticker)}
+                        disabled={busy !== null}
+                        aria-label={`Refresh ${r.ticker}`}
+                        className="icon-btn hover:border-slate-400"
+                      >
+                        <RefreshCcw className={`h-4 w-4 ${busy === `refresh-${r.id}` ? "motion-safe:animate-spin" : ""}`} aria-hidden />
+                      </button>
+                    </Tooltip>
+                    <Tooltip align="end" text="Stop tracking this ticker">
+                      <button
+                        type="button"
+                        onClick={() => remove(r.id, r.ticker)}
+                        disabled={busy !== null}
+                        aria-label={`Remove ${r.ticker} from the watchlist`}
+                        className="icon-btn hover:border-red-500/50 hover:text-red-400"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                      </button>
+                    </Tooltip>
                   </div>
                 </div>
                 {r.thesis && (

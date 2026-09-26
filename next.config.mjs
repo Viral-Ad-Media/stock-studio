@@ -39,6 +39,9 @@ const securityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Never ship source maps to browsers, and don't advertise the framework.
+  productionBrowserSourceMaps: false,
+  poweredByHeader: false,
   // lib/engine/prompts.ts reads the methodology from the skill file at
   // runtime — make sure serverless bundles actually contain it.
   outputFileTracingIncludes: {

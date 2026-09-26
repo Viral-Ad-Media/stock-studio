@@ -8,7 +8,11 @@ import StatusBadge from "@/components/StatusBadge";
 import GradeBadge from "@/components/insights/GradeBadge";
 import EarningsPanel, { EarningsPanelSkeleton } from "@/components/insights/EarningsPanel";
 import { parseStoredGrade } from "@/lib/grades";
-import { ArrowRight } from "lucide-react";
+import { FilePlus2 } from "lucide-react";
+import Onboarding from "@/components/guide/Onboarding";
+import EmptyState from "@/components/guide/EmptyState";
+
+export const metadata = { title: "Dashboard", description: "Your case studies, their build status and upcoming earnings." };
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +60,7 @@ export default async function Dashboard() {
   return (
     <div>
       {inFlight && <AutoRefresh />}
+      <Onboarding show={studies.length === 0 && pendingJobs.length === 0} />
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-100 mb-1">Dashboard</h1>
@@ -75,15 +80,18 @@ export default async function Dashboard() {
       )}
 
       {studies.length === 0 ? (
-        <div className="card p-10 text-center">
-          <p className="text-slate-400 mb-4">No case studies yet.</p>
-          <Link
-            href="/new"
-            className="btn-primary text-sm px-4 py-2"
-          >
-            Queue your first study <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
+        <EmptyState
+          icon={FilePlus2}
+          title="Queue your first case study"
+          body="Pick a ticker and a format. The research engine builds a dated, source-cited study, and it appears here as soon as it's ready."
+          tips={[
+            "Start with a company you already know well, so you can check the study's work.",
+            "A quick take costs the fewest credits; a full 4-card study covers growth, profitability, valuation and moat.",
+            "Paste your own notes into the form and the study fact-checks them, listing any corrections separately.",
+            "Add tickers to the watchlist to see their earnings dates on this page.",
+          ]}
+          action={{ href: "/new", label: "Queue a study" }}
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {studies.map((s) => {

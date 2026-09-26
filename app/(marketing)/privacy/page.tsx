@@ -1,20 +1,33 @@
-export const metadata = { title: "Privacy Policy — Stock Studio" };
+import type { Metadata } from "next";
+import Link from "next/link";
+import Breadcrumbs from "@/components/marketing/Breadcrumbs";
+import { SITE } from "@/lib/site";
+
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  description: "What personal data Stock Studio collects, why, who processes it on our behalf, how long we keep it, and how to access or delete it.",
+  alternates: { canonical: "/privacy" },
+};
+
+const UPDATED = "September 26, 2026";
 
 export default function PrivacyPage() {
   return (
-    <div className="max-w-3xl mx-auto px-6 py-16 markdown">
-      <div className="card p-4 mb-8 border-amber-500/30 text-sm text-amber-400">
-        Template — has not been reviewed by a lawyer. Replace the bracketed placeholders, confirm
-        the vendor list matches what's actually integrated, and get this reviewed (including for
-        GDPR/CCPA applicability) before relying on it for a real launch.
-      </div>
+    <div className="mx-auto max-w-3xl px-6 py-12">
+      <Breadcrumbs items={[{ name: "Home", path: "/" }, { name: "Privacy Policy", path: "/privacy" }]} />
+      <div className="markdown">
 
       <h1>Privacy Policy</h1>
-      <p className="text-sm text-fg-subtle">Last updated: [DATE]</p>
+      <p className="text-sm text-fg-subtle">Last updated: {UPDATED}</p>
+
+      <p>
+        This policy explains how {SITE.operator} (&ldquo;we&rdquo;, &ldquo;us&rdquo;), the operator of Stock Studio,
+        handles personal data. It applies together with our <Link href="/terms">Terms of Service</Link>.
+      </p>
 
       <h2>1. What we collect</h2>
       <ul>
-        <li><strong>Account data:</strong> email address and authentication credentials, handled by our authentication provider (Supabase Auth).</li>
+        <li><strong>Account data:</strong> your name, email address and authentication credentials, handled by our authentication provider (Supabase Auth). If you sign in with Google, we receive your name and email address from Google.</li>
         <li><strong>Usage data:</strong> tickers you queue, notes you submit for fact-checking, and the studies/watchlist entries generated for your account.</li>
         <li><strong>Payment data:</strong> handled entirely by our payment processor (Stripe) — we do not store full card numbers.</li>
         <li><strong>Technical data:</strong> IP address, browser type, and basic request logs, for security and abuse prevention.</li>
@@ -32,9 +45,10 @@ export default function PrivacyPage() {
       <h2>3. Third parties we share data with</h2>
       <p>
         We use a small set of subprocessors to run the Service: our database and authentication
-        provider (Supabase), our AI research provider (Anthropic — the ticker/notes you submit
-        for a study are sent to generate that study's content), and our payment processor
-        (Stripe). We do not sell your personal data.
+        provider (Supabase), our AI research provider (Anthropic: the ticker and notes you submit
+        for a study are sent to generate that study&apos;s content), our payment processor
+        (Stripe), Google if you choose Google sign-in, and our hosting provider. We do not sell
+        your personal data.
       </p>
 
       <h2>4. Data retention</h2>
@@ -48,13 +62,14 @@ export default function PrivacyPage() {
       <p>
         Depending on your location, you may have the right to access, correct, export, or delete
         your personal data. To exercise these rights, email{" "}
-        <a href="mailto:privacy@stockstudio.app">privacy@stockstudio.app</a>.
+        <a href={`mailto:${SITE.email}`}>{SITE.email}</a>.
       </p>
 
       <h2>6. Cookies</h2>
       <p>
-        We use a single essential cookie to keep you signed in. We do not use third-party
-        advertising or tracking cookies.
+        We use only essential cookies: the ones that keep you signed in, and one that remembers
+        whether you chose &ldquo;Remember me&rdquo;. We do not use advertising, analytics or
+        tracking cookies.
       </p>
 
       <h2>7. Security</h2>
@@ -71,8 +86,9 @@ export default function PrivacyPage() {
 
       <h2>10. Contact</h2>
       <p>
-        <a href="mailto:privacy@stockstudio.app">privacy@stockstudio.app</a>
+        {SITE.operator}: <a href={`mailto:${SITE.email}`}>{SITE.email}</a>
       </p>
+      </div>
     </div>
   );
 }

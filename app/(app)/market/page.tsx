@@ -6,6 +6,8 @@ import { currentWorkspaceId } from "@/lib/workspace";
 import { getMarketContext, BREADTH_UNIVERSE } from "@/lib/market-context";
 import { fetchMovers, type Mover } from "@/lib/marketdata";
 
+export const metadata = { title: "Market context", description: "Sector rotation, market breadth and today's biggest movers." };
+
 export const dynamic = "force-dynamic";
 
 function signed(n: number, unit = "%") {

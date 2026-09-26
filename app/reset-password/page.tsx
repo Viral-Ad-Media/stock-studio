@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { getSupabase } from "@/lib/supabase/lazy";
 import AuthShell from "@/components/auth/AuthShell";
 import PasswordInput from "@/components/auth/PasswordInput";
 
@@ -25,8 +25,8 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    createClient()
-      .auth.getUser()
+    getSupabase()
+      .then((sb) => sb.auth.getUser())
       .then(({ data }) => setState(data.user ? "ready" : "no-session"))
       .catch(() => setState("no-session"));
   }, []);
@@ -40,7 +40,7 @@ export default function ResetPasswordPage() {
     setBusy(true);
     setError(null);
     try {
-      const { error } = await createClient().auth.updateUser({ password });
+      const { error } = await (await getSupabase()).auth.updateUser({ password });
       if (error) {
         setError(/different from the old/i.test(error.message) ? "Choose a password you haven't used before." : error.message);
         setBusy(false);

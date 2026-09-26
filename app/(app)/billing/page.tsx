@@ -5,6 +5,8 @@ import { getBillingState, CREDITS_PER_PACK } from "@/lib/billing";
 import BillingActions from "@/components/BillingActions";
 import AutoRefresh from "@/components/AutoRefresh";
 
+export const metadata = { title: "Billing", description: "Your trial, access and credit balance." };
+
 export const dynamic = "force-dynamic";
 
 const REASON_LABELS: Record<string, string> = {
