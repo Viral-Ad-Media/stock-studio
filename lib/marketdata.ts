@@ -6,11 +6,14 @@
 
 export type Candle = { t: string; o: number; h: number; l: number; c: number; v: number };
 
-async function yahooFetch(url: string, label: string) {
+// `revalidateSec` opts a read into Next's data cache (dashboard/market pages);
+// the worker and CLI always fetch fresh. Outside Next the option is ignored.
+async function yahooFetch(url: string, label: string, revalidateSec?: number) {
   // Bounded: the worker has a fixed per-invocation time budget.
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (stock-studio market data fetcher)" },
     signal: AbortSignal.timeout(15_000),
+    ...(revalidateSec ? { cache: "force-cache" as const, next: { revalidate: revalidateSec } } : {}),
   });
   if (!res.ok) throw new Error(`Yahoo ${label} API returned ${res.status}`);
   const body: any = await res.json();
@@ -173,9 +176,9 @@ export type Mover = {
   exchange: string | null;
 };
 
-async function screener(scrId: string, count: number): Promise<Mover[]> {
+async function screener(scrId: string, count: number, revalidateSec?: number): Promise<Mover[]> {
   const url = `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=${scrId}&count=${count}&formatted=false`;
-  const body = await yahooFetch(url, "screener");
+  const body = await yahooFetch(url, "screener", revalidateSec);
   const quotes = body?.finance?.result?.[0]?.quotes ?? [];
   return quotes.map((q: any) => ({
     symbol: q.symbol,
@@ -188,8 +191,11 @@ async function screener(scrId: string, count: number): Promise<Mover[]> {
   }));
 }
 
-export async function fetchMovers(count = 5) {
-  const [gainers, losers] = await Promise.all([screener("day_gainers", count), screener("day_losers", count)]);
+export async function fetchMovers(count = 5, revalidateSec?: number) {
+  const [gainers, losers] = await Promise.all([
+    screener("day_gainers", count, revalidateSec),
+    screener("day_losers", count, revalidateSec),
+  ]);
   if (gainers.length === 0 && losers.length === 0) {
     throw new Error("Yahoo screeners returned no quotes — try again later or fall back to web research.");
   }
@@ -199,4 +205,48 @@ export async function fetchMovers(count = 5) {
     gainers,
     losers,
   };
+}
+
+export type DailyCloses = { symbol: string; dates: string[]; closes: number[] };
+
+// Daily closes (oldest first) for the market-context page and study track
+// records. Cached for `revalidateSec` in Next's data cache.
+export async function fetchDailyCloses(ticker: string, range = "1y", revalidateSec = 1800): Promise<DailyCloses> {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
+    ticker
+  )}?interval=1d&range=${encodeURIComponent(range)}&includePrePost=false`;
+  const body = await yahooFetch(url, "chart", revalidateSec);
+  const result = body?.chart?.result?.[0];
+  if (!result || body?.chart?.error) throw new Error(`No chart data for ${ticker}`);
+  const ts: number[] = result.timestamp ?? [];
+  const raw: (number | null)[] = result.indicators?.adjclose?.[0]?.adjclose ?? result.indicators?.quote?.[0]?.close ?? [];
+  const dates: string[] = [];
+  const closes: number[] = [];
+  for (let i = 0; i < ts.length; i++) {
+    const c = raw[i];
+    if (c == null || !Number.isFinite(c)) continue;
+    dates.push(new Date(ts[i] * 1000).toISOString().slice(0, 10));
+    closes.push(c);
+  }
+  if (closes.length === 0) throw new Error(`No daily closes returned for ${ticker}`);
+  return { symbol: ticker, dates, closes };
+}
+
+// Runs `fn` over `items` with at most `limit` in flight; failures become null
+// so one bad ticker never sinks a whole panel.
+export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<(R | null)[]> {
+  const out: (R | null)[] = new Array(items.length).fill(null);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      try {
+        out[i] = await fn(items[i]);
+      } catch {
+        out[i] = null;
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
 }

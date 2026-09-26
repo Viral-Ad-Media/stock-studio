@@ -11,9 +11,11 @@
  *
  * `complete` semantics by job type:
  *   build_case_study / earnings_update / movers_digest — --content is required (the finished markdown).
- *     --meta may set: company, as_of_date, sources ([{title,url}]), corrections_md.
+ *     --meta may set: company, as_of_date, sources ([{title,url}]), corrections_md, summary_line,
+ *     grade ({growth,profitability,valuation,moat}: each {score 0-100, note} — graded variants only).
  *   watchlist_entry — --meta is required with: thesis, snapshot, triggers ([string]),
- *     as_of_date; optional: company, status_tag, case_study_id.
+ *     as_of_date; optional: company, status_tag, thesis_status (intact|weakening|broken|unknown,
+ *     refreshes only), thesis_status_note.
  *
  * Requires DATABASE_URL (hosted Postgres, `stocks` schema) — read from
  * .env.local automatically.
@@ -25,6 +27,8 @@ import dotenv from "dotenv";
 dotenv.config({ path: path.join(__dirname, "../.env.local") });
 
 import { sql } from "../lib/db";
+import { earningsForTickers } from "../lib/earnings";
+import { computeGrade, cleanSummaryLine, parseThesisStatus, GRADED_VARIANTS } from "../lib/grades";
 
 function arg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -128,9 +132,18 @@ async function main() {
           console.error("--content <file.md> is required for case study jobs");
           process.exit(1);
         }
+        const [study] = await tx`SELECT variant FROM case_studies WHERE id = ${payload.case_study_id}`;
+        // Same rules as the worker: overall letter computed from the card
+        // scores, graded variants only.
+        const grade = study && GRADED_VARIANTS.has(study.variant) ? computeGrade(meta.grade) : null;
+        if (meta.grade && !grade && study && GRADED_VARIANTS.has(study.variant)) {
+          console.error("meta.grade ignored: needs growth/profitability/valuation/moat, each {score 0-100, note}");
+        }
         await tx`
           UPDATE case_studies SET
             status = 'ready', content_md = ${content}, error = NULL,
+            summary_line = COALESCE(${cleanSummaryLine(meta.summary_line)}, summary_line),
+            grade_json = COALESCE(${grade ? sql.json(grade) : null}, grade_json),
             company = COALESCE(${meta.company ?? null}, company),
             as_of_date = COALESCE(${meta.as_of_date ?? null}, as_of_date),
             sources_json = COALESCE(${meta.sources ? sql.json(meta.sources) : null}, sources_json),
@@ -144,6 +157,10 @@ async function main() {
           process.exit(1);
         }
         const statusTag = ["watching", "building_conviction", "pass"].includes(meta.status_tag) ? meta.status_tag : null;
+        const [prev] = await tx`SELECT thesis FROM watchlist WHERE id = ${payload.watchlist_id}`;
+        // A first entry has nothing to judge against.
+        const thesisStatus = prev?.thesis ? parseThesisStatus(meta.thesis_status) ?? "unknown" : "unknown";
+        const thesisNote = prev?.thesis ? cleanSummaryLine(meta.thesis_status_note) : null;
         await tx`
           UPDATE watchlist SET
             thesis = ${meta.thesis},
@@ -152,6 +169,8 @@ async function main() {
             as_of_date = COALESCE(${meta.as_of_date ?? null}, as_of_date),
             company = COALESCE(${meta.company ?? null}, company),
             status_tag = COALESCE(${statusTag}, status_tag),
+            thesis_status = ${thesisStatus},
+            thesis_status_note = ${thesisNote},
             updated_at = now()
           WHERE id = ${payload.watchlist_id}
         `;
@@ -187,14 +206,28 @@ async function main() {
     // workspaces, with whether a refresh is already open. Ids and labels
     // only — no thesis/snapshot text.
     const rows = await sql`
-      SELECT w.id, w.ticker, w.company, w.status_tag, w.as_of_date, w.case_study_id,
+      SELECT w.id, w.ticker, w.company, w.status_tag, w.thesis_status, w.as_of_date, w.case_study_id,
              EXISTS (
                SELECT 1 FROM jobs j WHERE j.type = 'watchlist_entry' AND j.status IN ('pending','running')
                AND j.workspace_id = w.workspace_id AND (j.payload->>'watchlist_id')::bigint = w.id
              ) AS refresh_open
       FROM watchlist w ORDER BY w.id
     `;
-    out(rows);
+    // Reported / upcoming earnings from the Nasdaq calendar — best effort; the
+    // sweep still verifies with WebSearch.
+    let earnings: Awaited<ReturnType<typeof earningsForTickers>> | null = null;
+    try {
+      earnings = await earningsForTickers(rows.map((r) => r.ticker));
+    } catch (err) {
+      console.error(`earnings calendar unavailable: ${(err as Error).message}`);
+    }
+    out(
+      rows.map((r) => ({
+        ...r,
+        reported_on: earnings?.get(r.ticker)?.last?.date ?? null,
+        next_earnings: earnings?.get(r.ticker)?.next?.date ?? null,
+      }))
+    );
   } else if (cmd === "queue-refresh") {
     // Sweep-initiated refresh: queued in the row's own workspace and not
     // charged — the customer didn't ask for it.

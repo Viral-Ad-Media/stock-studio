@@ -115,22 +115,48 @@ export function davinciModelPrompt(ticker: string, notes: string | null, history
     .join("\n");
 }
 
-export function watchlistResearchPrompt(ticker: string, company: string | null): string {
-  return (
+export function watchlistResearchPrompt(
+  ticker: string,
+  company: string | null,
+  prior?: { thesis: string; as_of_date: string | null } | null
+): string {
+  const lines = [
     `Research ${ticker}${company ? ` (${company})` : ""} per the Watchlist jobs section — just ` +
-    "enough for a compact tracker entry: current price/valuation snapshot, a one-line thesis, " +
-    "2-3 specific triggers to watch, and a status tag suggestion (watching, building_conviction, " +
-    "or pass)."
-  );
+      "enough for a compact tracker entry: current price/valuation snapshot, a one-line thesis, " +
+      "2-3 specific triggers to watch, and a status tag suggestion (watching, building_conviction, " +
+      "or pass).",
+  ];
+  if (prior?.thesis) {
+    lines.push(
+      "",
+      `This is a refresh. The previous entry's thesis (as of ${prior.as_of_date ?? "unknown date"}) is below — ` +
+        "judge whether what has happened since leaves it intact, weakening, or broken, and say why " +
+        "in one sentence citing the specific verified development.",
+      untrusted("prior_thesis", prior.thesis)
+    );
+  }
+  return lines.join("\n");
 }
 
 // Shared meta-extraction schema/tool for case_studies jobs — pulls the
 // as_of date (and company/corrections when relevant) out of the finished
 // markdown rather than parsing it with regex, since the model already
 // knows exactly what it wrote.
+const cardScore = (what: string) => ({
+  type: "object",
+  properties: {
+    score: { type: "integer", minimum: 0, maximum: 100, description: what },
+    note: { type: "string", description: "One short clause citing the verified fact in the study that drove this score" },
+  },
+  required: ["score", "note"],
+});
+
 export const CASE_STUDY_META_TOOL = {
   toolName: "record_case_study_meta",
-  instructions: "Record metadata about the case study you just wrote.",
+  instructions:
+    "Record metadata about the case study you just wrote. The summary_line and grade must come " +
+    "only from facts already in the study — add nothing new. The grade is a research-quality score " +
+    "of the business as the study describes it, not a buy/sell call.",
   schema: {
     type: "object",
     properties: {
@@ -140,7 +166,29 @@ export const CASE_STUDY_META_TOOL = {
         type: ["string", "null"],
         description: "Short markdown note on material corrections made to the user's provided notes, or null if there were no user notes or nothing was corrected",
       },
+      summary_line: {
+        type: "string",
+        description:
+          "One plain-English sentence (max ~200 chars) interpreting what the study found — what the numbers mean, " +
+          'e.g. "Revenue growth is re-accelerating on AI demand, but the valuation already assumes it continues." ' +
+          "No advice, no price targets, no 'buy'/'sell'.",
+      },
+      grade: {
+        type: ["object", "null"],
+        description:
+          "Scores 0-100 for each of the study's four cards. null for setups (one-candle, Da Vinci), market digests, " +
+          "and comparisons. Calibrate: 50 = unremarkable, 80+ = clearly strong on verified facts, <40 = clearly weak.",
+        properties: {
+          growth: cardScore("Growth: verified revenue/earnings trajectory"),
+          profitability: cardScore("Profitability: margins, cash generation, balance sheet"),
+          valuation: cardScore("Valuation: HIGHER = more reasonable price relative to the fundamentals; stretched multiples score low"),
+          moat: cardScore("Moat: durability of the advantage, net of the bear case"),
+        },
+        required: ["growth", "profitability", "valuation", "moat"],
+      },
     },
+    // summary_line/grade stay optional here: a failed extraction falls back to
+    // the "As of" line only and would drop corrections_md with it.
     required: ["as_of_date"],
   },
 };
@@ -157,7 +205,16 @@ export const WATCHLIST_ENTRY_TOOL = {
       snapshot: { type: "string", description: "Price/valuation snapshot line" },
       triggers: { type: "array", items: { type: "string" }, description: "2-3 specific triggers to watch" },
       status_tag: { type: "string", enum: ["watching", "building_conviction", "pass"] },
+      thesis_status: {
+        type: "string",
+        enum: ["intact", "weakening", "broken", "unknown"],
+        description: "Refreshes: whether developments since the prior thesis leave it intact/weakening/broken. First entries: unknown",
+      },
+      thesis_status_note: {
+        type: ["string", "null"],
+        description: "One sentence naming the verified development behind thesis_status, or null for first entries",
+      },
     },
-    required: ["as_of_date", "thesis", "snapshot", "triggers", "status_tag"],
+    required: ["as_of_date", "thesis", "snapshot", "triggers", "status_tag", "thesis_status"],
   },
 };
