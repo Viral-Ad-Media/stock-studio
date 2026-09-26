@@ -83,4 +83,28 @@ function getBillingClient() {
   return globalThis.__stocksBillingSql;
 }
 
+declare global {
+  // eslint-disable-next-line no-var
+  var __stocksAdminSql: ReturnType<typeof postgres> | undefined;
+}
+
+// Separate connection for the super-admin console's WRITES only, as the
+// stocks_admin role: the one role allowed to run admin_adjust_credits /
+// admin_set_access / admin_extend_trial. Never use it for anything else.
+export const adminSql = new Proxy(function () {} as unknown as ReturnType<typeof postgres>, {
+  apply: (_target, _thisArg, args) => (getAdminClient() as any)(...args),
+  get: (_target, prop) => (getAdminClient() as any)[prop],
+}) as ReturnType<typeof postgres>;
+
+function getAdminClient() {
+  if (!globalThis.__stocksAdminSql) {
+    globalThis.__stocksAdminSql = createClient(process.env.ADMIN_DATABASE_URL, "ADMIN_DATABASE_URL", 2);
+  }
+  return globalThis.__stocksAdminSql;
+}
+
+export function adminWritesConfigured(): boolean {
+  return Boolean(process.env.ADMIN_DATABASE_URL);
+}
+
 export * from "./shared";
