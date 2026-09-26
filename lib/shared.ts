@@ -14,6 +14,9 @@ export type CaseStudy = {
   corrections_md: string | null;
   error: string | null;
   parent_id: number | null;
+  // Research-quality grade (lib/grades.ts StudyGrade) and a one-line summary.
+  grade_json: unknown | null;
+  summary_line: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -39,6 +42,8 @@ export type WatchlistRow = {
   snapshot: string | null;
   as_of_date: string | null;
   case_study_id: number | null;
+  thesis_status: "intact" | "weakening" | "broken" | "unknown";
+  thesis_status_note: string | null;
   created_at: string;
   updated_at: string;
 };

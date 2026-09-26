@@ -18,6 +18,7 @@ opens with an "As of [date]" line and ends with a "Not investment advice" line.
 ## Contents
 
 - [What it produces](#what-it-produces)
+- [Insights: grades, thesis tracking, earnings, market context](#insights-grades-thesis-tracking-earnings-market-context)
 - [Architecture](#architecture)
 - [Getting started](#getting-started)
 - [Environment variables](#environment-variables)
@@ -59,6 +60,35 @@ The **one_candle** and **davinci_model** variants are strictly educational frame
 built only from real fetched candles. They give no trade directives and make no profitability
 claims, and each has its own required footer. See [`CLAUDE.md`](CLAUDE.md) for the full
 methodology of each.
+
+---
+
+## Insights: grades, thesis tracking, earnings, market context
+
+These features are adapted from [QuantEdgeResearch](https://github.com/Maleek23/QuantEdgeResearch). Each one was
+narrowed to fit Stock Studio's educational, no-advice framing. Its trade execution, signal bots, options flow and
+gamma exposure, and Discord/SMS alerts were deliberately left out.
+
+- **Research grade and one-line summary.** Fundamental studies get a letter grade (A to F) built from four card
+  scores: growth, profitability, valuation (higher means more reasonable) and moat.
+  - The engine scores each card from the verified facts in the study.
+  - [`lib/grades.ts`](lib/grades.ts) computes the letter as the average of the four scores.
+  - Each study also gets a one-sentence "what this means" line, shown on dashboard cards.
+  - The grade is labelled a research-quality score, never a buy or sell rating.
+- **Thesis tracker.** Every watchlist refresh judges the previous thesis as intact, weakening or broken, and cites
+  the development that decided it.
+  - Every version is kept (`watchlist_history`) and shown as a timeline.
+  - Study pages show how the price has moved since the as-of date, next to SPY.
+- **Earnings calendar.** Upcoming and just-reported earnings dates for your watchlist and studied tickers come from
+  Nasdaq's public calendar. A just-reported ticker links to its study, where you can queue an earnings update.
+- **Market context (`/market`).** Shows:
+  - sector ETFs against SPY over 1 day, 5 days and 1 month;
+  - large-cap breadth: the share above the 50- and 200-day averages, advancers and decliners, and names near
+    52-week highs and lows;
+  - today's biggest movers;
+  - plain-English readings generated from those numbers.
+
+  Market data is cached for about 30 minutes (Next's fetch cache).
 
 ---
 

@@ -123,6 +123,25 @@ npm run movers -- --count 5    # Yahoo day-gainers/day-losers screeners (no API 
 Queued from the dashboard button or by the weekday-morning scheduled task. Never invent a
 catalyst — "no clear catalyst reported" is a valid story.
 
+## Insights (adapted from QuantEdgeResearch)
+
+- **Study grade + summary line** (`lib/grades.ts`): for fundamental variants the engine records a
+  0-100 score per study card (growth, profitability, valuation, moat) plus a one-sentence
+  `summary_line`; the overall letter is computed in code, never by the model. Stored in
+  `case_studies.grade_json` / `summary_line`. It is a **research-quality score, never a buy/sell
+  rating** — the UI always shows that disclaimer.
+- **Thesis tracker**: watchlist refreshes set `thesis_status` (intact / weakening / broken / unknown)
+  + `thesis_status_note` against the prior thesis; a trigger copies every version into
+  `watchlist_history` (the timeline). The study page shows the price move since the as-of date
+  vs SPY — context for what to re-check, not a scorecard.
+- **Earnings calendar** (`lib/earnings.ts`, Nasdaq public API): upcoming / just-reported dates for
+  watchlist and study tickers on the dashboard and watchlist; also in `npm run engine -- watchlist`.
+- **Market context** (`/market`, `lib/market-context.ts`): sector ETFs vs SPY, large-cap breadth,
+  today's movers. The "what this means" sentences are generated from the numbers in code —
+  descriptive only, no directives.
+- Deliberately **not** adopted from that repo: trade execution, trade-signal/idea bots, options
+  flow/GEX, Discord/SMS alerts — they conflict with the content rules below.
+
 ## Billing
 
 - Trial is server-granted in `stocks.handle_new_user()` (30 days + 5 starter credits) — never

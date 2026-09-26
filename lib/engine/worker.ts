@@ -19,6 +19,7 @@ import {
   CASE_STUDY_META_TOOL,
   WATCHLIST_ENTRY_TOOL,
 } from "./prompts";
+import { computeGrade, cleanSummaryLine, parseThesisStatus, GRADED_VARIANTS } from "@/lib/grades";
 
 const MAX_ATTEMPTS = 3;
 // Total wall-clock this invocation may spend, kept under the route's
@@ -45,7 +46,13 @@ type Job = {
   attempts: number;
 };
 type Tx = TransactionSql<{}>;
-type CaseStudyMeta = { company?: string | null; as_of_date?: string | null; corrections_md?: string | null };
+type CaseStudyMeta = {
+  company?: string | null;
+  as_of_date?: string | null;
+  corrections_md?: string | null;
+  summary_line?: string | null;
+  grade?: unknown;
+};
 type WatchlistEntry = {
   company?: string | null;
   as_of_date: string;
@@ -53,6 +60,8 @@ type WatchlistEntry = {
   snapshot: string;
   triggers: string[];
   status_tag: "watching" | "building_conviction" | "pass";
+  thesis_status?: string;
+  thesis_status_note?: string | null;
 };
 
 // The study row was deleted while its job was running. The research was
@@ -96,8 +105,12 @@ async function writeStudy(
   caseStudyId: number,
   content: string,
   sources: { title: string; url: string }[],
-  meta: CaseStudyMeta
+  meta: CaseStudyMeta,
+  variant: string
 ) {
+  // The overall letter is computed from the card scores, never taken from the model.
+  const grade = GRADED_VARIANTS.has(variant) ? computeGrade(meta.grade) : null;
+  const summaryLine = cleanSummaryLine(meta.summary_line);
   // Study and job flip together — no window where the study is ready but the
   // job still looks unfinished.
   await sql.begin(async (tx) => {
@@ -108,6 +121,8 @@ async function writeStudy(
         as_of_date = COALESCE(${meta.as_of_date ?? null}, as_of_date),
         sources_json = COALESCE(${sources.length ? sql.json(sources) : null}, sources_json),
         corrections_md = COALESCE(${meta.corrections_md ?? null}, corrections_md),
+        summary_line = COALESCE(${summaryLine}, summary_line),
+        grade_json = COALESCE(${grade ? sql.json(grade) : null}, grade_json),
         updated_at = now()
       WHERE id = ${caseStudyId}
       RETURNING id
@@ -165,7 +180,7 @@ async function processCaseStudy(job: Job, deadline: number) {
     sources = res.sources;
   }
 
-  await writeStudy(job, caseStudyId, content, sources, await studyMeta(content, deadline));
+  await writeStudy(job, caseStudyId, content, sources, await studyMeta(content, deadline), study.variant);
 }
 
 async function processMoversDigest(job: Job, deadline: number) {
@@ -176,17 +191,24 @@ async function processMoversDigest(job: Job, deadline: number) {
     deadline,
   });
   const meta = await studyMeta(res.text, deadline);
-  await writeStudy(job, job.payload.case_study_id!, res.text, res.sources, { as_of_date: meta.as_of_date });
+  await writeStudy(
+    job,
+    job.payload.case_study_id!,
+    res.text,
+    res.sources,
+    { as_of_date: meta.as_of_date, summary_line: meta.summary_line },
+    "movers_digest"
+  );
 }
 
 async function processWatchlistEntry(job: Job, deadline: number) {
   const watchlistId = job.payload.watchlist_id!;
-  const [row] = await sql`SELECT id, ticker, company FROM watchlist WHERE id = ${watchlistId}`;
+  const [row] = await sql`SELECT id, ticker, company, thesis, as_of_date FROM watchlist WHERE id = ${watchlistId}`;
   if (!row) throw new StudyGoneError(`watchlist row ${watchlistId} not found`);
 
   const research = await researchWithWebSearch({
     system: systemPromptWithWebSearch(),
-    prompt: watchlistResearchPrompt(row.ticker, row.company),
+    prompt: watchlistResearchPrompt(row.ticker, row.company, row.thesis ? { thesis: row.thesis, as_of_date: row.as_of_date } : null),
     deadline,
   });
   const entry = await extractStructured<WatchlistEntry>({
@@ -198,6 +220,9 @@ async function processWatchlistEntry(job: Job, deadline: number) {
   });
   const triggers = Array.isArray(entry.triggers) ? entry.triggers.map(String) : null;
   const statusTag = ["watching", "building_conviction", "pass"].includes(entry.status_tag) ? entry.status_tag : null;
+  // A first entry has nothing to judge against.
+  const thesisStatus = row.thesis ? parseThesisStatus(entry.thesis_status) ?? "unknown" : "unknown";
+  const thesisNote = row.thesis ? cleanSummaryLine(entry.thesis_status_note) : null;
 
   await sql.begin(async (tx) => {
     const updated = await tx`
@@ -208,6 +233,8 @@ async function processWatchlistEntry(job: Job, deadline: number) {
         as_of_date = COALESCE(${entry.as_of_date ?? null}, as_of_date),
         company = COALESCE(${entry.company ?? null}, company),
         status_tag = COALESCE(${statusTag}, status_tag),
+        thesis_status = ${thesisStatus},
+        thesis_status_note = ${thesisNote},
         updated_at = now()
       WHERE id = ${watchlistId}
       RETURNING id
