@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import Nav from "@/components/Nav";
+import { TourProvider } from "@/components/guide/Tour";
 import { currentUser, currentWorkspaceId } from "@/lib/workspace";
 import { getBillingState } from "@/lib/billing";
 
@@ -11,6 +13,9 @@ import { getBillingState } from "@/lib/billing";
 // dynamic-rendering signal into our error handling.
 export const dynamic = "force-dynamic";
 
+// Signed-in screens are private: never indexed, never followed.
+export const metadata: Metadata = { robots: { index: false, follow: false } };
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // Nav chrome only — a failure here must not take the page down, but it
   // shouldn't vanish silently either.
@@ -22,11 +27,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const ws = user ? await currentWorkspaceId().catch(logged("currentWorkspaceId")) : null;
   const billing = user && ws ? await getBillingState(user.id, ws).catch(logged("getBillingState")) : null;
   return (
-    <div className="min-h-screen md:flex">
-      <Nav userEmail={user?.email ?? null} userName={user?.name ?? null} credits={billing?.balance ?? null} />
-      <main id="main" className="w-full min-w-0 flex-1 p-4 sm:p-6 md:p-8 max-w-5xl mx-auto">
-        {children}
-      </main>
-    </div>
+    <TourProvider>
+      <div className="min-h-screen md:flex">
+        <Nav userEmail={user?.email ?? null} userName={user?.name ?? null} credits={billing?.balance ?? null} />
+        <main id="main" className="w-full min-w-0 flex-1 p-4 sm:p-6 md:p-8 max-w-5xl mx-auto">
+          {children}
+        </main>
+      </div>
+    </TourProvider>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import Tooltip from "@/components/guide/Tooltip";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, X, Newspaper } from "lucide-react";
@@ -91,15 +92,17 @@ export default function QueuePanel({ jobs }: { jobs: QueueJob[] }) {
                   </span>
                 </div>
                 {j.status === "pending" && (
-                  <button
-                    onClick={() => removeJob(j.id)}
-                    disabled={busy !== null}
-                    aria-label={`Remove ${j.ticker ?? "job"} from the queue and refund its credits`}
-                    title="Remove from queue"
-                    className="icon-btn hover:border-red-500/50 hover:text-red-400"
-                  >
-                    <X className="h-4 w-4" aria-hidden />
-                  </button>
+                  <Tooltip align="end" text="Remove from the queue and refund its credits">
+                    <button
+                      type="button"
+                      onClick={() => removeJob(j.id)}
+                      disabled={busy !== null}
+                      aria-label={`Remove ${j.ticker ?? "job"} from the queue`}
+                      className="icon-btn hover:border-red-500/50 hover:text-red-400"
+                    >
+                      <X className="h-4 w-4" aria-hidden />
+                    </button>
+                  </Tooltip>
                 )}
               </li>
             ))}

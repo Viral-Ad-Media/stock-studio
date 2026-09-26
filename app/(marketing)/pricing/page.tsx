@@ -1,116 +1,165 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Check, ArrowRight } from "lucide-react";
 import { creditCost } from "@/lib/shared";
+import { SITE, absoluteUrl } from "@/lib/site";
+import Breadcrumbs from "@/components/marketing/Breadcrumbs";
+import JsonLd, { ORGANIZATION_ID } from "@/components/seo/JsonLd";
 
-export const metadata = {
-  title: "Pricing — Stock Studio",
-  description: "A 30-day free trial, then a one-time unlock plus pay-as-you-go credits.",
+export const metadata: Metadata = {
+  title: "Pricing",
+  description: `Try Stock Studio free for ${SITE.trialDays} days, then unlock it once for $${SITE.accessPriceUsd} and pay per study with credits. Credit packs from $${SITE.creditPackPriceUsd}; credits never expire.`,
+  alternates: { canonical: "/pricing" },
 };
 
-// NOTE: the dollar figures on this page are placeholders pending the
-// actual Stripe products (Phase 4 of the SaaS build) — confirm real
-// pricing before launch. The structure (trial → one-time unlock → credits)
-// is the decided model.
 // Credit figures come from the same table the billing code charges from.
-const CREDIT_COSTS = [
+const CREDIT_ROWS = [
   { variant: "Quick take", credits: creditCost("quick_take") },
   { variant: "Full 4-card study", credits: creditCost("full") },
+  { variant: "Social carousel, newsletter section or video script", credits: creditCost("carousel") },
   { variant: "Deep research memo", credits: creditCost("memo") },
-  { variant: "Comparison / watchlist entry", credits: creditCost("comparison") },
+  { variant: "Comparison", credits: creditCost("comparison") },
+  { variant: "Watchlist entry or refresh", credits: creditCost("watchlist_entry") },
+  { variant: "Earnings reaction update", credits: creditCost("earnings_update") },
+  { variant: "Market movers digest", credits: creditCost("movers_digest") },
   { variant: "Intraday setup check", credits: creditCost("one_candle") },
 ];
 
+const INCLUDED_FREE = ["Market context page", "Setup bots and their track record", "Gamma exposure model", "Earnings calendar"];
+
 export default function PricingPage() {
+  const ld = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: SITE.name,
+    description: SITE.description,
+    image: absoluteUrl("/opengraph-image.png"),
+    brand: { "@type": "Brand", name: SITE.name },
+    manufacturer: { "@id": ORGANIZATION_ID },
+    offers: [
+      { "@type": "Offer", name: `${SITE.trialDays}-day free trial`, price: "0", priceCurrency: "USD", url: absoluteUrl("/signup") },
+      { "@type": "Offer", name: "One-time access", price: String(SITE.accessPriceUsd), priceCurrency: "USD", url: absoluteUrl("/pricing") },
+      {
+        "@type": "Offer",
+        name: `${SITE.creditPackSize}-credit pack`,
+        price: String(SITE.creditPackPriceUsd),
+        priceCurrency: "USD",
+        url: absoluteUrl("/pricing"),
+      },
+    ],
+  };
+
   return (
-    <div className="max-w-5xl mx-auto px-6 py-16">
-      <div className="text-center mb-14">
-        <h1 className="text-3xl md:text-4xl font-bold text-slate-100 mb-3">Simple, usage-based pricing</h1>
-        <p className="text-fg-subtle max-w-xl mx-auto">
-          Try everything free for 30 days. Unlock once, then pay only for the studies you
-          actually queue.
+    <div className="mx-auto max-w-5xl px-6 py-12">
+      <JsonLd data={ld} />
+      <Breadcrumbs items={[{ name: "Home", path: "/" }, { name: "Pricing", path: "/pricing" }]} />
+
+      <div className="mb-14 text-center">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-100 md:text-5xl">Simple, usage-based pricing</h1>
+        <p className="mx-auto mt-4 max-w-xl text-slate-300">
+          Try everything free for {SITE.trialDays} days. Unlock once, then pay only for the studies you actually queue.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16">
-        <div className="card p-8">
-          <div className="text-sm font-medium text-emerald-400 mb-1">Free trial</div>
-          <div className="text-3xl font-bold text-slate-100 mb-1">$0</div>
-          <div className="text-sm text-fg-subtle mb-6">for 30 days</div>
-          <ul className="space-y-3 text-sm text-slate-300 mb-8">
+      <div className="mb-16 grid grid-cols-1 gap-6 md:grid-cols-2">
+        <section aria-labelledby="trial-heading" className="card flex flex-col p-8">
+          <h2 id="trial-heading" className="text-sm font-semibold text-emerald-300">
+            Free trial
+          </h2>
+          <p className="mt-2 text-4xl font-bold text-slate-100">$0</p>
+          <p className="mt-1 text-sm text-fg-subtle">for {SITE.trialDays} days</p>
+          <ul className="mb-8 mt-6 space-y-3 text-sm text-slate-300">
             {[
-              "Full access to every study format",
-              "Watchlist with automatic refresh",
+              "Every study format",
+              `${SITE.trialCredits} starter credits included`,
+              "Watchlist with thesis tracking",
               "No card required to start",
             ].map((f) => (
               <li key={f} className="flex items-start gap-2">
-                <Check className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" /> {f}
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden /> {f}
               </li>
             ))}
           </ul>
-          <Link
-            href="/signup"
-            className="inline-flex items-center gap-2 w-full justify-center btn-primary font-medium px-5 py-2.5 rounded-lg"
-          >
-            Start free trial <ArrowRight className="w-4 h-4" />
+          <Link href="/signup" className="btn-primary mt-auto w-full px-5 py-3">
+            Start free trial <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>
-        </div>
+        </section>
 
-        <div className="card p-8 border-emerald-500/30">
-          <div className="text-sm font-medium text-slate-400 mb-1">After your trial</div>
-          <div className="text-3xl font-bold text-slate-100 mb-1">
-            $79 <span className="text-base font-normal text-fg-subtle">one-time</span>
-          </div>
-          <div className="text-sm text-fg-subtle mb-6">unlocks the app, then pay per study with credits</div>
-          <ul className="space-y-3 text-sm text-slate-300 mb-8">
+        <section aria-labelledby="unlock-heading" className="card relative flex flex-col border-emerald-500/40 p-8">
+          <span className="absolute -top-3 right-6 rounded-full border border-emerald-500/40 bg-ink-900 px-3 py-0.5 text-xs font-medium text-emerald-300">
+            No subscription
+          </span>
+          <h2 id="unlock-heading" className="text-sm font-semibold text-slate-300">
+            After your trial
+          </h2>
+          <p className="mt-2 text-4xl font-bold text-slate-100">
+            ${SITE.accessPriceUsd} <span className="text-base font-normal text-fg-subtle">one-time</span>
+          </p>
+          <p className="mt-1 text-sm text-fg-subtle">unlocks the app, then pay per study with credits</p>
+          <ul className="mb-8 mt-6 space-y-3 text-sm text-slate-300">
             {[
-              "One-time unlock — no recurring subscription",
-              "Credit packs from $10 (10 credits)",
+              "One-time unlock, never a recurring charge",
+              `Credit packs: $${SITE.creditPackPriceUsd} for ${SITE.creditPackSize} credits`,
               "Unused credits never expire",
+              "Failed studies are refunded automatically",
             ].map((f) => (
               <li key={f} className="flex items-start gap-2">
-                <Check className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" /> {f}
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden /> {f}
               </li>
             ))}
           </ul>
-          <Link
-            href="/signup"
-            className="inline-flex items-center gap-2 w-full justify-center border border-ink-600 hover:border-ink-500 text-slate-200 font-medium px-5 py-2.5 rounded-lg"
-          >
+          <Link href="/signup" className="btn-secondary mt-auto w-full px-5 py-3">
             Start with the free trial first
           </Link>
-        </div>
+        </section>
       </div>
 
-      <div className="card p-8 mb-10">
-        <h2 className="text-lg font-semibold text-slate-100 mb-1">How credits work</h2>
-        <p className="text-sm text-fg-subtle mb-5">
-          1 credit ≈ $1. Deeper research costs more because it does more — more sources checked,
-          more figures cross-verified. You always see the cost before you queue a study.
+      <section aria-labelledby="credits-heading" className="card mb-10 p-8">
+        <h2 id="credits-heading" className="text-lg font-semibold text-slate-100">
+          Credits per format
+        </h2>
+        <p className="mb-5 mt-1 text-sm text-fg-subtle">
+          1 credit is about $1. Deeper research costs more because it checks more sources and cross-verifies more figures.
+          You always see the cost before you queue.
         </p>
         <table className="w-full text-sm">
+          <caption className="sr-only">Credits charged per study format</caption>
           <thead>
-            <tr className="text-left text-fg-subtle border-b border-ink-700">
-              <th className="pb-2 font-medium">Format</th>
-              <th className="pb-2 font-medium text-right">Credits</th>
+            <tr className="border-b border-ink-700 text-left text-fg-subtle">
+              <th scope="col" className="pb-2 font-medium">
+                Format
+              </th>
+              <th scope="col" className="pb-2 text-right font-medium">
+                Credits
+              </th>
             </tr>
           </thead>
           <tbody>
-            {CREDIT_COSTS.map((row) => (
+            {CREDIT_ROWS.map((row) => (
               <tr key={row.variant} className="border-b border-ink-800 last:border-0">
-                <td className="py-2.5 text-slate-300">{row.variant}</td>
-                <td className="py-2.5 text-right text-slate-400">{row.credits}</td>
+                <th scope="row" className="py-2.5 text-left font-normal text-slate-300">
+                  {row.variant}
+                </th>
+                <td className="py-2.5 text-right tabular-nums text-slate-200">{row.credits}</td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+        <p className="mt-5 text-sm text-slate-300">
+          Included at no credit cost: {INCLUDED_FREE.join(", ")}. See them on the{" "}
+          <Link href="/#features" className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300">
+            features overview
+          </Link>
+          .
+        </p>
+      </section>
 
-      <div className="text-center text-sm text-fg-subtle">
+      <p className="text-center text-sm text-fg-subtle">
         Questions about pricing?{" "}
-        <a href="mailto:support@stockstudio.app" className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300">
-          support@stockstudio.app
+        <a href={`mailto:${SITE.email}`} className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300">
+          {SITE.email}
         </a>
-      </div>
+      </p>
     </div>
   );
 }

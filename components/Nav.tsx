@@ -3,17 +3,19 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut, CreditCard, Menu, X, Globe2, Radar, Sigma } from "lucide-react";
-import { createClient, setRememberMe } from "@/lib/supabase/client";
+import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut, CreditCard, Menu, X, Globe2, Radar, Sigma, HelpCircle } from "lucide-react";
+import { useTour } from "@/components/guide/Tour";
+import { getSupabase } from "@/lib/supabase/lazy";
+import { setRememberMe } from "@/lib/supabase/remember";
 
 const links = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/new", label: "New study", icon: FilePlus2 },
-  { href: "/watchlist", label: "Watchlist", icon: Eye },
-  { href: "/market", label: "Market", icon: Globe2 },
-  { href: "/setups", label: "Setup bots", icon: Radar },
-  { href: "/gamma", label: "Gamma exposure", icon: Sigma },
-  { href: "/billing", label: "Billing", icon: CreditCard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, tour: "dashboard" },
+  { href: "/new", label: "New study", icon: FilePlus2, tour: "new" },
+  { href: "/watchlist", label: "Watchlist", icon: Eye, tour: "watchlist" },
+  { href: "/market", label: "Market", icon: Globe2, tour: "market" },
+  { href: "/setups", label: "Setup bots", icon: Radar, tour: "setups" },
+  { href: "/gamma", label: "Gamma exposure", icon: Sigma, tour: "gamma" },
+  { href: "/billing", label: "Billing", icon: CreditCard, tour: "billing" },
 ];
 
 type Props = { userEmail: string | null; userName: string | null; credits: number | null };
@@ -58,6 +60,7 @@ export default function Nav({ userEmail, userName, credits }: Props) {
             onClick={(e) => e.stopPropagation()}
           >
             <NavLinks pathname={pathname} credits={credits} />
+            <HelpButton onStart={() => setOpen(false)} />
             <Account userEmail={userEmail} userName={userName} />
           </nav>
         </div>
@@ -71,6 +74,7 @@ export default function Nav({ userEmail, userName, credits }: Props) {
           <Brand withTagline />
         </div>
         <NavLinks pathname={pathname} credits={credits} />
+        <HelpButton />
         <Account userEmail={userEmail} userName={userName} />
       </nav>
     </>
@@ -92,7 +96,7 @@ function Brand({ withTagline = false }: { withTagline?: boolean }) {
 function NavLinks({ pathname, credits }: { pathname: string; credits: number | null }) {
   return (
     <>
-      {links.map(({ href, label, icon: Icon }) => {
+      {links.map(({ href, label, icon: Icon, tour }) => {
         // Study pages belong to the dashboard section.
         const active = pathname.startsWith(href) || (href === "/dashboard" && pathname.startsWith("/study"));
         return (
@@ -100,6 +104,7 @@ function NavLinks({ pathname, credits }: { pathname: string; credits: number | n
             key={href}
             href={href}
             aria-current={active ? "page" : undefined}
+            data-tour={tour}
             className={`flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm ${
               active ? "bg-ink-700 font-medium text-slate-100" : "text-slate-400 hover:bg-ink-800 hover:text-slate-200"
             }`}
@@ -118,10 +123,29 @@ function NavLinks({ pathname, credits }: { pathname: string; credits: number | n
   );
 }
 
+// Replays the product tour (components/guide/Tour.tsx).
+function HelpButton({ onStart }: { onStart?: () => void }) {
+  const { start } = useTour();
+  return (
+    <button
+      type="button"
+      data-tour="help"
+      onClick={() => {
+        onStart?.();
+        start();
+      }}
+      className="mt-2 flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-slate-400 hover:bg-ink-800 hover:text-slate-200"
+    >
+      <HelpCircle className="h-4 w-4" aria-hidden />
+      Help: take the tour
+    </button>
+  );
+}
+
 function Account({ userEmail, userName }: { userEmail: string | null; userName: string | null }) {
   const router = useRouter();
   async function signOut() {
-    await createClient().auth.signOut();
+    await (await getSupabase()).auth.signOut();
     setRememberMe(true); // clear the session-only flag
     router.push("/login");
     router.refresh();

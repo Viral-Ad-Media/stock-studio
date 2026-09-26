@@ -28,9 +28,4 @@ export function createClient() {
   });
 }
 
-// Set before signing in: remember=false makes the session end with the browser.
-export function setRememberMe(remember: boolean) {
-  document.cookie = remember
-    ? serializeCookieHeader(REMEMBER_COOKIE, "", { path: "/", maxAge: 0, sameSite: "lax" })
-    : serializeCookieHeader(REMEMBER_COOKIE, "0", { path: "/", sameSite: "lax" });
-}
+export { setRememberMe } from "./remember";

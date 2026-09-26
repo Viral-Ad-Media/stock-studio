@@ -231,6 +231,30 @@ session cookies (`lib/auth-cookies.ts`). Shared UI lives in `components/auth/`.
   (`components/StatusBadge.tsx`), never color alone. Dates go through `formatDate()`.
 - Layouts work at 390px: the app shell swaps the sidebar for a top bar + drawer below `md`.
 - Only render `<AutoRefresh />` while something can still change.
+- Guidance lives in `components/guide/`: first-run `Onboarding` (once per browser, empty dashboard),
+  the `Tour` (nav items carry `data-tour="<key>"`; steps in `TOUR_STEPS`; replayed from "Help"),
+  `EmptyState` (every blank screen gets a guide with tips — facts about the feature, never advice)
+  and `Tooltip` (icon buttons; keeps the button's `aria-label`, adds `aria-describedby`; use
+  `align="end"` at the right edge of a row). Tips and tour copy must stay true to what the code does.
+- The Supabase browser SDK is loaded on demand via `getSupabase()` (`lib/supabase/lazy.ts`); never
+  import `lib/supabase/client` statically from a page or component.
+
+## Public site & SEO
+
+- Site facts (operator, contact email, displayed prices, trial terms) live in `lib/site.ts` — the
+  marketing pages, JSON-LD, `llms.txt` and legal pages all read from it. Displayed prices must match
+  the Stripe prices.
+- `metadataBase` comes from `NEXT_PUBLIC_APP_URL` (falls back to Render's `RENDER_EXTERNAL_URL` /
+  Vercel's production URL) and must be set **at build time** — static pages bake in canonicals.
+- Every public page: a unique `title` (root template `%s | Stock Studio`) and `description`, a
+  canonical, exactly one `<h1>`, breadcrumbs (`components/marketing/Breadcrumbs.tsx`, which also emits
+  BreadcrumbList JSON-LD) below the home page. Signed-in screens are `noindex` via `app/(app)/layout.tsx`.
+  `app/sitemap.ts`, `app/robots.ts` and `app/llms.txt/route.ts` list public pages only.
+- Structured data: Organization, WebSite, SoftwareApplication, FAQPage (home), Product/Offer
+  (pricing). Online-only business — no LocalBusiness schema without a real published address.
+- Marketing screenshots in `public/screenshots/` are real app components rendered with a
+  **fictional company and sample numbers**, and every frame is labelled "Sample data". Never
+  replace them with a real ticker carrying made-up figures. Share image: `app/opengraph-image.png`.
 
 ## Content rules (non-negotiable)
 
