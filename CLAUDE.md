@@ -163,8 +163,10 @@ catalyst — "no clear catalyst reported" is a valid story.
 
 ## Billing
 
-- Trial is server-granted in `stocks.handle_new_user()` (30 days + 5 starter credits) — never
-  from client metadata. `hasAccess = access_granted OR trial_ends_at > now()`.
+- Trial is server-granted by `stocks.provision_user()` (30 days + 5 starter credits, at most once
+  per user) — never from client metadata. It runs from the signup trigger (`handle_new_user`) and,
+  for logins that predate it (the Supabase project is shared, so `auth.users` holds other apps'
+  accounts), lazily from `currentWorkspaceId()`. `hasAccess = access_granted OR trial_ends_at > now()`.
 - Credits are charged **at queue time**, inside the same transaction as the job INSERT, via
   `stocks.charge_job_credits()`; per-format costs live in `CREDIT_COSTS` (`lib/shared.ts`), which
   `/pricing` also renders — change prices there only.
