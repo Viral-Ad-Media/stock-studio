@@ -71,6 +71,7 @@ npm run engine -- fail <jobId> --message "why"             # also refunds the jo
 npm run engine -- watchlist                                 # /refresh-watchlist: tracked tickers, all workspaces
 npm run engine -- queue-refresh <watchlistId>               # free sweep-initiated refresh (row's workspace)
 npm run engine -- queue-earnings <caseStudyId>              # free sweep-initiated earnings update
+npm run engine -- scan-setups [--force]                     # setup-bot scan for the last completed session
 ```
 
 Markdown goes through `--content` files (scratchpad), metadata through `--meta` JSON — this avoids
@@ -139,8 +140,26 @@ catalyst — "no clear catalyst reported" is a valid story.
 - **Market context** (`/market`, `lib/market-context.ts`): sector ETFs vs SPY, large-cap breadth,
   today's movers. The "what this means" sentences are generated from the numbers in code —
   descriptive only, no directives.
-- Deliberately **not** adopted from that repo: trade execution, trade-signal/idea bots, options
-  flow/GEX, Discord/SMS alerts — they conflict with the content rules below.
+- **Setup bots** (`/setups`, `lib/setups.ts`, runner `lib/setups-run.ts`): five rule-based pattern
+  scanners (52-week breakout, RSI(2) pullback, 50-day pullback, unusual volume, post-earnings gap)
+  over ~100 large caps. The worker runs one scan per completed session at the end of an invocation
+  (claimed per `session_date`, so the per-minute cron makes it a no-op once done);
+  `npm run engine -- scan-setups [--force]` runs it by hand. A match means "fits the pattern's
+  published definition" — never buy/sell, conviction or entry/stop/target language. The pattern's
+  own levels are shown as reference/failure levels. The one model call per scan writes descriptive
+  desk notes from the scan data; `isDescriptiveNote()` drops any note that reads as a directive.
+  Every match is paper-tracked over the bot's horizon (vs SPY, signed by direction) and the page
+  shows the record with a hypothetical-results disclaimer. `setup_scans` / `setup_matches` are
+  **market-wide, not tenant data** — the one deliberate exception to the `workspace_id` rule (RLS
+  on, no policies, `stocks_app` only).
+- **Gamma exposure** (`/gamma`, `lib/gex.ts`): CBOE's free 15-min-delayed chains (index symbols
+  as `_SPX`), Black-Scholes gamma per contract, dollar gamma per 1% move, zero-gamma level found by
+  re-pricing ±15%, largest call/put strikes. Always presented as a model with its dealer-positioning
+  assumption spelled out; the reading describes, never directs. Snapshots are memoized in memory
+  (chains exceed Next's 2 MB fetch-cache limit).
+- Deliberately **not** adopted from that repo: trade execution / broker connections, directional
+  trade calls with entries/stops/targets, options-flow "whale" alerts, Discord/SMS signal alerts —
+  they conflict with the content rules below.
 
 ## Billing
 
