@@ -60,6 +60,8 @@ export const config = {
     "/new/:path*",
     "/watchlist/:path*",
     "/market/:path*",
+    "/setups/:path*",
+    "/gamma/:path*",
     "/study/:path*",
     "/api/case-studies/:path*",
     "/api/jobs/:path*",

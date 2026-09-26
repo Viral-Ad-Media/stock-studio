@@ -18,7 +18,7 @@ opens with an "As of [date]" line and ends with a "Not investment advice" line.
 ## Contents
 
 - [What it produces](#what-it-produces)
-- [Insights: grades, thesis tracking, earnings, market context](#insights-grades-thesis-tracking-earnings-market-context)
+- [Insights: grades, thesis tracking, earnings, market context, setup bots, gamma](#insights-grades-thesis-tracking-earnings-market-context-setup-bots-gamma)
 - [Architecture](#architecture)
 - [Getting started](#getting-started)
 - [Environment variables](#environment-variables)
@@ -63,11 +63,11 @@ methodology of each.
 
 ---
 
-## Insights: grades, thesis tracking, earnings, market context
+## Insights: grades, thesis tracking, earnings, market context, setup bots, gamma
 
 These features are adapted from [QuantEdgeResearch](https://github.com/Maleek23/QuantEdgeResearch). Each one was
-narrowed to fit Stock Studio's educational, no-advice framing. Its trade execution, signal bots, options flow and
-gamma exposure, and Discord/SMS alerts were deliberately left out.
+narrowed to fit Stock Studio's educational, no-advice framing. Its trade execution, directional trade calls,
+options-flow alerts and Discord/SMS signal alerts were deliberately left out.
 
 - **Research grade and one-line summary.** Fundamental studies get a letter grade (A to F) built from four card
   scores: growth, profitability, valuation (higher means more reasonable) and moat.
@@ -89,6 +89,16 @@ gamma exposure, and Discord/SMS alerts were deliberately left out.
   - plain-English readings generated from those numbers.
 
   Market data is cached for about 30 minutes (Next's fetch cache).
+- **Setup bots (`/setups`).** Five rule-based scanners check about 100 large caps after every close for published
+  chart patterns: 52-week breakout, RSI(2) pullback in an uptrend, pullback to a rising 50-day average, unusual
+  volume, and post-earnings gap.
+  - A match lists the pattern's own reference and failure levels. It is never a buy/sell call.
+  - One model call per scan writes descriptive "desk notes"; any note that reads like advice is dropped.
+  - Every match is paper-tracked against SPY over the bot's horizon, and the page shows each bot's record.
+  - The worker runs the scan once per completed session. `npm run engine -- scan-setups [--force]` runs it by hand.
+- **Gamma exposure (`/gamma`).** A dealer-gamma model for SPY, SPX, QQQ, IWM or any optionable symbol, built from
+  CBOE's free delayed chains. It shows net gamma per 1% move, the zero-gamma level, the largest call and put
+  strikes, and a strike-by-strike chart, with the model's assumptions spelled out on the page.
 
 ---
 

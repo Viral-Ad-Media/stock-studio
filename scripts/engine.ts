@@ -8,6 +8,7 @@
  *   npm run engine -- watchlist                    list tracked tickers (all workspaces) for the sweep
  *   npm run engine -- queue-refresh <watchlistId>  queue a free, sweep-initiated watchlist refresh
  *   npm run engine -- queue-earnings <caseStudyId> queue a free earnings update for a ready study
+ *   npm run engine -- scan-setups [--force]        run the setup-bot scan for the last completed session
  *
  * `complete` semantics by job type:
  *   build_case_study / earnings_update / movers_digest — --content is required (the finished markdown).
@@ -28,6 +29,7 @@ dotenv.config({ path: path.join(__dirname, "../.env.local") });
 
 import { sql } from "../lib/db";
 import { earningsForTickers } from "../lib/earnings";
+import { maybeRunSetupScan } from "../lib/setups-run";
 import { computeGrade, cleanSummaryLine, parseThesisStatus, GRADED_VARIANTS } from "../lib/grades";
 
 function arg(flag: string): string | undefined {
@@ -228,6 +230,10 @@ async function main() {
         next_earnings: earnings?.get(r.ticker)?.next?.date ?? null,
       }))
     );
+  } else if (cmd === "scan-setups") {
+    // Same routine the worker runs after the close; --force re-runs a
+    // session that's already done (its matches are replaced).
+    out(await maybeRunSetupScan({ deadline: Date.now() + 280_000, force: process.argv.includes("--force") }));
   } else if (cmd === "queue-refresh") {
     // Sweep-initiated refresh: queued in the row's own workspace and not
     // charged — the customer didn't ask for it.
