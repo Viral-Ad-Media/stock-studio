@@ -19,6 +19,7 @@ export default function robots(): MetadataRoute.Robots {
           "/setups",
           "/gamma",
           "/billing",
+          "/admin",
           "/reset-password",
         ],
       },
