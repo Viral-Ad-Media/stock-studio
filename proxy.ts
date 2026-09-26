@@ -59,6 +59,7 @@ export const config = {
     "/dashboard/:path*",
     "/new/:path*",
     "/watchlist/:path*",
+    "/market/:path*",
     "/study/:path*",
     "/api/case-studies/:path*",
     "/api/jobs/:path*",

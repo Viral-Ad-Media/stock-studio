@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { renderMarkdown, safeHttpUrl } from "@/lib/markdown";
@@ -6,6 +7,9 @@ import { currentWorkspaceId } from "@/lib/workspace";
 import AutoRefresh from "@/components/AutoRefresh";
 import StudyActions from "@/components/StudyActions";
 import StatusBadge from "@/components/StatusBadge";
+import GradeBreakdown from "@/components/insights/GradeBreakdown";
+import TrackRecord from "@/components/insights/TrackRecord";
+import { parseStoredGrade, GRADED_VARIANTS } from "@/lib/grades";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +29,9 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
     SELECT * FROM case_studies WHERE parent_id = ${study.id} AND workspace_id = ${ws} ORDER BY id DESC
   `) as unknown as CaseStudy[];
   const variantLabel = VARIANTS.find((v) => v.value === study.variant)?.label ?? study.variant;
+  const grade = study.status === "ready" ? parseStoredGrade(study.grade_json) : null;
+  // Price since the as-of date only means something for a single-company study.
+  const showTrack = study.status === "ready" && !!study.as_of_date && GRADED_VARIANTS.has(study.variant);
 
   return (
     <div>
@@ -72,6 +79,24 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
             dangerouslySetInnerHTML={{ __html: renderMarkdown(study.corrections_md) }}
           />
         </div>
+      )}
+
+      {grade ? (
+        <GradeBreakdown grade={grade} summary={study.summary_line} />
+      ) : (
+        study.status === "ready" &&
+        study.summary_line && (
+          <p className="card mb-4 p-4 text-sm text-slate-300">
+            <span className="font-semibold text-slate-100">In one line: </span>
+            {study.summary_line}
+          </p>
+        )
+      )}
+
+      {showTrack && (
+        <Suspense fallback={null}>
+          <TrackRecord ticker={study.ticker} asOfDate={study.as_of_date!} />
+        </Suspense>
       )}
 
       {study.content_md && (

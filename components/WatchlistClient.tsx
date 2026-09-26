@@ -4,7 +4,18 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RefreshCcw, Trash2, Plus } from "lucide-react";
-import { apiError, type WatchlistRow } from "@/lib/shared";
+import { apiError, formatDate, type WatchlistRow } from "@/lib/shared";
+import ThesisStatusBadge from "@/components/insights/ThesisStatusBadge";
+
+export type ThesisHistoryEntry = {
+  id: number;
+  watchlist_id: number;
+  as_of_date: string | null;
+  thesis: string;
+  thesis_status: string;
+  thesis_status_note: string | null;
+  created_at: string;
+};
 
 const TAGS = [
   { value: "watching", label: "Watching", cls: "bg-sky-500/10 text-sky-400 border-sky-500/30" },
@@ -12,7 +23,13 @@ const TAGS = [
   { value: "pass", label: "Pass", cls: "bg-red-500/10 text-red-400 border-red-500/30" },
 ];
 
-export default function WatchlistClient({ rows }: { rows: WatchlistRow[] }) {
+export default function WatchlistClient({
+  rows,
+  history = {},
+}: {
+  rows: WatchlistRow[];
+  history?: Record<number, ThesisHistoryEntry[]>;
+}) {
   const router = useRouter();
   const [ticker, setTicker] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -104,6 +121,8 @@ export default function WatchlistClient({ rows }: { rows: WatchlistRow[] }) {
         <div className="space-y-3">
           {rows.map((r) => {
             const triggers: string[] = r.triggers_json ?? [];
+            // Earlier versions only — the first entry is the current thesis.
+            const past = (history[r.id] ?? []).slice(1);
             return (
               <div key={r.id} className="card p-4">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
@@ -151,6 +170,12 @@ export default function WatchlistClient({ rows }: { rows: WatchlistRow[] }) {
                     </button>
                   </div>
                 </div>
+                {r.thesis && (
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <ThesisStatusBadge status={r.thesis_status} />
+                    {r.thesis_status_note && <span className="text-sm text-slate-300">{r.thesis_status_note}</span>}
+                  </div>
+                )}
                 {r.snapshot && <p className="mb-1 text-sm text-slate-400">{r.snapshot}</p>}
                 {r.thesis ? (
                   <p className="text-sm text-slate-300">{r.thesis}</p>
@@ -165,6 +190,25 @@ export default function WatchlistClient({ rows }: { rows: WatchlistRow[] }) {
                       </li>
                     ))}
                   </ul>
+                )}
+                {past.length > 0 && (
+                  <details className="mt-3 text-sm">
+                    <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-fg-subtle">
+                      Thesis timeline ({past.length} earlier)
+                    </summary>
+                    <ol className="mt-2 space-y-2 border-l border-ink-600 pl-3">
+                      {past.map((h) => (
+                        <li key={h.id}>
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-fg-subtle">
+                            <span>{h.as_of_date ? `As of ${h.as_of_date}` : formatDate(h.created_at)}</span>
+                            <ThesisStatusBadge status={h.thesis_status} />
+                          </div>
+                          <p className="mt-0.5 text-slate-400">{h.thesis}</p>
+                          {h.thesis_status_note && <p className="text-xs text-fg-subtle">{h.thesis_status_note}</p>}
+                        </li>
+                      ))}
+                    </ol>
+                  </details>
                 )}
                 {r.case_study_id && (
                   <Link href={`/study/${r.case_study_id}`} className="mt-2 inline-block text-sm text-emerald-400 hover:underline">
