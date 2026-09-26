@@ -19,6 +19,7 @@ import {
   CASE_STUDY_META_TOOL,
   WATCHLIST_ENTRY_TOOL,
 } from "./prompts";
+import { maybeRunSetupScan } from "@/lib/setups-run";
 import { computeGrade, cleanSummaryLine, parseThesisStatus, GRADED_VARIANTS } from "@/lib/grades";
 
 const MAX_ATTEMPTS = 3;
@@ -33,6 +34,8 @@ const MIN_CLAIM_MS = Number(process.env.ENGINE_MIN_CLAIM_MS ?? 150_000);
 // hosted web_search tool, whose output quality hasn't been validated against
 // the interactive /build-studies bar yet. Off by default: those jobs stay
 // pending for the manual path; only OHLC-only variants are automated.
+// A scan fetches ~100 daily series plus one small model call.
+const SETUP_SCAN_MIN_MS = 90_000;
 const INCLUDE_WEB_RESEARCH = process.env.ENGINE_WEB_RESEARCH === "1";
 
 // What customers see on a failed study. Raw error text (API bodies, config
@@ -315,5 +318,17 @@ export async function runWorkerLoop() {
     }
   }
 
-  return { processed_count: processed.length, processed };
+  // Once per completed session, run the market-wide setup-bot scan with
+  // whatever budget the queue left. Customer jobs always come first.
+  let setupScan: unknown = null;
+  if (deadline - Date.now() >= SETUP_SCAN_MIN_MS) {
+    try {
+      setupScan = await maybeRunSetupScan({ deadline });
+    } catch (err) {
+      console.error("engine: setup scan failed", err);
+      setupScan = { ran: false, reason: "error" };
+    }
+  }
+
+  return { processed_count: processed.length, processed, setup_scan: setupScan };
 }
