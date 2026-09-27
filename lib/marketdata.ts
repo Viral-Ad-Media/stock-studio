@@ -10,11 +10,20 @@ export type Candle = { t: string; o: number; h: number; l: number; c: number; v:
 // the worker and CLI always fetch fresh. Outside Next the option is ignored.
 async function yahooFetch(url: string, label: string, revalidateSec?: number) {
   // Bounded: the worker has a fixed per-invocation time budget.
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0 (stock-studio market data fetcher)" },
-    signal: AbortSignal.timeout(15_000),
-    ...(revalidateSec ? { cache: "force-cache" as const, next: { revalidate: revalidateSec } } : {}),
-  });
+  const get = (u: string) =>
+    fetch(u, {
+      headers: { "User-Agent": "Mozilla/5.0 (stock-studio market data fetcher)" },
+      signal: AbortSignal.timeout(15_000),
+      ...(revalidateSec ? { cache: "force-cache" as const, next: { revalidate: revalidateSec } } : {}),
+    });
+  let res = await get(url);
+  // Yahoo rate-limits shared hosting IPs per host. Retry a 429/5xx twice with
+  // a short backoff, alternating query1 <-> query2 (same API, separate limits).
+  for (let attempt = 1; attempt <= 2 && (res.status === 429 || res.status >= 500); attempt++) {
+    await new Promise((r) => setTimeout(r, attempt * 1500));
+    const alt = /\/\/query1\./.test(url) ? url.replace("//query1.", "//query2.") : url.replace("//query2.", "//query1.");
+    res = await get(attempt % 2 === 1 ? alt : url);
+  }
   if (!res.ok) throw new Error(`Yahoo ${label} API returned ${res.status}`);
   const body: any = await res.json();
   return body;
