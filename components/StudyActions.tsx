@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Check, RefreshCcw, Trash2, Eye } from "lucide-react";
+import Link from "next/link";
+import { Copy, Check, RefreshCcw, Trash2, Eye, FilePlus2 } from "lucide-react";
 import { apiError } from "@/lib/shared";
 
 type Props = {
@@ -11,6 +12,7 @@ type Props = {
     ticker: string;
     company: string | null;
     status: string;
+    variant: string;
     content_md: string | null;
   };
 };
@@ -118,6 +120,15 @@ export default function StudyActions({ study }: Props) {
               {busy === "watch" ? "Adding…" : "Add to watchlist"}
             </button>
           </>
+        )}
+        {study.variant !== "movers_digest" && (
+          <Link
+            href={`/new?${new URLSearchParams({ ticker: study.ticker, ...(study.company ? { company: study.company } : {}) })}`}
+            className={btn}
+          >
+            <FilePlus2 className="h-4 w-4 text-emerald-400" aria-hidden />
+            New study for {study.ticker}
+          </Link>
         )}
         <button onClick={remove} disabled={busy !== null} className={`${btn} hover:border-red-500/50 hover:text-red-400`}>
           <Trash2 className="h-4 w-4" aria-hidden /> {busy === "delete" ? "Deleting…" : "Delete"}
