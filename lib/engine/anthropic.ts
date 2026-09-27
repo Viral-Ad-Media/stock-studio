@@ -9,8 +9,9 @@ import Anthropic from "@anthropic-ai/sdk";
 
 export const ENGINE_MODEL = "claude-sonnet-5";
 
-// Single-call ceiling; the deadline usually binds first.
-const MAX_CALL_MS = 170_000;
+// Single-call ceiling; the deadline usually binds first. Raise it with the
+// invocation budget on hosts without a function time limit (e.g. Render).
+const MAX_CALL_MS = Number(process.env.ENGINE_MAX_CALL_MS ?? 170_000);
 // Headroom kept after a call for the DB write-back.
 const WRITE_BACK_MS = 5_000;
 // Extraction is a small structured call — never give it more than this.

@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { requireSuperAdminApi } from "@/lib/admin";
+import { STALE_LOCK_MS } from "@/lib/engine/worker";
 
 // Minutes a running job must sit untouched before an admin may fail it. A
 // live worker bumps updated_at and finishes well inside its 5-minute budget;
 // failing one mid-flight could refund a report that then gets delivered.
-const STUCK_AFTER_MIN = 15;
+const STUCK_AFTER_MIN = Math.max(15, Math.ceil(STALE_LOCK_MS / 60_000));
 
 // Fail (and refund) a job that's pending, or running but stuck.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {

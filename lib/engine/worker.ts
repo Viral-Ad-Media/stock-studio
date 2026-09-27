@@ -24,12 +24,17 @@ import { computeGrade, cleanSummaryLine, parseThesisStatus, GRADED_VARIANTS } fr
 
 const MAX_ATTEMPTS = 3;
 // Total wall-clock this invocation may spend, kept under the route's
-// maxDuration (300s). Every Anthropic/Yahoo call is bounded by this deadline
+// maxDuration (300s) on serverless hosts; a long-running server (Render) can
+// raise it so deep-research jobs have time to finish. Every Anthropic/Yahoo call is bounded by this deadline
 // (lib/engine/anthropic.ts), so a job either finishes or fails cleanly inside
 // the invocation instead of being killed mid-flight.
 const INVOCATION_BUDGET_MS = Number(process.env.ENGINE_INVOCATION_BUDGET_MS ?? 280_000);
 // Don't start another job with less than this left — it would only time out.
 const MIN_CLAIM_MS = Number(process.env.ENGINE_MIN_CLAIM_MS ?? 150_000);
+// A running job's lock goes stale (reclaimable) only after the longest an
+// invocation can live, plus margin — otherwise a second invocation could take
+// over a job that is still being written.
+export const STALE_LOCK_MS = Math.max(360_000, INVOCATION_BUDGET_MS + 120_000);
 // General research variants (full, memo, watchlist, movers…) depend on the
 // hosted web_search tool, whose output quality hasn't been validated against
 // the manually researched bar yet. Off by default: those jobs stay
@@ -294,7 +299,11 @@ export async function runWorkerLoop() {
 
   while (deadline - Date.now() >= MIN_CLAIM_MS) {
     const [job] = (await sql`
-      SELECT * FROM claim_job(max_attempts => ${MAX_ATTEMPTS}, include_web_research => ${INCLUDE_WEB_RESEARCH})
+      SELECT * FROM claim_job(
+        stale_after => make_interval(secs => ${STALE_LOCK_MS / 1000}),
+        max_attempts => ${MAX_ATTEMPTS},
+        include_web_research => ${INCLUDE_WEB_RESEARCH}
+      )
     `) as unknown as (Job | { id: null })[];
     if (!job || job.id == null) break; // nothing left to claim
 
