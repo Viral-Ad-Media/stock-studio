@@ -30,7 +30,7 @@ async function yahooFetch(url: string, label: string, revalidateSec?: number) {
 }
 
 // The one-candle strategy's fixed "first 5 minutes of the regular session"
-// rule — see .claude/skills/build-studies/SKILL.md's One-candle section.
+// rule — see lib/engine/methodology.md's One-candle section.
 export async function fetchOpeningCandle(ticker: string, date?: string) {
   let url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
     ticker
@@ -119,7 +119,7 @@ export async function fetchOpeningCandle(ticker: string, date?: string) {
 
 // General-purpose OHLC across many candles — for swing-structure setups
 // like the Da Vinci liquidity model, where a single opening range isn't
-// enough. See .claude/skills/build-studies/SKILL.md's Da Vinci section.
+// enough. See lib/engine/methodology.md's Da Vinci section.
 export async function fetchHistory(ticker: string, interval = "5m", range = "5d") {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
     ticker

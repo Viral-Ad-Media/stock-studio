@@ -42,10 +42,10 @@ const nextConfig = {
   // Never ship source maps to browsers, and don't advertise the framework.
   productionBrowserSourceMaps: false,
   poweredByHeader: false,
-  // lib/engine/prompts.ts reads the methodology from the skill file at
-  // runtime — make sure serverless bundles actually contain it.
+  // lib/engine/prompts.ts reads lib/engine/methodology.md at runtime
+  // — make sure serverless bundles actually contain it.
   outputFileTracingIncludes: {
-    "/api/engine/run": ["./.claude/skills/build-studies/SKILL.md"],
+    "/api/engine/run": ["./lib/engine/methodology.md"],
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

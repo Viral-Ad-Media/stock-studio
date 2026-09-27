@@ -1,5 +1,5 @@
 /**
- * Engine CLI — how Claude Code reads and writes the jobs queue.
+ * Engine CLI — how the manual engine reads and writes the jobs queue.
  *
  *   npm run engine -- pending                 list pending/running job ids + labels (no customer text)
  *   npm run engine -- claim <jobId>           mark a job running, print its full context (JSON)
@@ -204,7 +204,7 @@ async function main() {
     });
     out({ ok: true, job_id: id, failed: true });
   } else if (cmd === "watchlist") {
-    // For the /refresh-watchlist sweep: every tracked ticker, across all
+    // For the watchlist refresh sweep: every tracked ticker, across all
     // workspaces, with whether a refresh is already open. Ids and labels
     // only — no thesis/snapshot text.
     const rows = await sql`
