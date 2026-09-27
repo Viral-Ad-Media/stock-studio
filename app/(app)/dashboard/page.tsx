@@ -5,6 +5,7 @@ import { currentWorkspaceId } from "@/lib/workspace";
 import AutoRefresh from "@/components/AutoRefresh";
 import QueuePanel, { QueueJob } from "@/components/QueuePanel";
 import StatusBadge from "@/components/StatusBadge";
+import RetryStudyButton from "@/components/RetryStudyButton";
 import GradeBadge from "@/components/insights/GradeBadge";
 import EarningsPanel, { EarningsPanelSkeleton } from "@/components/insights/EarningsPanel";
 import { parseStoredGrade } from "@/lib/grades";
@@ -97,10 +98,10 @@ export default async function Dashboard() {
           {studies.map((s) => {
             const grade = parseStoredGrade(s.grade_json);
             return (
+              <div key={s.id} className="relative">
               <Link
-                key={s.id}
                 href={`/study/${s.id}`}
-                className="card p-4 hover:border-ink-500 transition-colors block"
+                className="card p-4 hover:border-ink-500 transition-colors block h-full"
               >
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <span className="flex items-center gap-2">
@@ -117,6 +118,13 @@ export default async function Dashboard() {
                   {s.as_of_date ? `As of ${s.as_of_date}` : `Queued ${formatDate(s.created_at)}`}
                 </div>
               </Link>
+              {/* A sibling of the link, not inside it: no nested interactive elements. */}
+              {s.status === "error" && (
+                <div className="absolute bottom-3 right-3">
+                  <RetryStudyButton id={s.id} ticker={s.ticker} variant={s.variant} compact />
+                </div>
+              )}
+              </div>
             );
           })}
         </div>
