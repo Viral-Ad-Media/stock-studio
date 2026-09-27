@@ -10,7 +10,7 @@ opens with an "As of [date]" line and ends with a "Not investment advice" line.
 - **Database**: hosted Postgres on Supabase, in an isolated `stocks` schema.
 - **Auth**: Supabase Auth. Each signup gets its own workspace.
 - **Billing**: Stripe. A 30-day trial, then a one-time access fee, then per-report credits.
-- **Research engine**: an automated Anthropic API worker, with Claude Code as a manual fallback.
+- **Research engine**: an automated Anthropic API worker, with a manual CLI fallback.
 - **Market data**: unauthenticated Yahoo Finance endpoints (no API key).
 
 ---
@@ -58,8 +58,8 @@ there and nowhere else.
 
 The **one_candle** and **davinci_model** variants are strictly educational framework analysis
 built only from real fetched candles. They give no trade directives and make no profitability
-claims, and each has its own required footer. See [`CLAUDE.md`](CLAUDE.md) for the full
-methodology of each.
+claims, and each has its own required footer. See [`lib/engine/methodology.md`](lib/engine/methodology.md) for
+the full methodology of each.
 
 ---
 
@@ -120,7 +120,7 @@ options-flow alerts and Discord/SMS signal alerts were deliberately left out.
             │ payments · RPCs: claim_job, charge/refund_job_credits, fulfill_checkout │
             └─────────────────────────────────────────────────────────────────────────┘
                     ▲
-                    │ npm run engine (CLI)  ← manual fallback: Claude Code /build-studies
+                    │ npm run engine (CLI)  ← manual fallback
 ```
 
 **Lifecycle of a report:**
@@ -143,7 +143,7 @@ options-flow alerts and Discord/SMS signal alerts were deliberately left out.
 - Node 20+
 - Access to the Supabase project that hosts the `stocks` schema, including a password for the
   `stocks_app` role
-- (Optional) an Anthropic API key, Stripe test-mode keys, and Claude Code for the manual engine
+- (Optional) an Anthropic API key, and Stripe test-mode keys
 
 ### Install & run
 
@@ -175,12 +175,12 @@ All variables are listed in [`.env.example`](.env.example).
 |---|---|---|
 | `DATABASE_URL` | everything | Supabase **transaction pooler**, `stocks_app` role (`stocks_app.<ref>` username). |
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | auth | From Project Settings → API. |
-| `SUPABASE_PROJECT_ID` | Claude Code skills | Used with the Supabase MCP `execute_sql` for read-only inspection. |
+| `SUPABASE_PROJECT_ID` | tooling | Project ref, for read-only inspection with the Supabase SQL tools. |
 | `NEXT_PUBLIC_APP_URL` | login + Stripe redirects, canonical URLs, sitemap, social cards | **Set it in production, available at build time**, e.g. `https://app.example.com`. Behind a host's proxy the server sees itself as `0.0.0.0:$PORT`. Without it, `appOrigin()` falls back to the forwarded `Host` header and SEO URLs fall back to Render's/Vercel's own public URL. |
 | `ANTHROPIC_API_KEY` | automated worker | |
 | `ENGINE_WEBHOOK_SECRET` | automated worker | Must equal the Vault secret `engine_webhook_secret`. |
 | `ENGINE_WEB_RESEARCH` | automated worker | `1` also automates web-research variants. Off by default ([why](#automated-worker)). |
-| `ENGINE_INVOCATION_BUDGET_MS` / `ENGINE_MIN_CLAIM_MS` | automated worker | Optional tuning: total budget per invocation, and the minimum time left to start another job. Defaults: 280000 / 150000. |
+| `ENGINE_INVOCATION_BUDGET_MS` / `ENGINE_MIN_CLAIM_MS` / `ENGINE_MAX_CALL_MS` | automated worker | Optional tuning: total budget per invocation, the minimum time left to start another job, and the cap on one model call. Defaults 280000 / 150000 / 170000 fit a 300 s serverless limit. On Render (no function limit) deep-research jobs need more, e.g. 720000 / 150000 / 600000. A running job's lock goes stale after the budget plus 2 minutes. |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | billing | |
 | `BILLING_DATABASE_URL` | billing (webhook only) | Pooler URL for the `stocks_billing` role, the only role allowed to grant access or credits. Set its password first in the Supabase SQL editor: `ALTER ROLE stocks_billing WITH PASSWORD '…';`. |
 | `STRIPE_PRICE_ACCESS` | billing | Price id of the one-time access fee. |
@@ -192,7 +192,7 @@ All variables are listed in [`.env.example`](.env.example).
 ## The research engine
 
 The engine runs in two modes that share one jobs queue and one methodology file:
-[`.claude/skills/build-studies/SKILL.md`](.claude/skills/build-studies/SKILL.md).
+[`lib/engine/methodology.md`](lib/engine/methodology.md).
 
 ### Automated worker
 
@@ -224,17 +224,23 @@ The engine runs in two modes that share one jobs queue and one methodology file:
 
 **Only `one_candle` and `davinci_model` are automated by default.** Those variants work purely
 from fetched candles. The general research variants rely on Anthropic's hosted `web_search`
-tool, whose output hasn't yet been validated against the interactive Claude Code bar. Until
+tool, whose output hasn't yet been validated against the manually researched bar. Until
 `ENGINE_WEB_RESEARCH=1` is set, those jobs stay `pending` for the manual path.
 
-### Manual fallback (Claude Code)
+### Manual fallback (engine CLI)
 
-On any machine with `DATABASE_URL` in `.env.local`, open the repo in Claude Code and run:
+On any machine with `DATABASE_URL` in `.env.local`, jobs the worker doesn't take can be built by
+hand through the engine CLI, following [`lib/engine/methodology.md`](lib/engine/methodology.md):
 
-| Skill | When | What it does |
-|---|---|---|
-| `/build-studies` | after queuing studies or watchlist entries | Drains pending jobs using live WebSearch/WebFetch, then writes the fact-checked markdown back through the engine CLI. |
-| `/refresh-watchlist` | on a schedule or on demand | Sweeps tracked tickers for earnings or material news, requeues stale entries, queues earnings updates, then drains them. |
+```bash
+npm run engine -- pending                                  # pending job ids + labels
+npm run engine -- claim <jobId>                            # mark running, print the job's context
+npm run engine -- complete <jobId> --content s.md --meta m.json
+npm run engine -- fail <jobId> --message "why"             # also refunds the job's credits
+npm run engine -- watchlist                                # tracked tickers for a refresh sweep
+npm run engine -- queue-refresh <watchlistId>              # free sweep-initiated refresh
+npm run engine -- queue-earnings <caseStudyId>             # free sweep-initiated earnings update
+```
 
 Manual claims leave `locked_at` NULL, so the automated worker never takes them over. In the
 other direction, the CLI refuses to claim a job the worker is holding.
@@ -250,7 +256,7 @@ other direction, the CLI refuses to claim a job the worker is holding.
 | **Credits** | Charged **at queue time** in the same transaction as the job INSERT. If the balance is short the charge raises (SQLSTATE `SS402`) and the job never exists; the API returns 402. |
 | **Refunds** | Failed jobs (worker or CLI `fail`) are refunded automatically and idempotently. Jobs can be removed from the queue, and refunded, only while still `pending`. Once running, a job can't be cancelled. |
 | **Limits** | Per workspace, at most 10 reports in progress and 30 queued per hour (`lib/limits.ts`). |
-| **Sweep jobs** | Refreshes and earnings updates queued by `/refresh-watchlist` are free, because the customer didn't ask for them. |
+| **Sweep jobs** | Refreshes and earnings updates queued by the watchlist sweep (`queue-refresh` / `queue-earnings`) are free, because the customer didn't ask for them. |
 | **Purchases** | `/billing` opens a hosted Stripe Checkout, either the access fee or a credit pack. |
 
 **The Stripe webhook is the only thing that grants access or purchased credits.** It connects as
@@ -419,11 +425,10 @@ lib/
   stripe.ts             Stripe client + price lookup
   shared.ts             client-safe types, VARIANTS, CREDIT_COSTS
   marketdata.ts         Yahoo Finance candles/history/movers
-  engine/               worker loop, Anthropic client, prompt builders
+  engine/               worker loop, Anthropic client, prompts, methodology.md
   supabase/             browser + server Supabase clients
 scripts/                engine / candles / history / movers CLIs
 supabase/migrations/    SQL for recent migrations
-.claude/skills/         build-studies and refresh-watchlist (manual engine + shared methodology)
 ```
 
 ---
@@ -431,7 +436,7 @@ supabase/migrations/    SQL for recent migrations
 ## Deployment
 
 1. **Host**: deploy the repo and set the env vars above.
-   - **Vercel**: `next.config.mjs` adds `SKILL.md` to the `/api/engine/run` bundle, since the
+   - **Vercel**: `next.config.mjs` adds `lib/engine/methodology.md` to the `/api/engine/run` bundle, since the
      worker reads it at runtime.
    - **Render** (or any host that assigns a port): build `npm install && npm run build`, start
      `npm run start`. The start script listens on `0.0.0.0:$PORT` (3200 when `PORT` is unset), so
@@ -458,7 +463,7 @@ supabase/migrations/    SQL for recent migrations
      before launch, because Supabase's built-in sender is heavily rate-limited.
 5. **Smoke test**:
    - Sign up and confirm the trial credits appear.
-   - Queue a `one_candle` study and confirm it builds without any Claude Code session running.
+   - Queue a `one_candle` study and confirm it builds with no manual engine running.
    - Run a test-mode checkout, then replay the webhook and confirm nothing is granted twice.
 
 ---
@@ -484,7 +489,7 @@ These rules are non-negotiable and apply to every variant and both engine modes:
 
 | Symptom | Likely cause |
 |---|---|
-| Jobs sit in `pending` forever | Either `engine_webhook_url` in Vault is still the placeholder, or the job is a web-research variant and `ENGINE_WEB_RESEARCH` is off (run `/build-studies`). |
+| Jobs sit in `pending` forever | Either `engine_webhook_url` in Vault is still the placeholder, or the job is a web-research variant and `ENGINE_WEB_RESEARCH` is off (build it through the engine CLI). |
 | Study shows "We couldn't build this report" | The job failed and its credits were refunded. The real reason is in `jobs.result`: for example a refusal, output over the length limit, repeated timeouts, or invocations killed 3 times. For kills, check the host's function logs and keep `ENGINE_INVOCATION_BUDGET_MS` below the route's `maxDuration`. |
 | Browser console shows a CSP violation | The page is calling an origin not in `connect-src` in `next.config.mjs`; add it there. |
 | API returns 429 | The workspace hit a queue limit (`lib/limits.ts`): 10 reports in progress, or 30 queued in the last hour. The response says which one, with `Retry-After`. |
@@ -495,4 +500,3 @@ These rules are non-negotiable and apply to every variant and both engine modes:
 | `DATABASE_URL is not set` from a CLI | `.env.local` is missing from the repo root. |
 | `npm run candles` returns no data | The market isn't open yet, or the date is beyond Yahoo's ~30-day 1-minute history. |
 
-For contributor and agent conventions, see [`CLAUDE.md`](CLAUDE.md).

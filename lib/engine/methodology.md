@@ -1,8 +1,3 @@
----
-name: build-studies
-description: Drain pending Stock Studio jobs — research each queued ticker with live web sources following the Stock Case Study Builder methodology, then write the finished fact-checked case study (or watchlist entry) back into the hosted database so it appears in the app.
----
-
 # Build queued case studies
 
 You are the research engine for the Stock Studio app in this project. Execute every pending job in the queue.
