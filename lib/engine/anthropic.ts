@@ -25,7 +25,7 @@ let _client: Anthropic | null = null;
 function client(): Anthropic {
   if (_client) return _client;
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new PermanentJobError("ANTHROPIC_API_KEY is not set");
+  if (!apiKey) throw new EngineUnavailableError("ANTHROPIC_API_KEY is not set");
   _client = new Anthropic({ apiKey, maxRetries: 0 });
   return _client;
 }
@@ -34,20 +34,34 @@ function client(): Anthropic {
 // limit, bad input). The worker fails the job immediately and refunds.
 export class PermanentJobError extends Error {}
 
-// Auth/permission/bad-request/billing errors and our own permanent errors stop
-// the job immediately rather than burning the attempts ceiling — agentor-ai
-// burned 73 attempts against a dead key before this existed.
-export function isPermanentAnthropicFailure(err: unknown): boolean {
-  if (err instanceof PermanentJobError) return true;
+// Our own API account can't serve any job right now: no key, a revoked key,
+// an empty credit balance, an unknown model, or rate-limited / overloaded.
+// None of that is the job's fault, so the worker puts the job back in the
+// queue without spending an attempt and stops the invocation, instead of
+// failing (and refunding) every queued report until the account is fixed.
+export class EngineUnavailableError extends Error {}
+
+export function isEngineUnavailable(err: unknown): boolean {
+  if (err instanceof EngineUnavailableError) return true;
   if (
     err instanceof Anthropic.AuthenticationError ||
     err instanceof Anthropic.PermissionDeniedError ||
     err instanceof Anthropic.NotFoundError ||
-    err instanceof Anthropic.BadRequestError // includes "credit balance is too low"
+    err instanceof Anthropic.RateLimitError
   ) {
     return true;
   }
+  if (err instanceof Anthropic.BadRequestError && /credit balance/i.test(err.message)) return true;
+  if (err instanceof Anthropic.APIError && err.status === 529) return true; // overloaded
   return false;
+}
+
+// Bad-request errors and our own permanent errors stop the job immediately
+// rather than burning the attempts ceiling. Account-level failures are
+// checked first (isEngineUnavailable) and never land here.
+export function isPermanentAnthropicFailure(err: unknown): boolean {
+  if (err instanceof PermanentJobError) return true;
+  return err instanceof Anthropic.BadRequestError;
 }
 
 // Time left for one call: bounded by the invocation deadline minus what the
