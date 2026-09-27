@@ -32,7 +32,7 @@ const INVOCATION_BUDGET_MS = Number(process.env.ENGINE_INVOCATION_BUDGET_MS ?? 2
 const MIN_CLAIM_MS = Number(process.env.ENGINE_MIN_CLAIM_MS ?? 150_000);
 // General research variants (full, memo, watchlist, movers…) depend on the
 // hosted web_search tool, whose output quality hasn't been validated against
-// the interactive /build-studies bar yet. Off by default: those jobs stay
+// the manually researched bar yet. Off by default: those jobs stay
 // pending for the manual path; only OHLC-only variants are automated.
 // A scan fetches ~100 daily series plus one small model call.
 const SETUP_SCAN_MIN_MS = 90_000;
