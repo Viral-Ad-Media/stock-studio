@@ -2,6 +2,8 @@ import Link from "next/link";
 import { sql, formatDate } from "@/lib/db";
 import { requireSuperAdminPage, userDirectory } from "@/lib/admin";
 import Stat from "@/components/admin/Stat";
+import { formatCost } from "@/lib/engine/usage";
+import { creditCost } from "@/lib/shared";
 
 export const metadata = { title: "Overview" };
 
@@ -45,6 +47,24 @@ export default async function AdminOverview() {
       count(*) FILTER (WHERE status = 'ready' AND updated_at > now() - interval '7 days')::int AS ready7
     FROM case_studies
   `;
+  // Model spend, recorded per job by the worker (estimates at list price).
+  const [m] = await sql`
+    SELECT
+      coalesce(sum(cost_usd) FILTER (WHERE updated_at >= date_trunc('day', now())), 0)::float AS today,
+      coalesce(sum(cost_usd) FILTER (WHERE updated_at > now() - interval '7 days'), 0)::float AS d7,
+      coalesce(sum(cost_usd) FILTER (WHERE updated_at > now() - interval '30 days'), 0)::float AS d30,
+      coalesce(sum(cost_usd) FILTER (WHERE status <> 'done' AND updated_at > now() - interval '30 days'), 0)::float AS unbuilt30,
+      coalesce(sum((usage_json->>'web_search_requests')::int) FILTER (WHERE updated_at > now() - interval '30 days'), 0)::int AS searches30
+    FROM jobs WHERE cost_usd IS NOT NULL
+  `;
+  const byFormat = await sql`
+    SELECT coalesce(cs.variant, j.type) AS format, count(*)::int AS jobs,
+      avg(j.cost_usd)::float AS avg_cost, max(j.cost_usd)::float AS max_cost,
+      avg((j.usage_json->>'web_search_requests')::int)::float AS avg_searches
+    FROM jobs j LEFT JOIN case_studies cs ON cs.id = (j.payload->>'case_study_id')::bigint
+    WHERE j.cost_usd IS NOT NULL AND j.status = 'done' AND j.updated_at > now() - interval '30 days'
+    GROUP BY 1 ORDER BY avg(j.cost_usd) DESC
+  `;
   const failures = await sql`
     SELECT id, type, result, updated_at FROM jobs WHERE status = 'error' ORDER BY updated_at DESC LIMIT 5
   `;
@@ -82,6 +102,55 @@ export default async function AdminOverview() {
         <Stat label="Last 24 hours" value={`${j.done24} done · ${j.failed24} failed`} tone={j.failed24 ? "warn" : undefined} />
         <Stat label="Studies ready" value={s.ready} hint={`${s.ready7} in the last 7 days · last job done ${j.last_done ? formatDate(j.last_done) : "never"}`} />
       </div>
+
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Model spend (estimated)</h2>
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat label="Today (UTC)" value={formatCost(m.today)} />
+        <Stat label="7 days" value={formatCost(m.d7)} />
+        <Stat label="30 days" value={formatCost(m.d30)} hint={`${m.searches30} web searches`} />
+        <Stat
+          label="Spent on unbuilt reports, 30 days"
+          value={formatCost(m.unbuilt30)}
+          hint="Failed, retrying or held attempts"
+          tone={m.unbuilt30 > 0 ? "warn" : undefined}
+        />
+      </div>
+      <section aria-labelledby="cost-by-format" className="card mb-8 overflow-x-auto">
+        <h3 id="cost-by-format" className="px-4 pt-4 text-sm font-semibold text-slate-100">
+          Cost per finished report, last 30 days
+        </h3>
+        {byFormat.length === 0 ? (
+          <p className="px-4 pb-4 pt-2 text-sm text-fg-subtle">No finished reports with recorded cost yet.</p>
+        ) : (
+          <table className="mt-2 w-full min-w-[560px] text-sm">
+            <caption className="sr-only">Average model cost per finished report by format</caption>
+            <thead>
+              <tr className="border-b border-ink-700 text-left text-xs text-fg-subtle">
+                <th scope="col" className="px-4 py-2 font-medium">Format</th>
+                <th scope="col" className="px-4 py-2 font-medium">Reports</th>
+                <th scope="col" className="px-4 py-2 font-medium">Average</th>
+                <th scope="col" className="px-4 py-2 font-medium">Highest</th>
+                <th scope="col" className="px-4 py-2 font-medium">Searches</th>
+                <th scope="col" className="px-4 py-2 font-medium">Credits charged</th>
+              </tr>
+            </thead>
+            <tbody>
+              {byFormat.map((f) => (
+                <tr key={f.format} className="border-b border-ink-800 last:border-0">
+                  <th scope="row" className="px-4 py-2 text-left font-normal text-slate-200">{f.format}</th>
+                  <td className="px-4 py-2 tabular-nums text-slate-300">{f.jobs}</td>
+                  <td className="px-4 py-2 tabular-nums text-slate-300">{formatCost(f.avg_cost)}</td>
+                  <td className="px-4 py-2 tabular-nums text-slate-300">{formatCost(f.max_cost)}</td>
+                  <td className="px-4 py-2 tabular-nums text-slate-300">{Math.round(f.avg_searches ?? 0)}</td>
+                  <td className="px-4 py-2 tabular-nums text-slate-300">
+                    {f.format === "watchlist_entry" || f.format === "movers_digest" || f.format === "earnings_update" ? `${creditCost(f.format)} (free if sweep-queued)` : creditCost(f.format)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section aria-labelledby="recent-users" className="card p-4">

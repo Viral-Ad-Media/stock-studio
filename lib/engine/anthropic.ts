@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type { UsageMeter } from "./usage";
 
 // Automated-worker Anthropic client. Pattern reused from agentor-ai:
 // maxRetries: 0 because the worker's own per-job `attempts` counter
@@ -110,16 +111,37 @@ export type ResearchResult = {
   usage: { input_tokens: number; output_tokens: number };
 };
 
+// The methodology system prompt is identical for every job, so it's cached:
+// repeat reads (continuations, and other jobs within 5 minutes) cost 0.1x.
+function cachedSystem(text: string): Anthropic.TextBlockParam[] {
+  return [{ type: "text", text, cache_control: { type: "ephemeral" } }];
+}
+
+export type Effort = "low" | "medium" | "high";
+
 // Research call with Anthropic's hosted web_search tool. The model searches
 // server-side; a `pause_turn` (server tool loop hit its iteration limit) is
 // resumed by re-sending the conversation with the paused assistant turn.
+// `maxSearches` caps web searches across the whole call, continuations
+// included (the API's max_uses is per request, so it's re-derived each time).
 export async function researchWithWebSearch(opts: {
   system: string;
   prompt: string;
   deadline: number;
+  maxSearches: number;
+  effort?: Effort;
+  meter?: UsageMeter;
   maxTokens?: number;
 }): Promise<ResearchResult> {
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: opts.prompt }];
+  const budgetNote =
+    `\n\nSearch budget: at most ${opts.maxSearches} web searches for this report. Plan them — ` +
+    "primary sources (investor-relations releases, SEC filings) first — and when the budget runs " +
+    "out, write the report from what you found, saying plainly what you couldn't verify.";
+  const messages: Anthropic.MessageParam[] = [
+    // Cached too, so each continuation re-reads the prompt at 0.1x.
+    { role: "user", content: [{ type: "text", text: opts.prompt + budgetNote, cache_control: { type: "ephemeral" } }] },
+  ];
+  let searchesUsed = 0;
   const sources: { title: string; url: string }[] = [];
   const seen = new Set<string>();
   const usage = { input_tokens: 0, output_tokens: 0 };
@@ -129,12 +151,22 @@ export async function researchWithWebSearch(opts: {
       {
         model: ENGINE_MODEL,
         max_tokens: opts.maxTokens ?? 16_000,
-        system: opts.system,
-        tools: [{ type: "web_search_20260209", name: "web_search" }],
+        system: cachedSystem(opts.system),
+        tools: [
+          {
+            type: "web_search_20260209",
+            name: "web_search",
+            // Never 0 (invalid): a spent budget leaves one search at most per continuation.
+            max_uses: Math.max(1, opts.maxSearches - searchesUsed),
+          },
+        ],
+        ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
         messages,
       },
       { timeout: callTimeout(opts.deadline, EXTRACT_RESERVE_MS, MAX_CALL_MS) }
     );
+    opts.meter?.add(msg.usage);
+    searchesUsed += msg.usage.server_tool_use?.web_search_requests ?? 0;
     usage.input_tokens += msg.usage.input_tokens;
     usage.output_tokens += msg.usage.output_tokens;
 
@@ -166,17 +198,19 @@ export async function writeFromData(opts: {
   system: string;
   prompt: string;
   deadline: number;
+  meter?: UsageMeter;
   maxTokens?: number;
 }): Promise<ResearchResult> {
   const msg = await client().messages.create(
     {
       model: ENGINE_MODEL,
       max_tokens: opts.maxTokens ?? 16_000,
-      system: opts.system,
+      system: cachedSystem(opts.system),
       messages: [{ role: "user", content: opts.prompt }],
     },
     { timeout: callTimeout(opts.deadline, EXTRACT_RESERVE_MS, MAX_CALL_MS) }
   );
+  opts.meter?.add(msg.usage);
   assertComplete(msg);
   return {
     text: finalText(msg),
@@ -195,6 +229,7 @@ export async function extractStructured<T>(opts: {
   toolName: string;
   schema: { required?: string[] } & Record<string, unknown>;
   deadline: number;
+  meter?: UsageMeter;
 }): Promise<T> {
   const msg = await client().messages.create(
     {
@@ -210,6 +245,7 @@ export async function extractStructured<T>(opts: {
     },
     { timeout: callTimeout(opts.deadline, WRITE_BACK_MS, EXTRACT_CALL_MS) }
   );
+  opts.meter?.add(msg.usage);
   if (msg.stop_reason !== "tool_use") {
     throw new Error(`Extraction did not complete (stop_reason: ${msg.stop_reason})`);
   }
