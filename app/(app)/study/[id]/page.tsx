@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import RetryStudyButton from "@/components/RetryStudyButton";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { renderMarkdown, safeHttpUrl } from "@/lib/markdown";
@@ -38,6 +39,16 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
   const updates = (await sql`
     SELECT * FROM case_studies WHERE parent_id = ${study.id} AND workspace_id = ${ws} ORDER BY id DESC
   `) as unknown as CaseStudy[];
+  // Every other format built for the same ticker (follow-ups are listed separately).
+  const siblings =
+    study.variant === "movers_digest"
+      ? []
+      : ((await sql`
+          SELECT id, variant, status, as_of_date, created_at FROM case_studies
+          WHERE workspace_id = ${ws} AND ticker = ${study.ticker} AND id <> ${study.id}
+            AND (parent_id IS DISTINCT FROM ${study.id})
+          ORDER BY id DESC LIMIT 20
+        `) as unknown as CaseStudy[]);
   const variantLabel = VARIANTS.find((v) => v.value === study.variant)?.label ?? study.variant;
   const grade = study.status === "ready" ? parseStoredGrade(study.grade_json) : null;
   // Price since the as-of date only means something for a single-company study.
@@ -60,7 +71,7 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
             {study.as_of_date && <> · as of {study.as_of_date}</>}
           </p>
         </div>
-        <StudyActions study={{ id: study.id, ticker: study.ticker, company: study.company, status: study.status, content_md: study.content_md }} />
+        <StudyActions study={{ id: study.id, ticker: study.ticker, company: study.company, status: study.status, variant: study.variant, content_md: study.content_md }} />
       </div>
 
       {study.status === "queued" && (
@@ -76,6 +87,7 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
       {study.status === "error" && (
         <div className="card p-6 text-sm text-red-400 border-red-500/30" role="alert">
           {study.error ?? "We couldn't build this report. Your credits have been refunded."}
+          <RetryStudyButton id={study.id} ticker={study.ticker} variant={study.variant} />
         </div>
       )}
 
@@ -145,6 +157,24 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
           </summary>
           <p className="mt-2 whitespace-pre-wrap">{study.notes}</p>
         </details>
+      )}
+
+      {siblings.length > 0 && (
+        <div className="mt-6">
+          <h2 className="text-sm uppercase tracking-wide text-fg-subtle font-medium mb-2">
+            Other studies for {study.ticker}
+          </h2>
+          <div className="space-y-2">
+            {siblings.map((s) => (
+              <Link key={s.id} href={`/study/${s.id}`} className="card p-3 flex flex-wrap items-center justify-between gap-2 text-sm hover:border-ink-500">
+                <span>{VARIANTS.find((v) => v.value === s.variant)?.label ?? s.variant}</span>
+                <span className="flex items-center gap-2 text-fg-subtle">
+                  <StatusBadge status={s.status} /> {s.as_of_date ? `As of ${s.as_of_date}` : formatDate(s.created_at)}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
       )}
 
       {updates.length > 0 && (

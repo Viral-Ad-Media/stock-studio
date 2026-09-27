@@ -213,8 +213,11 @@ The engine runs in two modes that share one jobs queue and one methodology file:
   - Only a response that ends naturally (`end_turn`) is published. Output cut off by the length
     limit, or a refusal, fails the job and refunds it. A paused web-search turn (`pause_turn`)
     is resumed.
-  - Auth, permission, not-found and bad-request errors (including a low Anthropic balance) fail
-    the job immediately. Rate limits, overloads and timeouts go back to the queue.
+  - Account-level failures (missing or revoked key, an empty Anthropic credit balance, unknown
+    model, rate limit, overload) put the job back in the queue without using an attempt and stop
+    the invocation, so a drained account leaves reports `queued` instead of failing them all.
+    `jobs.result` reads "waiting for the engine: …". Other bad-request errors fail the job
+    immediately; timeouts and 5xx errors retry, up to 3 attempts.
   - The structured-field extraction runs without thinking and is validated. If it fails for a
     study, the "As of" date is read from the study itself rather than repeating the research.
 - **Failures**: customers see "We couldn't build this report. Your credits have been refunded."

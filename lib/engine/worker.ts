@@ -6,6 +6,7 @@ import {
   writeFromData,
   extractStructured,
   isPermanentAnthropicFailure,
+  isEngineUnavailable,
   PermanentJobError,
 } from "./anthropic";
 import {
@@ -280,6 +281,22 @@ async function failJob(job: Job, err: unknown, refund: boolean) {
   });
 }
 
+// The account, not the job, failed: release the claim and give the attempt
+// back so an empty credit balance can't dead-letter the whole queue.
+async function holdForEngine(job: Job, err: unknown) {
+  const raw = (err instanceof Error ? err.message : String(err)).slice(0, 2000);
+  await sql.begin(async (tx) => {
+    await tx`
+      UPDATE jobs SET status = 'pending', locked_at = NULL, attempts = greatest(attempts - 1, 0),
+        result = ${`waiting for the engine: ${raw}`}, updated_at = now()
+      WHERE id = ${job.id}
+    `;
+    if (job.payload.case_study_id) {
+      await tx`UPDATE case_studies SET status = 'queued', updated_at = now() WHERE id = ${job.payload.case_study_id}`;
+    }
+  });
+}
+
 async function retryLater(job: Job, err: unknown) {
   const raw = (err instanceof Error ? err.message : String(err)).slice(0, 2000);
   await sql.begin(async (tx) => {
@@ -295,7 +312,8 @@ async function retryLater(job: Job, err: unknown) {
 
 export async function runWorkerLoop() {
   const deadline = Date.now() + INVOCATION_BUDGET_MS;
-  const processed: { job_id: number; status: "done" | "error" | "retrying" }[] = [];
+  const processed: { job_id: number; status: "done" | "error" | "retrying" | "held" }[] = [];
+  let engineUnavailable = false;
 
   while (deadline - Date.now() >= MIN_CLAIM_MS) {
     const [job] = (await sql`
@@ -315,6 +333,11 @@ export async function runWorkerLoop() {
       if (err instanceof StudyGoneError) {
         await failJob(job, err, false);
         processed.push({ job_id: job.id, status: "error" });
+      } else if (isEngineUnavailable(err)) {
+        await holdForEngine(job, err);
+        processed.push({ job_id: job.id, status: "held" });
+        engineUnavailable = true;
+        break; // every other job would hit the same wall
       } else if (isPermanentAnthropicFailure(err) || job.attempts >= MAX_ATTEMPTS) {
         await failJob(job, err, true);
         processed.push({ job_id: job.id, status: "error" });
@@ -330,7 +353,7 @@ export async function runWorkerLoop() {
   // Once per completed session, run the market-wide setup-bot scan with
   // whatever budget the queue left. Customer jobs always come first.
   let setupScan: unknown = null;
-  if (deadline - Date.now() >= SETUP_SCAN_MIN_MS) {
+  if (!engineUnavailable && deadline - Date.now() >= SETUP_SCAN_MIN_MS) {
     try {
       setupScan = await maybeRunSetupScan({ deadline });
     } catch (err) {
@@ -339,5 +362,5 @@ export async function runWorkerLoop() {
     }
   }
 
-  return { processed_count: processed.length, processed, setup_scan: setupScan };
+  return { processed_count: processed.length, processed, setup_scan: setupScan, engine_unavailable: engineUnavailable };
 }
