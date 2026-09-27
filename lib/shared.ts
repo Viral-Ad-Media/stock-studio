@@ -90,6 +90,13 @@ export function creditCost(variant: string): number {
   return CREDIT_COSTS[variant] ?? DEFAULT_CREDIT_COST;
 }
 
+// The queue job type that builds a study of this variant.
+export function jobTypeForVariant(variant: string): "earnings_update" | "movers_digest" | "build_case_study" {
+  if (variant === "earnings_update") return "earnings_update";
+  if (variant === "movers_digest") return "movers_digest";
+  return "build_case_study";
+}
+
 // "Sep 24, 2026". postgres.js returns timestamptz as Date objects, so never
 // String(date).slice(...) them (that renders "Thu Sep 24" with no year).
 export function formatDate(d: string | Date | null | undefined): string {

@@ -3,6 +3,7 @@ import { sql } from "@/lib/db";
 import { requireAppAccess, insufficientCreditsResponse } from "@/lib/access";
 import { queueLimitResponse } from "@/lib/limits";
 import { creditCost, chargeJobCredits, isInsufficientCredits, isDuplicateOpenJob } from "@/lib/billing";
+import { jobTypeForVariant } from "@/lib/shared";
 import { parseTicker, parseVariant, parseOptionalText, isInvalid, MAX_NOTES, MAX_COMPANY } from "@/lib/validate";
 
 export async function POST(req: Request) {
@@ -21,12 +22,7 @@ export async function POST(req: Request) {
   if (isInvalid(variant)) return NextResponse.json({ error: variant.error }, { status: 400 });
   if (isInvalid(company)) return NextResponse.json({ error: company.error }, { status: 400 });
   if (isInvalid(notes)) return NextResponse.json({ error: notes.error }, { status: 400 });
-  const jobType =
-    variant === "earnings_update"
-      ? "earnings_update"
-      : variant === "movers_digest"
-        ? "movers_digest"
-        : "build_case_study";
+  const jobType = jobTypeForVariant(variant);
 
   // parent_id feeds the parent study's content into the engine prompt — it
   // must belong to this workspace, or it's a cross-tenant read.
