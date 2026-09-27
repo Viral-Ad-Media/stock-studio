@@ -27,8 +27,8 @@ export const currentUser = cache(async (): Promise<SessionUser | null> => {
 // schema isn't exposed to PostgREST). Falls back to the user's first
 // workspace membership if active_workspace_id somehow isn't set, and
 // provisions one (stocks.provision_user — same trial as signup, at most once)
-// for an account that predates the signup trigger: the Supabase project is
-// shared with other apps, so a login can exist with no Stock Studio profile.
+// for an account that predates the signup trigger: the Supabase project used
+// to be shared with other apps, so an older login can have no Stock Studio profile.
 // Cached per request — never inline this lookup elsewhere.
 export const currentWorkspaceId = cache(async (): Promise<string | null> => {
   const user = await currentUser();
