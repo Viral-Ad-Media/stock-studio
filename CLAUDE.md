@@ -2,8 +2,7 @@
 
 Stock case-study studio, hosted so it's reachable from anywhere. The Next.js app (local dev on
 port 3200, deployed on Vercel) is the visual cockpit; the database is hosted Postgres (Supabase,
-isolated `stocks` schema — same shared project as Facebook Ads Studio's `fbads` schema, different
-app, different role). It is a multi-tenant SaaS: Supabase Auth accounts, one workspace per
+`stocks` schema in a Supabase project dedicated to Stock Studio). It is a multi-tenant SaaS: Supabase Auth accounts, one workspace per
 signup, Stripe billing (30-day trial → one-time access fee → per-report credits).
 
 ## The engine runs in two modes
@@ -38,9 +37,9 @@ signup, Stripe billing (30-day trial → one-time access fee → per-report cred
 
 ## Database
 
-Hosted Postgres — a Supabase project (`nxwehsafitrcoenbrkyv`, same project as Facebook Ads
-Studio) with an isolated schema **`stocks`** (created by migration `stock_studio_schema`). One
-shared DB means the web app (local or Vercel) and the Claude Code engine on any machine see the
+Hosted Postgres — a Supabase project (`nxwehsafitrcoenbrkyv`, used only by Stock Studio since the
+other apps that shared it were removed) with everything in schema **`stocks`** (created by
+migration `stock_studio_schema`; `public` is intentionally empty). One DB means the web app (local or Vercel) and the Claude Code engine on any machine see the
 same state.
 
 - **From skills / Claude Code**: prefer the engine CLI below; for read-only inspection or the
@@ -165,8 +164,8 @@ catalyst — "no clear catalyst reported" is a valid story.
 
 - Trial is server-granted by `stocks.provision_user()` (30 days + 5 starter credits, at most once
   per user) — never from client metadata. It runs from the signup trigger (`handle_new_user`) and,
-  for logins that predate it (the Supabase project is shared, so `auth.users` holds other apps'
-  accounts), lazily from `currentWorkspaceId()`. `hasAccess = access_granted OR trial_ends_at > now()`.
+  for logins that predate it (the project used to be shared, so older `auth.users` rows can lack a
+  profile), lazily from `currentWorkspaceId()`. `hasAccess = access_granted OR trial_ends_at > now()`.
 - Credits are charged **at queue time**, inside the same transaction as the job INSERT, via
   `stocks.charge_job_credits()`; per-format costs live in `CREDIT_COSTS` (`lib/shared.ts`), which
   `/pricing` also renders — change prices there only.

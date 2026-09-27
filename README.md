@@ -334,8 +334,8 @@ watch the balance update.
 
 ## Database
 
-Supabase project `nxwehsafitrcoenbrkyv`, schema `stocks`. The project is shared with other apps,
-which live in other schemas and use other roles.
+Supabase project `nxwehsafitrcoenbrkyv`, schema `stocks`. The project is used only by Stock Studio;
+the `public` schema is intentionally empty.
 
 | Table | Purpose |
 |---|---|
