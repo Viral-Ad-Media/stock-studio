@@ -8,6 +8,7 @@ import {
   isPermanentAnthropicFailure,
   isEngineUnavailable,
   PermanentJobError,
+  ENGINE_MODEL,
 } from "./anthropic";
 import {
   systemPromptWithWebSearch,
@@ -20,6 +21,8 @@ import {
   CASE_STUDY_META_TOOL,
   WATCHLIST_ENTRY_TOOL,
 } from "./prompts";
+import { UsageMeter } from "./usage";
+import { searchBudget, effortFor } from "./budgets";
 import { maybeRunSetupScan } from "@/lib/setups-run";
 import { computeGrade, cleanSummaryLine, parseThesisStatus, GRADED_VARIANTS } from "@/lib/grades";
 
@@ -90,7 +93,7 @@ function fallbackMeta(content: string): CaseStudyMeta {
   return { as_of_date: m?.[1] ?? null };
 }
 
-async function studyMeta(content: string, deadline: number): Promise<CaseStudyMeta> {
+async function studyMeta(content: string, deadline: number, meter: UsageMeter): Promise<CaseStudyMeta> {
   try {
     return await extractStructured<CaseStudyMeta>({
       researchedText: content,
@@ -98,6 +101,7 @@ async function studyMeta(content: string, deadline: number): Promise<CaseStudyMe
       toolName: CASE_STUDY_META_TOOL.toolName,
       schema: CASE_STUDY_META_TOOL.schema,
       deadline,
+      meter,
     });
   } catch (err) {
     console.warn("engine: meta extraction failed, using fallback", err);
@@ -141,7 +145,7 @@ async function writeStudy(
   });
 }
 
-async function processCaseStudy(job: Job, deadline: number) {
+async function processCaseStudy(job: Job, deadline: number, meter: UsageMeter) {
   const caseStudyId = job.payload.case_study_id!;
   const [study] = await sql`
     SELECT id, ticker, company, variant, notes, parent_id FROM case_studies WHERE id = ${caseStudyId}
@@ -163,6 +167,7 @@ async function processCaseStudy(job: Job, deadline: number) {
       system: systemPromptFromDataOnly(),
       prompt: oneCandlePrompt(study.ticker, study.notes, data),
       deadline,
+      meter,
     });
     content = res.text;
   } else if (study.variant === "davinci_model") {
@@ -171,6 +176,7 @@ async function processCaseStudy(job: Job, deadline: number) {
       system: systemPromptFromDataOnly(),
       prompt: davinciModelPrompt(study.ticker, study.notes, data),
       deadline,
+      meter,
     });
     content = res.text;
   } else {
@@ -184,22 +190,27 @@ async function processCaseStudy(job: Job, deadline: number) {
         parentStudyMarkdown,
       }),
       deadline,
+      maxSearches: searchBudget(study.variant),
+      effort: effortFor(study.variant),
+      meter,
     });
     content = res.text;
     sources = res.sources;
   }
 
-  await writeStudy(job, caseStudyId, content, sources, await studyMeta(content, deadline), study.variant);
+  await writeStudy(job, caseStudyId, content, sources, await studyMeta(content, deadline, meter), study.variant);
 }
 
-async function processMoversDigest(job: Job, deadline: number) {
+async function processMoversDigest(job: Job, deadline: number, meter: UsageMeter) {
   const moversData = await fetchMovers(5);
   const res = await researchWithWebSearch({
     system: systemPromptWithWebSearch(),
     prompt: moversDigestPrompt(moversData),
     deadline,
+    maxSearches: searchBudget("movers_digest"),
+    meter,
   });
-  const meta = await studyMeta(res.text, deadline);
+  const meta = await studyMeta(res.text, deadline, meter);
   await writeStudy(
     job,
     job.payload.case_study_id!,
@@ -210,7 +221,7 @@ async function processMoversDigest(job: Job, deadline: number) {
   );
 }
 
-async function processWatchlistEntry(job: Job, deadline: number) {
+async function processWatchlistEntry(job: Job, deadline: number, meter: UsageMeter) {
   const watchlistId = job.payload.watchlist_id!;
   const [row] = await sql`SELECT id, ticker, company, thesis, as_of_date FROM watchlist WHERE id = ${watchlistId}`;
   if (!row) throw new StudyGoneError(`watchlist row ${watchlistId} not found`);
@@ -219,6 +230,9 @@ async function processWatchlistEntry(job: Job, deadline: number) {
     system: systemPromptWithWebSearch(),
     prompt: watchlistResearchPrompt(row.ticker, row.company, row.thesis ? { thesis: row.thesis, as_of_date: row.as_of_date } : null),
     deadline,
+    maxSearches: searchBudget("watchlist_entry"),
+    effort: effortFor("watchlist_entry"),
+    meter,
   });
   const entry = await extractStructured<WatchlistEntry>({
     researchedText: research.text,
@@ -226,6 +240,7 @@ async function processWatchlistEntry(job: Job, deadline: number) {
     toolName: WATCHLIST_ENTRY_TOOL.toolName,
     schema: WATCHLIST_ENTRY_TOOL.schema,
     deadline,
+    meter,
   });
   const triggers = Array.isArray(entry.triggers) ? entry.triggers.map(String) : null;
   const statusTag = ["watching", "building_conviction", "pass"].includes(entry.status_tag) ? entry.status_tag : null;
@@ -253,13 +268,13 @@ async function processWatchlistEntry(job: Job, deadline: number) {
   });
 }
 
-async function processJob(job: Job, deadline: number) {
+async function processJob(job: Job, deadline: number, meter: UsageMeter) {
   if (job.type === "build_case_study" || job.type === "earnings_update") {
-    await processCaseStudy(job, deadline);
+    await processCaseStudy(job, deadline, meter);
   } else if (job.type === "movers_digest") {
-    await processMoversDigest(job, deadline);
+    await processMoversDigest(job, deadline, meter);
   } else if (job.type === "watchlist_entry") {
-    await processWatchlistEntry(job, deadline);
+    await processWatchlistEntry(job, deadline, meter);
   } else {
     throw new PermanentJobError(`Unknown job type: ${job.type}`);
   }
@@ -279,6 +294,32 @@ async function failJob(job: Job, err: unknown, refund: boolean) {
     // The credits charged at queue time go back — the customer got nothing.
     if (refund) await tx`SELECT refund_job_credits(${job.id})`;
   });
+}
+
+// Adds this attempt's model usage to the job's running totals. Accounting
+// must never break the worker, so failures here are only logged.
+async function recordUsage(jobId: number, meter: UsageMeter) {
+  const t = meter.totals;
+  if (t.calls === 0) return;
+  const cost = meter.costUsd();
+  try {
+    await sql`
+      UPDATE jobs SET
+        usage_json = jsonb_build_object(
+          'model', ${t.model}::text,
+          'calls', coalesce((usage_json->>'calls')::bigint, 0) + ${t.calls},
+          'input_tokens', coalesce((usage_json->>'input_tokens')::bigint, 0) + ${t.input_tokens},
+          'output_tokens', coalesce((usage_json->>'output_tokens')::bigint, 0) + ${t.output_tokens},
+          'cache_creation_input_tokens', coalesce((usage_json->>'cache_creation_input_tokens')::bigint, 0) + ${t.cache_creation_input_tokens},
+          'cache_read_input_tokens', coalesce((usage_json->>'cache_read_input_tokens')::bigint, 0) + ${t.cache_read_input_tokens},
+          'web_search_requests', coalesce((usage_json->>'web_search_requests')::bigint, 0) + ${t.web_search_requests}
+        ),
+        cost_usd = CASE WHEN ${cost}::numeric IS NULL THEN cost_usd ELSE coalesce(cost_usd, 0) + ${cost}::numeric END
+      WHERE id = ${jobId}
+    `;
+  } catch (err) {
+    console.error(`engine: couldn't record usage for job ${jobId}`, err);
+  }
 }
 
 // The account, not the job, failed: release the claim and give the attempt
@@ -325,8 +366,9 @@ export async function runWorkerLoop() {
     `) as unknown as (Job | { id: null })[];
     if (!job || job.id == null) break; // nothing left to claim
 
+    const meter = new UsageMeter(ENGINE_MODEL);
     try {
-      await processJob(job, deadline);
+      await processJob(job, deadline, meter);
       processed.push({ job_id: job.id, status: "done" });
     } catch (err) {
       console.error(`engine: job ${job.id} attempt ${job.attempts} failed`, err);
@@ -347,6 +389,9 @@ export async function runWorkerLoop() {
         await retryLater(job, err);
         processed.push({ job_id: job.id, status: "retrying" });
       }
+    } finally {
+      // Every attempt's spend is counted, including failed and held ones.
+      await recordUsage(job.id, meter);
     }
   }
 
