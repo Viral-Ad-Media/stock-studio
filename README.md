@@ -213,6 +213,16 @@ The engine runs in two modes that share one jobs queue and one methodology file:
   - Only a response that ends naturally (`end_turn`) is published. Output cut off by the length
     limit, or a refusal, fails the job and refunds it. A paused web-search turn (`pause_turn`)
     is resumed.
+  - **Cost controls**: each format has a web-search budget (`lib/engine/budgets.ts`: 5 for a quick
+    take or script, 10 for a full study, 15 for a memo), enforced across continuations. The
+    methodology system prompt and the job prompt are prompt-cached. Quick takes, scripts and
+    watchlist refreshes run at `medium` effort; set `ENGINE_SHORT_FORMAT_EFFORT=high` to undo that.
+  - **Spend tracking**: every model call's token usage and web searches are added to
+    `jobs.usage_json`, with an estimated `jobs.cost_usd` at list price (`lib/engine/usage.ts`),
+    after every attempt, failed ones included. The admin overview totals it and shows the average
+    cost per finished report by format; the Jobs page shows it per job. A call that times out
+    before responding reports no usage, so the figures can undercount; the Anthropic Console is
+    the bill.
   - Account-level failures (missing or revoked key, an empty Anthropic credit balance, unknown
     model, rate limit, overload) put the job back in the queue without using an attempt and stop
     the invocation, so a drained account leaves reports `queued` instead of failing them all.
