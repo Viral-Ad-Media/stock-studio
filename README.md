@@ -180,7 +180,7 @@ All variables are listed in [`.env.example`](.env.example).
 | `ANTHROPIC_API_KEY` | automated worker | |
 | `ENGINE_WEBHOOK_SECRET` | automated worker | Must equal the Vault secret `engine_webhook_secret`. |
 | `ENGINE_WEB_RESEARCH` | automated worker | `1` also automates web-research variants. Off by default ([why](#automated-worker)). |
-| `ENGINE_INVOCATION_BUDGET_MS` / `ENGINE_MIN_CLAIM_MS` | automated worker | Optional tuning: total budget per invocation, and the minimum time left to start another job. Defaults: 280000 / 150000. |
+| `ENGINE_INVOCATION_BUDGET_MS` / `ENGINE_MIN_CLAIM_MS` / `ENGINE_MAX_CALL_MS` | automated worker | Optional tuning: total budget per invocation, the minimum time left to start another job, and the cap on one model call. Defaults 280000 / 150000 / 170000 fit a 300 s serverless limit. On Render (no function limit) deep-research jobs need more, e.g. 720000 / 150000 / 600000. A running job's lock goes stale after the budget plus 2 minutes. |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | billing | |
 | `BILLING_DATABASE_URL` | billing (webhook only) | Pooler URL for the `stocks_billing` role, the only role allowed to grant access or credits. Set its password first in the Supabase SQL editor: `ALTER ROLE stocks_billing WITH PASSWORD '…';`. |
 | `STRIPE_PRICE_ACCESS` | billing | Price id of the one-time access fee. |
