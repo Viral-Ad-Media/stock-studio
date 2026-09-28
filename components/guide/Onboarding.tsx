@@ -15,7 +15,7 @@ const STEPS = [
     icon: CandlestickChart,
     title: "Welcome to Stock Studio",
     body: "Stock Studio builds fact-checked case studies on public companies: growth, profitability, valuation and moat, each verified against filings and earnings releases, with every source listed.",
-    points: ["Your free trial includes starter credits", "Every study is dated and cites its sources", "Educational analysis, never a buy or sell call"],
+    points: ["Your free trial includes starter credits", "Every study is dated and cites its sources", "Studies are educational analysis, never a buy or sell call"],
   },
   {
     icon: FileSearch,

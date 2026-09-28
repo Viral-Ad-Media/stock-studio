@@ -57,7 +57,7 @@ export default function PricingPage() {
       <div className="mb-14 text-center">
         <h1 className="text-3xl font-bold tracking-tight text-slate-100 md:text-5xl">Simple, usage-based pricing</h1>
         <p className="mx-auto mt-4 max-w-xl text-slate-300">
-          Try everything free for {SITE.trialDays} days. Unlock once, then pay only for the studies you actually queue.
+          Try the research tools free for {SITE.trialDays} days. Unlock once, then pay only for the studies you actually queue.
         </p>
       </div>
 
@@ -102,6 +102,7 @@ export default function PricingPage() {
               `Credit packs: $${SITE.creditPackPriceUsd} for ${SITE.creditPackSize} credits`,
               "Unused credits never expire",
               "Failed studies are refunded automatically",
+              "Trade signals from the program trader, with the full track record",
             ].map((f) => (
               <li key={f} className="flex items-start gap-2">
                 <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden /> {f}

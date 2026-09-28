@@ -10,7 +10,7 @@ export function GET() {
 
 > ${SITE.description}
 
-${SITE.name} is operated by ${SITE.operator}. It produces educational business analysis, never personalized investment advice. Every study opens with a visible "As of" date, cites its sources, and never invents a metric.
+${SITE.name} is operated by ${SITE.operator}. It produces educational business analysis, never personalized investment advice. Members with full access also receive the program trader's general trade signals. Every study opens with a visible "As of" date, cites its sources, and never invents a metric.
 
 ## Pages
 
