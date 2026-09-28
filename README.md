@@ -19,6 +19,7 @@ opens with an "As of [date]" line and ends with a "Not investment advice" line.
 
 - [What it produces](#what-it-produces)
 - [Insights: grades, thesis tracking, earnings, market context, setup bots, gamma](#insights-grades-thesis-tracking-earnings-market-context-setup-bots-gamma)
+- [Trade signals](#trade-signals)
 - [Architecture](#architecture)
 - [Getting started](#getting-started)
 - [Environment variables](#environment-variables)
@@ -66,8 +67,9 @@ the full methodology of each.
 ## Insights: grades, thesis tracking, earnings, market context, setup bots, gamma
 
 These features are adapted from [QuantEdgeResearch](https://github.com/Maleek23/QuantEdgeResearch). Each one was
-narrowed to fit Stock Studio's educational, no-advice framing. Its trade execution, directional trade calls,
-options-flow alerts and Discord/SMS signal alerts were deliberately left out.
+narrowed to fit Stock Studio's educational, no-advice framing for research features. Trade execution and
+options-flow alerts were left out. Directional trade calls and Discord/SMS signal alerts are now a separate
+feature, [Trade signals](#trade-signals), with its own rules.
 
 - **Research grade and one-line summary.** Fundamental studies get a letter grade (A to F) built from four card
   scores: growth, profitability, valuation (higher means more reasonable) and moat.
@@ -99,6 +101,35 @@ options-flow alerts and Discord/SMS signal alerts were deliberately left out.
 - **Gamma exposure (`/gamma`).** A dealer-gamma model for SPY, SPX, QQQ, IWM or any optionable symbol, built from
   CBOE's free delayed chains. It shows net gamma per 1% move, the zero-gamma level, the largest call and put
   strikes, and a strike-by-strike chart, with the model's assumptions spelled out on the page.
+
+---
+
+## Trade signals
+
+The program trader's own calls (BUY, SELL, EXIT, CLOSE, ALERT, with optional entry, target and stop),
+reposted to members. This is the one feature that makes directional trade calls; the research features
+above stay educational.
+
+- **Posting.** The trader types one line in a private Discord channel, e.g.
+  `BUY GOOGL CALL @12.40 tp 15 sl 11 breakout over 285`. The signal bot
+  ([`scripts/signal-bot.ts`](scripts/signal-bot.ts), parser [`lib/signals.ts`](lib/signals.ts)) records it,
+  then posts a formatted signal to the members' channel.
+- **Who can post.** Only Discord user IDs listed in `SIGNAL_POSTER_IDS`. The bot refuses to start without
+  at least one, and anyone else gets a ⛔ with nothing posted.
+- **Track record.** `stocks.signals` in Postgres: append-only (updates, deletes and truncates are refused by
+  triggers, for every role), timestamped by the database, and SHA-256 hash-chained row to row.
+  `stocks.verify_signal_chain()` recomputes the chain; `/signals` shows the result. Deliveries go in the
+  insert-only `stocks.signal_deliveries`. A signal is recorded before it's posted, and a message is
+  recorded once even if processed twice.
+- **Roles.** The bot connects as `stocks_signals` (`SIGNALS_DATABASE_URL`), which can only insert and read
+  those two tables. The web app's role can only read them.
+- **Who sees it.** `/signals` is for members with paid access (`profiles.access_granted`) and platform
+  admins, not trial accounts. No credits are charged. Like setup scans, signals are program-wide data
+  without a `workspace_id`.
+- **Secrets.** The bot token lives only in a root-only env file on the bot host, loaded by systemd.
+  Deploy steps: [`deploy/signal-bot/README.md`](deploy/signal-bot/README.md).
+- **SMS.** The rules allow SMS alerts and `signal_deliveries` accepts an `sms` channel, but no SMS
+  sender is built yet.
 
 ---
 
@@ -186,6 +217,7 @@ All variables are listed in [`.env.example`](.env.example).
 | `STRIPE_PRICE_ACCESS` | billing | Price id of the one-time access fee. |
 | `STRIPE_PRICE_CREDIT_PACK` | billing | Price id of one credit pack. |
 | `STRIPE_CREDITS_PER_PACK` | billing | Credits granted per pack. Default 10. |
+| `DISCORD_TOKEN`, `INPUT_CHANNEL_ID`, `SIGNALS_CHANNEL_ID`, `SIGNAL_POSTER_IDS`, `SIGNALS_DATABASE_URL` | signal bot host only | Never on the web host. See [`deploy/signal-bot/env.example`](deploy/signal-bot/env.example); in production they live in a root-only env file. |
 
 ---
 
@@ -400,6 +432,7 @@ npm run engine -- queue-earnings <caseStudyId>               # free, sweep-initi
 npm run candles -- <TICKER> [--date YYYY-MM-DD]              # 1m OHLC + first 5-min candle (~30d history)
 npm run history -- <TICKER> [--interval 1m|5m|15m|30m|60m|1d|1wk] [--range 1d|5d|1mo|3mo|6mo|1y|2y|5y]
 npm run movers -- --count 5                                  # day gainers/losers screeners
+npm run signal-bot                                           # Discord signal bot (see deploy/signal-bot)
 ```
 
 `complete` metadata depends on the job type:
@@ -440,7 +473,8 @@ lib/
   marketdata.ts         Yahoo Finance candles/history/movers
   engine/               worker loop, Anthropic client, prompts, methodology.md
   supabase/             browser + server Supabase clients
-scripts/                engine / candles / history / movers CLIs
+scripts/                engine / candles / history / movers CLIs, signal bot
+deploy/signal-bot/      systemd unit, env template and deploy steps for the signal bot
 supabase/migrations/    SQL for recent migrations
 ```
 
@@ -483,7 +517,8 @@ supabase/migrations/    SQL for recent migrations
 
 ## Content rules
 
-These rules are non-negotiable and apply to every variant and both engine modes:
+These rules are non-negotiable and apply to every study variant and both engine modes (trade signals
+have their own rules, below):
 
 1. Educational analysis, never personalized investment advice. Every study ends with the
    "Not investment advice" line.
@@ -495,6 +530,16 @@ These rules are non-negotiable and apply to every variant and both engine modes:
 5. Material corrections to the user's notes go in `corrections_md`, which the UI surfaces; they
    are never buried in the copy.
 6. Never leave a job stuck in `running`. Complete it or fail it with a message.
+
+Trade signals:
+
+1. Directional calls with entries, targets and stops are allowed, from approved posters only
+   (`SIGNAL_POSTER_IDS`), and are delivered to members through Discord (SMS allowed, not built).
+2. Every signal goes into the append-only, hash-chained track record before it is posted. Never edit,
+   delete or backdate a signal; corrections are new CLOSE or ALERT signals.
+3. Signals are the trader's general calls to all members, never presented as personalized advice, and
+   every surface that shows them carries the risk line.
+4. Only call the record "verified" while `verify_signal_chain()` reports it intact.
 
 ---
 

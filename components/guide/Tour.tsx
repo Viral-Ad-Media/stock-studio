@@ -41,6 +41,11 @@ export const TOUR_STEPS: TourStep[] = [
     body: "A model of options-dealer positioning for any optionable symbol, with its assumptions spelled out.",
   },
   {
+    target: "signals",
+    title: "Signals",
+    body: "The program trader's calls as they're posted, with a permanent track record. Members with full access see the feed.",
+  },
+  {
     target: "billing",
     title: "Credits and billing",
     body: "Your trial, access and credit balance. Failed studies are refunded automatically.",
