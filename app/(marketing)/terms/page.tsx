@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/terms" },
 };
 
-const UPDATED = "September 26, 2026";
+const UPDATED = "September 28, 2026";
 
 export default function TermsPage() {
   return (
@@ -25,7 +25,9 @@ export default function TermsPage() {
         Stock Studio (the &ldquo;Service&rdquo;) is operated by {SITE.operator} (&ldquo;we&rdquo;, &ldquo;us&rdquo;). It generates
         educational business-analysis case studies about publicly traded companies. Content is
         produced by an automated research process using large language models, real-time web
-        search, and public market data.
+        search, and public market data. Members with full access also receive trade signals: the
+        program trader&rsquo;s own buy, sell and exit calls, posted in the app and to a members&rsquo;
+        Discord channel.
       </p>
 
       <h2>2. Not investment advice</h2>
@@ -35,6 +37,13 @@ export default function TermsPage() {
         hold any security. You are solely responsible for your own investment decisions.
         Historical and forward-looking figures may be inaccurate, incomplete, or out of date
         despite our fact-checking process — verify anything material before acting on it.
+      </p>
+      <p>
+        Signals are the program trader&rsquo;s own calls, shared identically with every member who
+        has full access. They are general, not tailored to your finances, goals or risk tolerance.
+        Trading, and options trading in particular, can lose some or all of the money you put in,
+        and past signals do not guarantee future results. Whether and how you act on any signal is
+        your decision alone.
       </p>
 
       <h2>3. Accounts and eligibility</h2>

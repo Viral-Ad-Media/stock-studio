@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut, CreditCard, Menu, X, Globe2, Radar, Sigma, HelpCircle, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut, CreditCard, Menu, X, Globe2, Radar, Sigma, HelpCircle, ShieldCheck, Megaphone } from "lucide-react";
 import { useTour } from "@/components/guide/Tour";
 import ThemeToggle from "@/components/theme/ThemeToggle";
 import { getSupabase } from "@/lib/supabase/lazy";
@@ -16,6 +16,7 @@ const links = [
   { href: "/market", label: "Market", icon: Globe2, tour: "market" },
   { href: "/setups", label: "Setup bots", icon: Radar, tour: "setups" },
   { href: "/gamma", label: "Gamma exposure", icon: Sigma, tour: "gamma" },
+  { href: "/signals", label: "Signals", icon: Megaphone, tour: "signals" },
   { href: "/billing", label: "Billing", icon: CreditCard, tour: "billing" },
 ];
 

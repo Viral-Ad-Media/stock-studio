@@ -119,7 +119,7 @@ const STEPS = [
 const FAQ = [
   {
     q: "Is this investment advice?",
-    a: "No. Stock Studio produces educational business analysis. It never tells you to buy or sell anything, and every study ends with a not-investment-advice line.",
+    a: "No. Stock Studio's case studies are educational business analysis, and every study ends with a not-investment-advice line. Members with full access can also follow the program trader's own buy and sell calls in Signals. Those are general calls shared with every member, not advice tailored to you, and trading involves risk of loss.",
   },
   {
     q: "Where do the numbers come from?",
