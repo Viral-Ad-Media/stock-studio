@@ -1,0 +1,37 @@
+[Unit]
+Description=Stock Studio signal bot (Discord -> members channel + track record)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=signalbot
+Group=signalbot
+WorkingDirectory=/opt/stock-studio
+# Secrets live only in this root-owned, mode-600 file. systemd reads it as
+# root before dropping to the signalbot user, so the bot user can't read the
+# file itself and the token never appears in this unit or in `ps`.
+EnvironmentFile=/etc/signal-bot/env
+ExecStart=/opt/stock-studio/node_modules/.bin/tsx scripts/signal-bot.ts
+Restart=always
+RestartSec=5
+
+# Hardening: no privilege escalation, read-only OS and app code, private /tmp.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+# tsx caches compiled files; give it a writable cache dir.
+Environment=XDG_CACHE_HOME=/var/cache/signal-bot
+CacheDirectory=signal-bot
+
+[Install]
+WantedBy=multi-user.target
