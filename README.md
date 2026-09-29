@@ -74,7 +74,9 @@ feature, [Trade signals](#trade-signals), with its own rules.
 - **Research grade and one-line summary.** Fundamental studies get a letter grade (A to F) built from four card
   scores: growth, profitability, valuation (higher means more reasonable) and moat.
   - The engine scores each card from the verified facts in the study.
-  - [`lib/grades.ts`](lib/grades.ts) computes the letter as the average of the four scores.
+  - [`lib/grades.ts`](lib/grades.ts) computes the letter from the average of the four scores, on bands that follow
+    the scoring calibration: 70+ (✅ cards) is A to B-, 45–69 (⚠️, with 50 = unremarkable) is C+ to C-, and
+    below 45 (🔴) is D+ to F (F only under 30). The letter is re-derived from the stored score when shown.
   - Each study also gets a one-sentence "what this means" line, shown on dashboard cards.
   - The grade is labelled a research-quality score, never a buy or sell rating.
 - **Thesis tracker.** Every watchlist refresh judges the previous thesis as intact, weakening or broken, and cites
