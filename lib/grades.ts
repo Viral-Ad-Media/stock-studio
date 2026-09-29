@@ -22,9 +22,15 @@ export const GRADED_VARIANTS = new Set(["full", "quick_take", "memo", "newslette
 export const GRADE_DISCLAIMER =
   "Research-quality score: how the business scores on this study's four cards, from the verified facts in it. Not a buy, sell, or price-target rating.";
 
+// Bands follow the engine's scoring calibration (lib/engine/methodology.md),
+// not a school scale: a ✅ card scores 70+, ⚠️ 45-69 and 🔴 under 45, with
+// 50 meaning "unremarkable". So strong studies land in A/B, mixed ones in C
+// (50 = C) and clearly weak ones in D/F. Change the calibration and these
+// together.
 const LETTERS: [number, string][] = [
-  [93, "A"], [90, "A-"], [87, "B+"], [83, "B"], [80, "B-"], [77, "C+"],
-  [73, "C"], [70, "C-"], [67, "D+"], [63, "D"], [60, "D-"],
+  [90, "A"], [85, "A-"], [80, "B+"], [75, "B"], [70, "B-"],
+  [60, "C+"], [50, "C"], [45, "C-"],
+  [40, "D+"], [35, "D"], [30, "D-"],
 ];
 
 export function scoreToLetter(score: number): string {
@@ -51,12 +57,13 @@ export function computeGrade(raw: unknown): StudyGrade | null {
 }
 
 // Stored rows came from computeGrade, but JSONB is JSONB — re-check shape
-// before rendering.
+// before rendering. The letter is re-derived from the stored score, so rows
+// written under an older letter scale always render on the current one.
 export function parseStoredGrade(v: unknown): StudyGrade | null {
   if (!v || typeof v !== "object") return null;
   const g = v as StudyGrade;
   if (typeof g.overall !== "string" || !Number.isFinite(g.score) || !Array.isArray(g.components)) return null;
-  return g;
+  return { ...g, overall: scoreToLetter(g.score) };
 }
 
 export const SUMMARY_LINE_MAX = 220;
