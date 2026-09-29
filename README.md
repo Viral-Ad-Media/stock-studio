@@ -491,6 +491,24 @@ supabase/migrations/    SQL for recent migrations
      `npm run start`. The start script listens on `0.0.0.0:$PORT` (3200 when `PORT` is unset), so
      Render's port scan finds it. A hard-coded port fails the deploy with "failed to detect open
      port".
+   - **Docker** (any container host): the `Dockerfile` builds two images.
+     - `web` is the Next.js standalone server on port 3200 (`PORT` overrides it). It runs as a non-root
+       user and has a healthcheck on `/robots.txt`.
+     - `signal-bot` is the Discord signal bot.
+     The `NEXT_PUBLIC_*` values are build args, because Next inlines them into the browser bundle. Every
+     other variable is runtime-only, so no secret is baked into an image.
+     ```bash
+     docker compose --env-file .env.local up --build             # the app on :3200
+     docker compose --env-file .env.local --profile signals up   # plus the signal bot
+     # or directly:
+     docker build --target web -t stock-studio \
+       --build-arg NEXT_PUBLIC_APP_URL=https://app.example.com \
+       --build-arg NEXT_PUBLIC_SUPABASE_URL=... --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=... .
+     docker run -p 3200:3200 --env-file .env.local stock-studio
+     ```
+     Behind a TLS-inspecting proxy, add `--secret id=ca_bundle,src=/path/to/ca.pem`. It's mounted only
+     for the download steps and never stored in the image. If Docker Hub rate-limits you, add
+     `--build-arg NODE_IMAGE=mirror.gcr.io/library/node:22-bookworm-slim`.
 2. **Point the worker at the deploy**: in Supabase Vault, set `engine_webhook_url` to
    `https://<host>/api/engine/run`, and make `engine_webhook_secret` equal
    `ENGINE_WEBHOOK_SECRET`. Until then the trigger and cron POST to a placeholder and nothing is
