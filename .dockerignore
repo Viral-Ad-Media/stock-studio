@@ -1,0 +1,19 @@
+# Never send secrets or local state into the build context.
+.env
+.env.*
+!.env.example
+deploy/signal-bot/env
+.git
+.github
+node_modules
+.next
+out
+coverage
+*.log
+.DS_Store
+.claude
+CLAUDE.md
+AGENTS.md
+Dockerfile
+docker-compose.yml
+.dockerignore

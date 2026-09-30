@@ -39,6 +39,9 @@ const securityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Docker builds set NEXT_OUTPUT=standalone for a small self-contained server
+  // (see Dockerfile); Render and local dev keep the default `next start`.
+  ...(process.env.NEXT_OUTPUT === "standalone" ? { output: "standalone" } : {}),
   // Never ship source maps to browsers, and don't advertise the framework.
   productionBrowserSourceMaps: false,
   poweredByHeader: false,

@@ -1,0 +1,31 @@
+# Local / self-hosted run. Build args and runtime env come from .env.local:
+#   docker compose --env-file .env.local up --build            # the app on :3200
+#   docker compose --env-file .env.local --profile signals up  # plus the signal bot
+services:
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3200}
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+    env_file: .env.local
+    ports:
+      - "3200:3200"
+    restart: unless-stopped
+
+  signal-bot:
+    profiles: ["signals"]
+    build:
+      context: .
+      target: signal-bot
+    # The bot's secrets live only in this root-only file on the host (see
+    # deploy/signal-bot/README.md), never in the image or the repo.
+    env_file: ${SIGNAL_BOT_ENV_FILE:-/etc/signal-bot/env}
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
