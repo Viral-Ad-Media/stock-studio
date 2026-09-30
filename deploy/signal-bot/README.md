@@ -93,6 +93,22 @@ stop are optional and are shown as separate fields.
 - Editing a message in the input channel doesn't change the recorded signal; the bot replies
   saying so. Post a CLOSE or ALERT to correct a call.
 
+## Alternative: Docker
+
+The repo's `Dockerfile` has a `signal-bot` target, and `docker-compose.yml` runs it under the `signals`
+profile. It reads the same root-only env file, `/etc/signal-bot/env` by default, or `SIGNAL_BOT_ENV_FILE`.
+The container runs as a non-root user with a read-only filesystem and no Linux capabilities:
+
+```bash
+cd /opt/stock-studio
+sudo docker compose --profile signals up -d --build signal-bot
+sudo docker compose logs -f signal-bot
+```
+
+Use either Docker or the systemd service above, not both. With both running, each message is
+recorded and posted only once (the database rejects a duplicate), but the two bots race for it and
+both react to it, which is confusing.
+
 ## Updating
 
 ```bash
