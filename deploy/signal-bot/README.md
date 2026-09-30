@@ -109,6 +109,14 @@ Use either Docker or the systemd service above, not both. With both running, eac
 recorded and posted only once (the database rejects a duplicate), but the two bots race for it and
 both react to it, which is confusing.
 
+## Alternative: Render
+
+Run the bot as its own **Starter** web service on Render (a free instance spins down when idle and
+would miss signals; a Starter instance is always on). Build `npm ci`, start `npx tsx scripts/signal-bot.ts`.
+When Render assigns `PORT`, the bot answers `GET /` with `200 ok` while connected to Discord and
+`503` otherwise — set that as the health check path. Put every variable from `env.example` in the
+service's Environment tab; `DISCORD_TOKEN` is typed there directly and nowhere else.
+
 ## Updating
 
 ```bash

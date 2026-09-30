@@ -23,6 +23,7 @@
  * Run: npm run signal-bot
  */
 import fs from "fs";
+import http from "http";
 import path from "path";
 import dotenv from "dotenv";
 import postgres from "postgres";
@@ -112,6 +113,18 @@ client.once(Events.ClientReady, (c) => {
   console.log(`signal-bot: logged in as ${c.user.tag}; ${INPUT_CHANNEL_ID} -> ${SIGNALS_CHANNEL_ID}; ${POSTERS.size} approved poster(s)`);
 });
 
+// Health endpoint, only when a host assigns a PORT (Render web service, Docker
+// healthcheck). 200 while the gateway connection is up, 503 otherwise. It
+// serves nothing else — no signals, no config.
+const PORT = Number(process.env.PORT);
+const health = Number.isFinite(PORT) && PORT > 0
+  ? http.createServer((req, res) => {
+      const ok = client.isReady();
+      res.writeHead(ok ? 200 : 503, { "content-type": "text/plain", "cache-control": "no-store" });
+      res.end(ok ? "ok" : "discord gateway not connected");
+    }).listen(PORT, "0.0.0.0", () => console.log(`signal-bot: health check on :${PORT}`))
+  : null;
+
 client.on(Events.MessageCreate, async (msg) => {
   if (msg.author.bot || msg.channelId !== INPUT_CHANNEL_ID) return;
 
@@ -169,6 +182,7 @@ client.on(Events.MessageUpdate, async (_old, updated: Message | PartialMessage) 
 
 async function shutdown(signal: string) {
   console.log(`signal-bot: ${signal} received, shutting down`);
+  health?.close();
   await client.destroy();
   await sql.end({ timeout: 5 });
   process.exit(0);
