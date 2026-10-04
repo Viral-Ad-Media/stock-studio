@@ -39,10 +39,10 @@ export default function GexChart({ strikes, spot, zeroGamma, symbol, bucketed = 
         <span className="text-sm font-semibold text-slate-100">Net gamma by strike · {symbol}</span>
         <span className="flex flex-wrap items-center gap-3 text-xs text-slate-300" aria-hidden>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: POS }} /> Positive (calls dominate)
+            <span className="inline-block h-2.5 w-2.5 rounded-xs" style={{ background: POS }} /> Positive (calls dominate)
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: NEG }} /> Negative (puts dominate)
+            <span className="inline-block h-2.5 w-2.5 rounded-xs" style={{ background: NEG }} /> Negative (puts dominate)
           </span>
         </span>
       </figcaption>
@@ -67,7 +67,7 @@ export default function GexChart({ strikes, spot, zeroGamma, symbol, bucketed = 
                 onMouseEnter={() => setActive(i)}
                 onFocus={() => setActive(i)}
                 onBlur={() => setActive(null)}
-                className={`grid grid-cols-[4.5rem_1fr] items-center gap-2 rounded py-[3px] outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${
+                className={`grid grid-cols-[4.5rem_1fr] items-center gap-2 rounded-sm py-[3px] outline-hidden focus-visible:ring-2 focus-visible:ring-emerald-400 ${
                   active === i ? "bg-ink-800" : ""
                 }`}
               >

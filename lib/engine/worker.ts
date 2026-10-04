@@ -162,7 +162,7 @@ async function processCaseStudy(job: Job, deadline: number, meter: UsageMeter) {
   let sources: { title: string; url: string }[] = [];
 
   if (study.variant === "one_candle") {
-    const data = await fetchOpeningCandle(study.ticker, sessionDateFromNotes(study.notes));
+    const data = await fetchOpeningCandle(study.ticker, sessionDateFromNotes(study.notes), deadline - 40_000);
     const res = await writeFromData({
       system: systemPromptFromDataOnly(),
       prompt: oneCandlePrompt(study.ticker, study.notes, data),
@@ -171,7 +171,7 @@ async function processCaseStudy(job: Job, deadline: number, meter: UsageMeter) {
     });
     content = res.text;
   } else if (study.variant === "davinci_model") {
-    const data = await fetchHistory(study.ticker, "5m", "5d");
+    const data = await fetchHistory(study.ticker, "5m", "5d", deadline - 40_000);
     const res = await writeFromData({
       system: systemPromptFromDataOnly(),
       prompt: davinciModelPrompt(study.ticker, study.notes, data),
@@ -202,7 +202,7 @@ async function processCaseStudy(job: Job, deadline: number, meter: UsageMeter) {
 }
 
 async function processMoversDigest(job: Job, deadline: number, meter: UsageMeter) {
-  const moversData = await fetchMovers(5);
+  const moversData = await fetchMovers(5, undefined, deadline - 40_000);
   const res = await researchWithWebSearch({
     system: systemPromptWithWebSearch(),
     prompt: moversDigestPrompt(moversData),

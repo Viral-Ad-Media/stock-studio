@@ -66,7 +66,7 @@ From an approved account, post in the input channel:
 ALERT TEST testing the bot
 ```
 
-Expect ✅ on your message, a formatted signal in the members channel, and the signal on `/signals`
+Expect 📥 (durably queued) on your message, a formatted signal in the members channel, and the signal on `/signals`
 in the app. From an account not in `SIGNAL_POSTER_IDS`, expect ⛔ and nothing posted.
 
 ## Input format
@@ -88,8 +88,15 @@ stop are optional and are shown as separate fields.
 - **Hash-chained.** Each signal stores a SHA-256 over the previous signal's hash and its own
   fields. `SELECT * FROM stocks.verify_signal_chain();` recomputes the chain and returns the first
   broken signal (null when intact); the app shows the result on `/signals`.
-- A signal is recorded **before** it is posted. If posting fails, the poster gets ⚠️ and a reply
-  saying the signal is recorded but not posted. A message processed twice is recorded once.
+- Recording and queueing are **one transaction**. The bot drains at startup and every five
+  seconds. Failed sends retry with bounded backoff; abandoned leases are reclaimed after
+  90 seconds. 📥 acknowledges durable acceptance, not delivery. Inspect `signal_outbox.last_error`
+  and service logs if delivery is delayed. Replaying the original message also recovers a
+  historical recorded-but-undelivered signal.
+- Delivery uses a stable Discord nonce to suppress recent duplicates. It is at least once:
+  a crash after Discord accepts a message but before the database acknowledges it can produce
+  a duplicate after Discord’s nonce retention window. Check channel history before manually
+  replaying old signals. Successfully logged deliveries are never resent.
 - Editing a message in the input channel doesn't change the recorded signal; the bot replies
   saying so. Post a CLOSE or ALERT to correct a call.
 
@@ -106,7 +113,7 @@ sudo docker compose logs -f signal-bot
 ```
 
 Use either Docker or the systemd service above, not both. With both running, each message is
-recorded and posted only once (the database rejects a duplicate), but the two bots race for it and
+recorded once and delivery claims are leased by the database, but the two bots race for it and
 both react to it, which is confusing.
 
 ## Updating

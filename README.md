@@ -399,20 +399,20 @@ the `public` schema is intentionally empty.
 | `watchlist` | Tracked tickers: thesis, snapshot, `triggers_json`, `status_tag`. Unique per `(workspace_id, ticker)`. |
 | `credits_ledger` | Append-only; balance = `SUM(delta)`. Unique `(reason, ref)` makes charges, refunds and purchases idempotent. |
 | `payments` | Stripe audit trail. Unique `stripe_session_id`. |
-| `settings` | App settings |
+| `payment_refunds` | Durable full-refund tombstones, including refunds received before checkout fulfillment. |
+| `signal_outbox` | Leased delivery attempts, errors and acknowledgement state. |
 
-**Migrations** are applied with the Supabase MCP `apply_migration`. The history so far:
+**Migrations** now have a reproducible fresh-install baseline and forward fixes. See
+[`supabase/README.md`](supabase/README.md) for reset and existing-database rollout instructions.
+Earlier checked-in fragments are retained unchanged in `supabase/archive/`; they are historical
+reference, not the active replay chain. Their abbreviated filenames had ambiguous ordering,
+and the missing foundation files made resets fail. The baseline reconstructs the required
+schema from the application's contracts and applies those fragments in their intended order.
+It skips an existing complete Stock Studio schema and refuses a partial one.
 
-- `stock_studio_schema` — the original schema.
-- `stocks_multi_tenant_foundation` — workspaces, profiles, RLS.
-- `stocks_automated_worker` — `claim_job`, the trigger, the cron job.
-- `stocks_worker_hardening` — the claim fixes described above.
-- `stocks_billing` — the billing tables and functions.
-- `stocks_worker_billing_fixes` — refunds for jobs the worker gives up on, the one-open-job
-  indexes, and the `stocks_billing` role.
-
-The last three are also in [`supabase/migrations/`](supabase/migrations/) for review. Apply new
-migrations the same way and add their SQL to that folder.
+New installations use `supabase start` then `supabase db reset`. Existing deployments retain their historical migration records and apply the reviewed forward
+files as documented; do not run reset against a remote database.
+New migrations are generated with `supabase migration new <name>` and checked in.
 
 ---
 

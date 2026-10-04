@@ -1,6 +1,9 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.ts";
+
+@layer base {
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+}
 
 /* Theme palettes. Dark is the default; html[data-theme="light"] swaps every
    token (set before first paint by the script in app/layout.tsx). Light
@@ -118,7 +121,7 @@ body {
 .markdown a { @apply text-emerald-400 underline underline-offset-2; }
 .markdown hr { @apply my-6 border-ink-700; }
 .markdown blockquote { @apply border-l-2 border-ink-500 pl-4 my-4 text-slate-400 italic; }
-.markdown code { @apply bg-ink-800 px-1.5 py-0.5 rounded text-sm text-emerald-300; }
+.markdown code { @apply bg-ink-800 px-1.5 py-0.5 rounded-sm text-sm text-emerald-300; }
 /* Wide tables scroll inside the article instead of widening the page on mobile. */
 .markdown table { @apply block w-full max-w-full overflow-x-auto my-4 text-sm; }
 .markdown th { @apply text-left border-b border-ink-600 px-3 py-2 text-slate-100; }

@@ -59,7 +59,7 @@ FROM base AS signal-bot
 ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json tsconfig.json ./
-COPY lib/signals.ts ./lib/signals.ts
+COPY lib/signals.ts lib/signal-delivery.ts ./lib/
 COPY scripts/signal-bot.ts ./scripts/signal-bot.ts
 USER node
 CMD ["node_modules/.bin/tsx", "scripts/signal-bot.ts"]
