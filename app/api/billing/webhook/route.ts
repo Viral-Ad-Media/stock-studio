@@ -59,7 +59,7 @@ export async function POST(req: Request) {
       // judgement call and are left for the operator.
       if (charge.refunded && pi) {
         const [row] = await billingSql`SELECT stocks.refund_payment(${pi}) AS reversed`;
-        outcome = row.reversed ? "reversed" : "replay";
+        outcome = row.reversed ? "refund_recorded" : "replay";
       } else {
         outcome = "partial_refund_ignored";
       }

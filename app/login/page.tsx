@@ -127,7 +127,7 @@ export default function LoginPage() {
             type="checkbox"
             checked={remember}
             onChange={(e) => setRemember(e.target.checked)}
-            className="h-4 w-4 rounded border-ink-500 bg-ink-800 accent-emerald-500"
+            className="h-4 w-4 rounded-sm border-ink-500 bg-ink-800 accent-emerald-500"
           />
           Remember me
           <span className="text-fg-subtle">— stay signed in on this device</span>

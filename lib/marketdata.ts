@@ -4,23 +4,25 @@
 // key. Functions throw on failure rather than process.exit, so callers
 // (CLI or worker) decide how to handle it.
 
+import { assertTimeLeft, deadlineSignal, waitWithinBudget } from "./deadline";
+
 export type Candle = { t: string; o: number; h: number; l: number; c: number; v: number };
 
 // `revalidateSec` opts a read into Next's data cache (dashboard/market pages);
 // the worker and CLI always fetch fresh. Outside Next the option is ignored.
-async function yahooFetch(url: string, label: string, revalidateSec?: number) {
+async function yahooFetch(url: string, label: string, revalidateSec?: number, deadline?: number) {
   // Bounded: the worker has a fixed per-invocation time budget.
   const get = (u: string) =>
     fetch(u, {
       headers: { "User-Agent": "Mozilla/5.0 (stock-studio market data fetcher)" },
-      signal: AbortSignal.timeout(15_000),
+      signal: deadlineSignal(deadline, 15_000),
       ...(revalidateSec ? { cache: "force-cache" as const, next: { revalidate: revalidateSec } } : {}),
     });
   let res = await get(url);
   // Yahoo rate-limits shared hosting IPs per host. Retry a 429/5xx twice with
   // a short backoff, alternating query1 <-> query2 (same API, separate limits).
   for (let attempt = 1; attempt <= 2 && (res.status === 429 || res.status >= 500); attempt++) {
-    await new Promise((r) => setTimeout(r, attempt * 1500));
+    await waitWithinBudget(attempt * 1500, deadline);
     const alt = /\/\/query1\./.test(url) ? url.replace("//query1.", "//query2.") : url.replace("//query2.", "//query1.");
     res = await get(attempt % 2 === 1 ? alt : url);
   }
@@ -31,12 +33,12 @@ async function yahooFetch(url: string, label: string, revalidateSec?: number) {
 
 // The one-candle strategy's fixed "first 5 minutes of the regular session"
 // rule — see lib/engine/methodology.md's One-candle section.
-export async function fetchOpeningCandle(ticker: string, date?: string) {
+export async function fetchOpeningCandle(ticker: string, date?: string, deadline?: number) {
   let url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
     ticker
   )}?interval=1m&includePrePost=false`;
   if (date) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(`${date}T00:00:00-05:00`).getTime())) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) {
       throw new Error(`Invalid session date "${date}" — expected YYYY-MM-DD`);
     }
     const start = Math.floor(new Date(`${date}T00:00:00-05:00`).getTime() / 1000);
@@ -45,7 +47,7 @@ export async function fetchOpeningCandle(ticker: string, date?: string) {
     url += `&range=1d`;
   }
 
-  const body = await yahooFetch(url, "chart");
+  const body = await yahooFetch(url, "chart", undefined, deadline);
   const result = body?.chart?.result?.[0];
   if (!result || body?.chart?.error) {
     throw new Error(`No chart data for ${ticker}: ${JSON.stringify(body?.chart?.error ?? "empty result")}`);
@@ -70,7 +72,7 @@ export async function fetchOpeningCandle(ticker: string, date?: string) {
 
   const candles: (Candle & { unix: number })[] = [];
   for (let i = 0; i < ts.length; i++) {
-    if (q.open?.[i] == null) continue;
+    if (![ts[i], q.open?.[i], q.high?.[i], q.low?.[i], q.close?.[i]].every(Number.isFinite)) continue;
     candles.push({
       unix: ts[i],
       t: fmt(ts[i]),
@@ -85,13 +87,18 @@ export async function fetchOpeningCandle(ticker: string, date?: string) {
     throw new Error(`No 1-minute candles returned for ${ticker} (market not open yet, or date out of 1m-history range)`);
   }
 
-  let sessionStart = regularStart ?? candles[0].unix;
-  if (!candles.some((c) => c.unix >= sessionStart && c.unix < sessionStart + 300)) {
-    sessionStart = candles[0].unix;
-  }
-  const firstFive = candles.filter((c) => c.unix >= sessionStart && c.unix < sessionStart + 300);
-  if (firstFive.length === 0) {
-    throw new Error(`No candles found in the first five minutes of the regular session for ${ticker}`);
+  const sessionDate = date ?? exchangeDate(candles[0].unix, tz);
+  // Historical payloads sometimes contain current-session metadata. Use an
+  // explicit period for the requested day, or the fixed US equity open.
+  const periods = (result.tradingPeriods?.regular ?? []).flat(Infinity) as { start?: number }[];
+  const candidates = [regularStart, ...periods.map((p) => p.start)];
+  const sessionStart = candidates.find((start) => Number.isFinite(start) && exchangeDate(start!, tz) === sessionDate)
+    ?? (tz === "America/New_York" ? exchangeTime(sessionDate, 9, 30, tz) : undefined);
+  if (sessionStart == null) throw new Error(`Cannot verify regular-session opening time for ${ticker}`);
+  const firstFive = candles.filter((c) => c.unix >= sessionStart && c.unix < sessionStart + 300).sort((a, b) => a.unix - b.unix);
+  if (Date.now() < (sessionStart + 300) * 1000 || firstFive.length !== 5 ||
+      firstFive.some((c, i) => c.unix !== sessionStart + i * 60)) {
+    throw new Error(`Incomplete opening range for ${ticker}: need five completed 1-minute bars at the regular session open`);
   }
   const opening = {
     start: fmt(sessionStart),
@@ -110,7 +117,7 @@ export async function fetchOpeningCandle(ticker: string, date?: string) {
   return {
     ticker,
     exchange_timezone: tz,
-    session_date: fmt(sessionStart).slice(0, 10),
+    session_date: sessionDate,
     note: "Times are exchange-local. The regular session start comes from the exchange metadata (9:30 ET for US equities).",
     first_five_minute_candle: opening,
     one_minute_candles: series,
@@ -120,12 +127,12 @@ export async function fetchOpeningCandle(ticker: string, date?: string) {
 // General-purpose OHLC across many candles — for swing-structure setups
 // like the Da Vinci liquidity model, where a single opening range isn't
 // enough. See lib/engine/methodology.md's Da Vinci section.
-export async function fetchHistory(ticker: string, interval = "5m", range = "5d") {
+export async function fetchHistory(ticker: string, interval = "5m", range = "5d", deadline?: number) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
     ticker
   )}?interval=${encodeURIComponent(interval)}&range=${encodeURIComponent(range)}&includePrePost=false`;
 
-  const body = await yahooFetch(url, "chart");
+  const body = await yahooFetch(url, "chart", undefined, deadline);
   const result = body?.chart?.result?.[0];
   if (!result || body?.chart?.error) {
     throw new Error(`No chart data for ${ticker}: ${JSON.stringify(body?.chart?.error ?? "empty result")}`);
@@ -148,7 +155,7 @@ export async function fetchHistory(ticker: string, interval = "5m", range = "5d"
   const q = result.indicators?.quote?.[0] ?? {};
   const candles: Candle[] = [];
   for (let i = 0; i < ts.length; i++) {
-    if (q.open?.[i] == null) continue;
+    if (![ts[i], q.open?.[i], q.high?.[i], q.low?.[i], q.close?.[i]].every(Number.isFinite)) continue;
     candles.push({
       t: fmt(ts[i]),
       o: +q.open[i].toFixed(4),
@@ -185,9 +192,9 @@ export type Mover = {
   exchange: string | null;
 };
 
-async function screener(scrId: string, count: number, revalidateSec?: number): Promise<Mover[]> {
+async function screener(scrId: string, count: number, revalidateSec?: number, deadline?: number): Promise<Mover[]> {
   const url = `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=${scrId}&count=${count}&formatted=false`;
-  const body = await yahooFetch(url, "screener", revalidateSec);
+  const body = await yahooFetch(url, "screener", revalidateSec, deadline);
   const quotes = body?.finance?.result?.[0]?.quotes ?? [];
   return quotes.map((q: any) => ({
     symbol: q.symbol,
@@ -200,10 +207,10 @@ async function screener(scrId: string, count: number, revalidateSec?: number): P
   }));
 }
 
-export async function fetchMovers(count = 5, revalidateSec?: number) {
+export async function fetchMovers(count = 5, revalidateSec?: number, deadline?: number) {
   const [gainers, losers] = await Promise.all([
-    screener("day_gainers", count, revalidateSec),
-    screener("day_losers", count, revalidateSec),
+    screener("day_gainers", count, revalidateSec, deadline),
+    screener("day_losers", count, revalidateSec, deadline),
   ]);
   if (gainers.length === 0 && losers.length === 0) {
     throw new Error("Yahoo screeners returned no quotes — try again later or fall back to web research.");
@@ -231,11 +238,11 @@ export type DailyBars = {
   volumes: number[];
 };
 
-export async function fetchDailyBars(ticker: string, range = "1y", revalidateSec = 1800): Promise<DailyBars> {
+export async function fetchDailyBars(ticker: string, range = "1y", revalidateSec = 1800, deadline?: number): Promise<DailyBars> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
     ticker
   )}?interval=1d&range=${encodeURIComponent(range)}&includePrePost=false`;
-  const body = await yahooFetch(url, "chart", revalidateSec);
+  const body = await yahooFetch(url, "chart", revalidateSec, deadline);
   const result = body?.chart?.result?.[0];
   if (!result || body?.chart?.error) throw new Error(`No chart data for ${ticker}`);
   const ts: number[] = result.timestamp ?? [];
@@ -268,19 +275,40 @@ export async function fetchDailyCloses(ticker: string, range = "1y", revalidateS
 
 // Runs `fn` over `items` with at most `limit` in flight; failures become null
 // so one bad ticker never sinks a whole panel.
-export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<(R | null)[]> {
+export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>, deadline?: number): Promise<(R | null)[]> {
   const out: (R | null)[] = new Array(items.length).fill(null);
   let next = 0;
   async function worker() {
     while (next < items.length) {
+      assertTimeLeft(deadline);
       const i = next++;
       try {
         out[i] = await fn(items[i]);
       } catch {
+        assertTimeLeft(deadline);
         out[i] = null;
       }
     }
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
   return out;
+}
+
+function exchangeDate(unix: number, timezone: string): string {
+  return new Date(unix * 1000).toLocaleDateString("en-CA", { timeZone: timezone });
+}
+
+// Convert a local opening time to UTC without hard-coding EST/EDT offsets.
+export function exchangeTime(date: string, hour: number, minute: number, timezone: string): number {
+  const wanted = Date.parse(`${date}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00Z`);
+  let guess = wanted;
+  for (let i = 0; i < 3; i++) {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    }).formatToParts(new Date(guess)).map((p) => [p.type, p.value]));
+    const local = Date.parse(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}Z`);
+    guess += wanted - local;
+  }
+  return guess / 1000;
 }

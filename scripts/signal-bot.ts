@@ -5,9 +5,9 @@
  *
  *   BUY GOOGL CALL @12.40 tp 15 sl 11 breakout over 285
  *
- * Order of operations per message: record first, then post. A signal that
- * made it into the track record but failed to post is flagged to the poster;
- * a signal is never posted without being recorded.
+ * Recording and enqueueing happen in one transaction. Database leases and
+ * retry scheduling recover failed sends and process crashes. A signal is never
+ * posted without being recorded. 📥 means durably queued.
  *
  * Config (environment — never command-line arguments, never committed):
  *   DISCORD_TOKEN          bot token
@@ -22,6 +22,7 @@
  *
  * Run: npm run signal-bot
  */
+import { drainDeliveries, type Delivery } from "../lib/signal-delivery";
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
@@ -63,20 +64,15 @@ const DISCLAIMER = process.env.SIGNAL_DISCLAIMER ?? "Trading involves risk of lo
 
 // The dedicated role can only insert and read signals — even a leaked
 // connection string can't rewrite the track record.
-const sql = postgres(DATABASE_URL, { prepare: false, max: 2, idle_timeout: 30 });
+const sql = postgres(DATABASE_URL, { ssl: "require", prepare: false, max: 2, idle_timeout: 30 });
 
-type Recorded = { id: number; posted_at: Date; hash: string };
+type Recorded = { id: number; posted_at: Date | string; hash?: string };
 
 async function record(sig: ParsedSignal, msg: Message): Promise<Recorded | null> {
-  // ON CONFLICT: a redelivered or re-processed message is recorded once.
   const [row] = await sql<Recorded[]>`
-    INSERT INTO stocks.signals
-      (action, ticker, instrument, entry, target, stop, detail, author_discord_id, author_name, source_message_id)
-    VALUES
-      (${sig.action}, ${sig.ticker}, ${sig.instrument}, ${sig.entry}, ${sig.target}, ${sig.stop}, ${sig.detail},
-       ${msg.author.id}, ${msg.author.username.slice(0, 100)}, ${msg.id})
-    ON CONFLICT (source_message_id) DO NOTHING
-    RETURNING id, posted_at, hash
+    SELECT id, posted_at, hash FROM stocks.record_signal(
+      ${sql.json(sig)}, ${msg.author.id}, ${msg.author.username.slice(0, 100)},
+      ${msg.id}, ${SIGNALS_CHANNEL_ID})
   `;
   return row ?? null;
 }
@@ -87,7 +83,7 @@ function embedFor(sig: ParsedSignal, rec: Recorded): EmbedBuilder {
     .setTitle(`${sig.action} ${sig.ticker}${sig.instrument ? ` ${sig.instrument}` : ""}`)
     .setDescription(sig.detail || "No details")
     .setColor(style.color)
-    .setTimestamp(rec.posted_at)
+    .setTimestamp(new Date(rec.posted_at))
     .setFooter({ text: `Signal #${rec.id} · ${FOOTER}${DISCLAIMER ? ` · ${DISCLAIMER}` : ""}`.slice(0, 2048) });
   const levels = [
     ["Entry", formatPrice(sig.entry)],
@@ -108,7 +104,31 @@ const client = new Client({
   partials: [Partials.Message],
 });
 
+let deliveryTimer: ReturnType<typeof setInterval> | undefined;
+let draining: Promise<void> | undefined;
+function drain(): Promise<void> {
+  if (draining) return draining;
+  draining = drainDeliveries({
+    claim: async () => (await sql<Delivery[]>`SELECT * FROM stocks.claim_signal_delivery(${SIGNALS_CHANNEL_ID})`)[0] ?? null,
+    finish: async (item, id) => (await sql`SELECT stocks.finish_signal_delivery(${item.signal.id}, ${item.lease_token}::uuid, ${id}) AS done`)[0].done,
+    retry: async (item, error) => { console.error(`signal-bot: delivery #${item.signal.id} attempt ${item.attempts} will retry: ${error}`); await sql`SELECT stocks.retry_signal_delivery(${item.signal.id}, ${item.lease_token}::uuid, ${error})`; },
+  }, async (item) => {
+    const channel = await client.channels.fetch(item.destination);
+    if (!channel?.isSendable()) throw new Error("signals channel not found or not sendable");
+    // Discord also deduplicates retries during its recent-nonce window.
+    const sent = await channel.send({ embeds: [embedFor(item.signal, item.signal)],
+      nonce: `ss:${item.signal.id}`, enforceNonce: true, allowedMentions: { parse: [] } });
+    return sent.id;
+  }).finally(() => { draining = undefined; });
+  return draining;
+}
+function scheduleDrain() {
+  void drain().catch((error) => console.error("signal-bot: delivery drain failed", error));
+}
+
 client.once(Events.ClientReady, (c) => {
+  scheduleDrain();
+  deliveryTimer = setInterval(scheduleDrain, 5000);
   console.log(`signal-bot: logged in as ${c.user.tag}; ${INPUT_CHANNEL_ID} -> ${SIGNALS_CHANNEL_ID}; ${POSTERS.size} approved poster(s)`);
 });
 
@@ -138,22 +158,10 @@ client.on(Events.MessageCreate, async (msg) => {
     await reply(msg, "Couldn't save this signal to the track record, so it was NOT posted. Try again in a minute.");
     return;
   }
-  if (!rec) return; // already recorded (and handled) earlier
+  if (!rec) return;
+  scheduleDrain();
+  await msg.react("📥").catch(() => {}); // durably queued, including a replay
 
-  try {
-    const channel = await client.channels.fetch(SIGNALS_CHANNEL_ID);
-    if (!channel?.isSendable()) throw new Error("signals channel not found or not sendable");
-    const sent = await channel.send({ embeds: [embedFor(parsed, rec)], allowedMentions: { parse: [] } });
-    await sql`
-      INSERT INTO stocks.signal_deliveries (signal_id, channel, destination, external_id)
-      VALUES (${rec.id}, 'discord', ${SIGNALS_CHANNEL_ID}, ${sent.id})
-    `.catch((err) => console.error(`signal-bot: posted #${rec!.id} but couldn't log the delivery`, err));
-    await msg.react("✅").catch(() => {});
-  } catch (err) {
-    console.error(`signal-bot: recorded #${rec.id} but couldn't post it`, err);
-    await msg.react("⚠️").catch(() => {});
-    await reply(msg, `Signal #${rec.id} is in the track record but couldn't be posted to the members channel. Check SIGNALS_CHANNEL_ID and the bot's permissions.`);
-  }
 });
 
 // The track record is append-only, so an edit can't change a posted signal.
@@ -169,6 +177,8 @@ client.on(Events.MessageUpdate, async (_old, updated: Message | PartialMessage) 
 
 async function shutdown(signal: string) {
   console.log(`signal-bot: ${signal} received, shutting down`);
+  if (deliveryTimer) clearInterval(deliveryTimer);
+  if (draining) await draining.catch(() => {});
   await client.destroy();
   await sql.end({ timeout: 5 });
   process.exit(0);
