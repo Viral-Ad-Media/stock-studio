@@ -69,7 +69,7 @@ export default async function AdminUsers({ searchParams }: { searchParams: Promi
                     <Link href={`/admin/users/${u.id}`} className="text-slate-100 underline-offset-2 hover:underline">{u.email}</Link>
                     <div className="text-xs text-fg-subtle">
                       {u.full_name ?? "No name"} · {u.provider ?? "email"}
-                      {e?.is_admin && <span className="ml-2 rounded border border-amber-500/40 px-1 text-amber-300">Admin</span>}
+                      {e?.is_admin && <span className="ml-2 rounded-sm border border-amber-500/40 px-1 text-amber-300">Admin</span>}
                     </div>
                   </th>
                   <td className="px-4 py-3 text-slate-300">{status}</td>

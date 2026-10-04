@@ -26,8 +26,8 @@ export default function ProductShot({
           <span className="h-2.5 w-2.5 rounded-full bg-slate-600" />
           <span className="h-2.5 w-2.5 rounded-full bg-slate-600" />
         </span>
-        <span className="ml-2 truncate rounded bg-ink-900 px-2 py-0.5 font-mono text-[11px] text-fg-subtle">stockstudio{path}</span>
-        <span className="ml-auto shrink-0 rounded border border-ink-500 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-300">
+        <span className="ml-2 truncate rounded-sm bg-ink-900 px-2 py-0.5 font-mono text-[11px] text-fg-subtle">stockstudio{path}</span>
+        <span className="ml-auto shrink-0 rounded-sm border border-ink-500 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-300">
           Sample data
         </span>
       </div>
