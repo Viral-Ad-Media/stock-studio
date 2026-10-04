@@ -51,7 +51,7 @@ export default async function AdminUser({ params }: { params: Promise<{ id: stri
         <p className="mt-1 text-sm text-fg-subtle">
           {u.full_name ?? "No name"} · signs in with {u.provider ?? "email"} · joined {formatDate(u.created_at)} · last sign-in{" "}
           {u.last_sign_in_at ? formatDate(u.last_sign_in_at) : "never"}
-          {isAdmin && <span className="ml-2 rounded border border-amber-500/40 px-1 text-amber-300">Admin</span>}
+          {isAdmin && <span className="ml-2 rounded-sm border border-amber-500/40 px-1 text-amber-300">Admin</span>}
         </p>
       </div>
 

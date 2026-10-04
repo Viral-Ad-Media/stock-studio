@@ -3,6 +3,7 @@
 // backstop hits it every minute; the per-session claim below makes that a
 // no-op once today's scan exists) and by `npm run engine -- scan-setups`.
 import { sql } from "./db";
+import { assertTimeLeft } from "./deadline";
 import { fetchDailyBars, mapLimit, type DailyBars } from "./marketdata";
 import { earningsForTickers, marketDateET } from "./earnings";
 import {
@@ -51,7 +52,9 @@ export async function maybeRunSetupScan({ deadline, force = false }: { deadline:
     if (last?.d && last.d >= expectedLatestSession()) return { ran: false, reason: "up to date" };
   }
 
-  const spyRaw = await fetchDailyBars("SPY", "2y", 900);
+  const dataDeadline = deadline - 10_000; // leave time to persist failure or completion
+  assertTimeLeft(dataDeadline);
+  const spyRaw = await fetchDailyBars("SPY", "2y", 900, dataDeadline);
   const session = lastCompletedSession(spyRaw.dates);
   if (!session) return { ran: false, reason: "no completed session" };
 
@@ -70,7 +73,7 @@ export async function maybeRunSetupScan({ deadline, force = false }: { deadline:
 
   try {
     const spy = barsThrough(spyRaw, session);
-    const barsList = await mapLimit(SETUP_UNIVERSE, 8, (t) => fetchDailyBars(t, "2y", 900));
+    const barsList = await mapLimit(SETUP_UNIVERSE, 8, (t) => fetchDailyBars(t, "2y", 900, dataDeadline), dataDeadline);
     const bars = barsList.filter((b): b is DailyBars => b !== null).map((b) => barsThrough(b, session));
     // A mostly failed fetch must not be recorded as a real (empty) scan.
     if (bars.length < SETUP_UNIVERSE.length * 0.8) {
@@ -79,11 +82,12 @@ export async function maybeRunSetupScan({ deadline, force = false }: { deadline:
     const byTicker = new Map(bars.map((b) => [b.symbol, b]));
     let earnings: Awaited<ReturnType<typeof earningsForTickers>> | null = null;
     try {
-      earnings = await earningsForTickers(SETUP_UNIVERSE, { back: 10, ahead: 0 });
+      earnings = await earningsForTickers(SETUP_UNIVERSE, { back: 10, ahead: 0, deadline: dataDeadline });
     } catch {
       earnings = null; // earnings_gap just finds nothing today
     }
 
+    assertTimeLeft(dataDeadline);
     const matches: SetupMatch[] = [];
     for (const b of bars) {
       // Only tickers that actually traded on the session being scanned.
@@ -92,7 +96,7 @@ export async function maybeRunSetupScan({ deadline, force = false }: { deadline:
     }
     const spyAdj = spy.dates.at(-1) === session ? spy.adjCloses.at(-1)! : null;
 
-    const resolved = await resolveOpenMatches(byTicker, spy);
+    const resolved = await resolveOpenMatches(byTicker, spy, dataDeadline);
     const notes = deadline - Date.now() > 45_000 ? await deskNotes(session, matches, deadline) : null;
 
     await sql.begin(async (tx) => {
@@ -136,13 +140,14 @@ function expectedLatestSession(now = new Date()): string {
 
 // Close out every open match whose horizon has passed, using the bars just
 // fetched (anything outside the universe or not yet due stays open).
-async function resolveOpenMatches(byTicker: Map<string, DailyBars>, spy: DailyBars): Promise<number> {
+async function resolveOpenMatches(byTicker: Map<string, DailyBars>, spy: DailyBars, deadline: number): Promise<number> {
   const open = await sql`
     SELECT id, symbol, session_date, adj_close, spy_adj_close, horizon_sessions, invalidation_json
     FROM setup_matches WHERE resolved_at IS NULL ORDER BY id LIMIT 2000
   `;
   let n = 0;
   for (const m of open) {
+    assertTimeLeft(deadline);
     const bars = byTicker.get(m.symbol);
     if (!bars) continue;
     const out = resolveOutcome(

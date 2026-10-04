@@ -165,7 +165,7 @@ function TourOverlay({ step, setStep }: { step: number; setStep: (s: number | nu
           <p className="text-xs font-medium text-emerald-300" aria-live="polite">
             Step {step + 1} of {TOUR_STEPS.length}
           </p>
-          <button type="button" onClick={close} className="-m-1 rounded p-1 text-fg-subtle hover:text-slate-100" aria-label="Close the tour">
+          <button type="button" onClick={close} className="-m-1 rounded-sm p-1 text-fg-subtle hover:text-slate-100" aria-label="Close the tour">
             <X className="h-4 w-4" aria-hidden />
           </button>
         </div>

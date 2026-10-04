@@ -2,6 +2,7 @@
 // QuantEdgeResearch's earnings-calendar service. An earnings date means
 // variance is coming, not which way — the UI shows it as a scheduled event,
 // never as a signal.
+import { deadlineSignal } from "./deadline";
 import { mapLimit } from "./marketdata";
 
 export type EarningsEvent = {
@@ -62,10 +63,10 @@ export function parseEarningsRows(date: string, body: unknown): EarningsEvent[] 
     .filter((e) => /^[A-Z][A-Z0-9.\-]{0,9}$/.test(e.symbol));
 }
 
-async function fetchDay(date: string): Promise<EarningsEvent[]> {
+async function fetchDay(date: string, deadline?: number): Promise<EarningsEvent[]> {
   const res = await fetch(`https://api.nasdaq.com/api/calendar/earnings?date=${date}`, {
     headers: { "User-Agent": "Mozilla/5.0 (stock-studio earnings calendar)", Accept: "application/json" },
-    signal: AbortSignal.timeout(10_000),
+    signal: deadlineSignal(deadline, 10_000),
     // A day's calendar barely changes; past days never do.
     cache: "force-cache",
     next: { revalidate: date < marketDateET() ? 86_400 : 21_600 },
@@ -81,7 +82,7 @@ export type TickerEarnings = { last: EarningsEvent | null; next: EarningsEvent |
 // and a day that fails to load is just missing — this is context, not a gate.
 export async function earningsForTickers(
   tickers: string[],
-  { back = 7, ahead = 30 }: { back?: number; ahead?: number } = {}
+  { back = 7, ahead = 30, deadline }: { back?: number; ahead?: number; deadline?: number } = {}
 ): Promise<Map<string, TickerEarnings>> {
   const wanted = new Set(tickers.map((t) => t.toUpperCase()));
   const out = new Map<string, TickerEarnings>();
@@ -94,7 +95,7 @@ export async function earningsForTickers(
     const dow = new Date(`${d}T12:00:00Z`).getUTCDay();
     if (dow !== 0 && dow !== 6) days.push(d);
   }
-  const results = await mapLimit(days, 6, fetchDay);
+  const results = await mapLimit(days, 6, (d) => fetchDay(d, deadline), deadline);
 
   results.forEach((events) => {
     for (const e of events ?? []) {
