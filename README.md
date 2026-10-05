@@ -412,7 +412,10 @@ It skips an existing complete Stock Studio schema and refuses a partial one.
 
 New installations use `supabase start` then `supabase db reset`. Existing deployments retain their historical migration records and apply the reviewed forward
 files as documented; do not run reset against a remote database.
-New migrations are generated with `supabase migration new <name>` and checked in.
+New migrations are generated with `supabase migration new <name>` and checked in. The review
+follow-up migration serializes access refunds across a user’s payment intents and preserves
+signal delivery order during retries. Research continuations preserve full search evidence
+while disabling new searches when the allowance is exhausted.
 
 ---
 

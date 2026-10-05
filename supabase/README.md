@@ -1,7 +1,8 @@
 # Database installation and upgrades
 
 The active migration directory contains a fresh baseline plus additive repairs for billing,
-worker refunds and signal delivery. `archive/` preserves the previously checked-in historical
+worker refunds and signal delivery. The review follow-up adds destination-ordered delivery
+claims and user-level serialization of access payments/refunds. `archive/` preserves the previously checked-in historical
 fragments, including a destructive cleanup of unrelated apps that is deliberately excluded
 from fresh replay. Missing original foundation definitions could not be recovered; the baseline
 is reconstructed from application queries, types and the available SQL, not an exact historical dump.
@@ -41,7 +42,7 @@ point to `/api/engine/run`, and the secret must equal `ENGINE_WEBHOOK_SECRET`.
    history uses full timestamps and includes migrations from formerly shared applications.
    Keep that history intact. Do not bulk mark historical versions reverted to silence a CLI
    mismatch; the archived fragments do not establish every remote migration's provenance.
-3. Apply the three new files **in filename order** using the existing Supabase
+3. Apply any unapplied active files **in filename order** using the existing Supabase
    `apply_migration` workflow (or the owner SQL editor with your normal migration tracking).
    Review/apply them in a staging clone first, then repeat the reviewed rollout remotely.
    Record the resulting versions and names. The baseline skips an existing complete schema
@@ -62,3 +63,26 @@ Stripe/job records. The forward fix restores the refund-aware claim function and
 refund tombstones; it does not invent past refund events. Replay verified signed refund events
 from Stripe, or use the existing admin tools for confirmed adjustments. Do not assume every
 historic error should receive another credit refund.
+
+## Review follow-up rollout
+
+If the three audit migrations are already installed, apply only
+`20261005223236_ordered_signals_and_access_serialization.sql` using the existing migration
+workflow. It replaces functions in place and preserves all payments, credits, signal hashes
+and delivery history. If they are not installed yet, apply the audit files first, then this file.
+
+The oldest undelivered signal now blocks later signals to the same destination while it is
+leased or backing off. Different destinations remain independent. A persistent failure
+therefore stops that channel: monitor outbox errors and restore delivery rather than skipping
+a BUY and delivering its CLOSE first. Successfully acknowledged signals release the next one.
+Existing Discord at-least-once/nonce limitations still apply after ambiguous send failures.
+
+Access changes are serialized per user across different payment intents, while refund
+idempotency still uses the intent lock. Confirmed historical access anomalies require operator
+review: do not revoke all accounts without a completed access payment, because grandfathered
+and admin-comped accounts can legitimately have access without one.
+
+The application research update resumes the complete assistant/tool history (including
+encrypted search results) and sets `tool_choice: none` once its allowance is used. The provider
+can finish a previously pending search, but cannot select an additional search. Usage counts
+that pending search once, and the evidence remains available to the final report.
