@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import SectorChart from "@/components/charts/SectorChart";
 import { redirect } from "next/navigation";
 import { sql } from "@/lib/db";
 import { currentUser, currentWorkspaceId } from "@/lib/workspace";
@@ -26,7 +27,7 @@ export default async function TodayPage() {
   if (!ws) return <p role="alert">Your workspace is unavailable. Please sign in again.</p>;
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="workspace-heading flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-emerald-400">{marketDay(marketDateET())} · New York market date</p>
           <h1 className="text-3xl font-bold tracking-tight text-slate-100">Today</h1>
@@ -88,7 +89,7 @@ async function MarketOverview() {
         ))}
         <div className="rounded-lg border border-ink-700 p-3"><p className="text-xs text-fg-subtle">Large caps above 50-day average</p><p className="mt-1 text-lg font-semibold text-slate-100">{ctx.breadth ? `${ctx.breadth.pctAbove50}%` : "Unavailable"}</p></div>
       </div>
-      <p className="mt-3 text-sm text-slate-300">{ctx.readings.rotation}</p>
+      <SectorChart sectors={ctx.sectors} asOf={ctx.asOf}/><p className="mt-3 text-sm text-slate-300">{ctx.readings.rotation}</p>
       {ctx.readings.divergence && <p className="mt-2 text-sm text-amber-300">{ctx.readings.divergence}</p>}
       <p className="mt-3 text-xs text-fg-subtle">Breadth sample: {ctx.breadth?.sampled ?? 0} large caps, not the full S&amp;P 500. Daily series are cached for about 30 minutes.{ctx.missing.length > 0 && ` Some data could not be loaded: ${ctx.missing.join(", ")}.`}</p>
     </Panel>;
