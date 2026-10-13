@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Sigma } from "lucide-react";
 import { getGexSnapshot, bucketStrikes, formatGexDollars, GEX_PRESETS } from "@/lib/gex";
 import { parseTicker, isInvalid } from "@/lib/validate";
-import { formatDate } from "@/lib/shared";
+import DataStamp from "@/components/insights/DataStamp";
 import GexChart from "@/components/gamma/GexChart";
 
 export const metadata = { title: "Gamma exposure", description: "A dealer-gamma model built from delayed options data." };
@@ -114,9 +114,9 @@ async function GexSection({ symbol }: { symbol: string }) {
       />
       <p className="text-xs text-fg-subtle">
         {snap.contracts.toLocaleString("en-US")} contracts across {snap.expirations} expirations · calls{" "}
-        {formatGexDollars(snap.callGex)}, puts {formatGexDollars(-snap.putGex)} · loaded {formatDate(snap.fetchedAt)}{" "}
-        {new Date(snap.fetchedAt).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" })} ET
+        {formatGexDollars(snap.callGex)}, puts {formatGexDollars(-snap.putGex)}
       </p>
+      <DataStamp source="CBOE options chain (about 15-minute delay; open interest updates daily)" sourceAt={snap.sourceAt} fetchedAt={snap.fetchedAt} delayed />
     </div>
   );
 }
