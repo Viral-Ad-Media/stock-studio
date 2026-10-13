@@ -103,6 +103,50 @@ body {
 
 .card {
   @apply bg-ink-900 border border-ink-700 rounded-xl;
+  box-shadow: 0 2px 12px rgb(0 0 0 / .04);
+}
+
+.workspace-heading {
+  padding: 1.5rem;
+  border: 1px solid rgb(var(--ink-700));
+  border-radius: 1rem;
+  background: linear-gradient(120deg, rgb(var(--emerald-500) / .08), transparent 60%), rgb(var(--ink-900));
+}
+.desk-eyebrow {
+  margin-bottom: .75rem;
+  color: rgb(var(--emerald-400));
+  font-size: .65rem;
+  font-weight: 600;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.metric-tile {
+  border: 1px solid rgb(var(--ink-700));
+  border-radius: .75rem;
+  padding: 1rem;
+  background: rgb(var(--ink-950) / .55);
+}
+.chart-panel {
+  min-width: 0;
+  border: 1px solid rgb(var(--ink-700));
+  border-radius: .75rem;
+  padding: 1.25rem;
+  background: rgb(var(--ink-900));
+}
+.desk-badge {
+  border: 1px solid rgb(var(--ink-600));
+  border-radius: .35rem;
+  padding: .2rem .5rem;
+  color: rgb(var(--fg-subtle));
+  font-size: .6rem;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.chart-axis { fill: rgb(var(--fg-subtle)); font-size: 11px; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  .chart-panel { padding: .85rem; }
+  .workspace-heading { padding: 1.1rem; }
 }
 
 .markdown {

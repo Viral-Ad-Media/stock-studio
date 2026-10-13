@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut, CreditCard, Menu, X, Globe2, Radar, Sigma, HelpCircle, ShieldCheck, Megaphone } from "lucide-react";
+import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut, CreditCard, Menu, X, Globe2, Radar, Sigma, BookOpen, HelpCircle, ShieldCheck, Megaphone } from "lucide-react";
 import { useTour } from "@/components/guide/Tour";
 import ThemeToggle from "@/components/theme/ThemeToggle";
 import { getSupabase } from "@/lib/supabase/lazy";
@@ -18,7 +18,7 @@ const links = [
   { href: "/setups", label: "Setup bots", icon: Radar, tour: "setups" },
   { href: "/gamma", label: "Gamma exposure", icon: Sigma, tour: "gamma" },
   { href: "/signals", label: "Signals", icon: Megaphone, tour: "signals" },
-  { href: "/journal", label: "Trading journal", icon: Eye, tour: "journal" },
+  { href: "/journal", label: "Trading journal", icon: BookOpen, tour: "journal" },
   { href: "/leaps", label: "LEAPS workspace", icon: CandlestickChart, tour: "leaps" },
   { href: "/billing", label: "Billing", icon: CreditCard, tour: "billing" },
 ];
@@ -61,7 +61,7 @@ export default function Nav({ userEmail, userName, credits, isAdmin = false }: P
           <nav
             id="mobile-nav"
             aria-label="Main"
-            className="flex h-full w-72 max-w-[85vw] flex-col gap-1 border-r border-ink-700 bg-ink-900 p-4"
+            className="flex h-full w-72 max-w-[85vw] overflow-y-auto flex-col gap-1 border-r border-ink-700 bg-ink-900 p-4"
             onClick={(e) => e.stopPropagation()}
           >
             <NavLinks pathname={pathname} credits={credits} />
@@ -75,7 +75,7 @@ export default function Nav({ userEmail, userName, credits, isAdmin = false }: P
 
       <nav
         aria-label="Main"
-        className="hidden md:flex w-56 shrink-0 flex-col gap-1 border-r border-ink-700 bg-ink-900 p-4"
+        className="hidden md:sticky md:top-0 md:h-screen md:overflow-y-auto md:flex w-60 shrink-0 flex-col gap-1 border-r border-ink-700 bg-ink-900 p-4"
       >
         <div className="mb-4 px-2 py-3">
           <Brand withTagline />
@@ -96,7 +96,7 @@ function Brand({ withTagline = false }: { withTagline?: boolean }) {
       <CandlestickChart className="h-6 w-6 text-emerald-400" aria-hidden />
       <div>
         <div className="font-bold leading-tight text-slate-100">Stock Studio</div>
-        {withTagline && <div className="text-xs leading-tight text-fg-subtle">case study engine</div>}
+        {withTagline && <div className="text-xs leading-tight text-fg-subtle">Research & trading workspace</div>}
       </div>
     </Link>
   );
@@ -109,13 +109,12 @@ function NavLinks({ pathname, credits }: { pathname: string; credits: number | n
         // Study pages belong to the dashboard section.
         const active = pathname.startsWith(href) || (href === "/dashboard" && pathname.startsWith("/study"));
         return (
-          <Link
-            key={href}
+          <div key={href}>{["/today", "/market", "/journal", "/billing"].includes(href) && <p className="px-3 pb-2 pt-4 text-[10px] font-semibold uppercase tracking-[.16em] text-fg-subtle">{({"/today":"Research", "/market":"Market intelligence", "/journal":"Your trading desk", "/billing":"Account"} as Record<string,string>)[href]}</p>}<Link
             href={href}
             aria-current={active ? "page" : undefined}
             data-tour={tour}
             className={`flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm ${
-              active ? "bg-ink-700 font-medium text-slate-100" : "text-slate-400 hover:bg-ink-800 hover:text-slate-200"
+              active ? "bg-emerald-500/10 font-medium text-emerald-400 shadow-[inset_2px_0_0_rgb(var(--emerald-400))]" : "text-slate-400 hover:bg-ink-800 hover:text-slate-200"
             }`}
           >
             <Icon className="h-4 w-4" aria-hidden />
@@ -125,7 +124,7 @@ function NavLinks({ pathname, credits }: { pathname: string; credits: number | n
                 {credits} {credits === 1 ? "credit" : "credits"}
               </span>
             )}
-          </Link>
+          </Link></div>
         );
       })}
     </>
