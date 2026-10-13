@@ -4,6 +4,7 @@ import { sql, formatDate } from "@/lib/db";
 import { currentUser, currentWorkspaceId } from "@/lib/workspace";
 import { getBillingState } from "@/lib/billing";
 import { isSuperAdmin } from "@/lib/admin";
+import { canReadSignals } from "@/lib/today";
 import EmptyState from "@/components/guide/EmptyState";
 import { ACTION_STYLE, SIGNAL_ACTIONS, formatPrice, type SignalAction } from "@/lib/signals";
 
@@ -52,7 +53,7 @@ export default async function SignalsPage() {
   const [billing, admin] = await Promise.all([getBillingState(user.id, ws), isSuperAdmin(user.id)]);
 
   // Paying members (and admins) only — not trial accounts.
-  if (!billing.accessGranted && !admin) {
+  if (!canReadSignals(billing.accessGranted, admin)) {
     return (
       <div>
         <h1 className="mb-1 flex items-center gap-2 text-2xl font-bold text-slate-100">

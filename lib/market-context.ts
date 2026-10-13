@@ -171,11 +171,20 @@ export function readDivergence(spy: MarketContext["spy"], b: Breadth | null): st
 }
 
 let memo: { at: number; value: MarketContext } | null = null;
+let inFlight: Promise<MarketContext> | null = null;
 const MEMO_MS = 10 * 60 * 1000;
 
 export async function getMarketContext(): Promise<MarketContext> {
   if (memo && Date.now() - memo.at < MEMO_MS) return memo.value;
+  // Today and Market share one fetch batch per process, even when several
+  // users open an uncached overview at once. Never cache tenant data here.
+  if (inFlight) return inFlight;
+  inFlight = loadMarketContext();
+  try { return await inFlight; }
+  finally { inFlight = null; }
+}
 
+async function loadMarketContext(): Promise<MarketContext> {
   const missing: string[] = [];
   const [spyData, ...sectorData] = await mapLimit(["SPY", ...SECTORS.map((s) => s.symbol)], 6, (t) =>
     fetchDailyCloses(t, "1y")

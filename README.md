@@ -66,6 +66,81 @@ the full methodology of each.
 
 ## Insights: grades, thesis tracking, earnings, market context, setup bots, gamma
 
+- **Today (`/today`).** A signed-in daily overview of the latest research, weakening or broken
+  watchlist theses, earnings for followed companies, market context, the latest completed setup
+  scan and recent member signals. Each section loads independently, so an unavailable feed does
+  not hide the rest of the overview. Research and watchlist queries are scoped to the server-resolved
+  workspace. Signal previews use the same paid-access/admin gate as `/signals`; trial users do not
+  see the feed. Opening Today does not queue research, call the AI provider or charge credits.
+  Today and Market reuse cached market data and coalesce concurrent uncached loads within a process.
+  Market-wide caches never contain workspace data.
+- **Data timestamps.** Gamma distinguishes CBOE's source timestamp from the time Stock Studio
+  retrieved the chain. Missing or timezone-ambiguous source timestamps are explicitly unknown;
+  retrieval time is never presented as evidence of freshness. The delayed-feed label remains visible.
+  Daily market bars identify their session date and may be in progress during trading hours.
+  No paid data feed is required. The journal and saved LEAPS scenarios below require their
+  additive storage migration before the new app version is deployed.
+
+### Trading journal (`/journal`)
+
+- Record long/short stock lots and purchased standard 100-share calls or puts, with entry/exit
+  prices, dates, total fees, strategy, thesis, review and optional initial dollar risk.
+- Link an existing study from the same workspace. App queries scope every read and mutation;
+  a database trigger also rejects cross-workspace study links. RLS is enabled, while public
+  API roles retain no grants on these private tables.
+- Edit or close a full lot. Archive and restore entries instead of deleting them. An integer
+  revision prevents one edit from silently overwriting a concurrent edit or archive.
+- Review realized P&L after fees, wins/losses, results by strategy, cumulative realized P&L,
+  daily realized drawdown and average R for lots with entered initial risk. Profit factor
+  requires at least 30 closed lots and a loss. These are self-reported results, not broker
+  verification; open positions are not marked to market.
+- CSV imports use a downloadable template, preview, full validation and an atomic commit.
+  At most 500 rows / 1 MB per file. Map broker columns to the template first; this is not an
+  automatic parser for every broker's transaction export. Dates are `YYYY-MM-DD`, prices are
+  per share, fees cover the entire lot, and exits require both date and price. A zero exit
+  price records a worthless closed option.
+- Use a unique **broker-prefixed** `source_ref` for each lot. Repeat import keys are scoped
+  to a workspace. Without a reference, identical economic lot fields are treated as repeats;
+  distinct identical fills need distinct references. Archived imported lots retain their key.
+  CSV export protects spreadsheet cells from formula injection.
+- Partial exits must be split into separate lots, with fees allocated to each. Adjusted
+  contracts, spreads and short options are unsupported. Each active/archived view is bounded
+  to 10,000 entries and fails explicitly beyond that limit instead of reporting truncated totals.
+
+### LEAPS workspace (`/leaps`)
+
+- Load CBOE's delayed options chain on demand, or enter manual assumptions when the feed is
+  unavailable. The chain view includes supported roots with at least 365 days remaining,
+  expirations up to four years and strikes within 50% of the underlying. It displays the first
+  500 matches, sampling strikes nearest the underlying across expirations and option types
+  to preserve expiration coverage. Sampling is not a contract recommendation. Quotes carry source time when available and a
+  separate retrieval timestamp. Missing bid/ask/IV/volume/OI stays missing.
+- Compare expiration, quoted bid/ask spread, IV, volume and open interest. Copying a contract
+  is not an order or fill. IV percentages are converted from the feed's decimal IV; interest
+  rates, dividend yield and future volatility remain explicit user assumptions.
+- European Black-Scholes with continuous dividend yield computes price, delta, gamma,
+  theta per day and vega per IV percentage point. Scenario P&L uses the entered premium,
+  contract count, fees, remaining time, underlying move and exit IV. It also shows an
+  expiration-only breakeven, price scenarios, fixed-price time decay and hypothetical
+  180/365/730-day comparisons. At expiration, the model uses intrinsic payoff.
+- This approximation does **not** model American early exercise, discrete dividends, skew,
+  assignment, taxes or slippage. It is not a quote or forecast; model prices may differ
+  materially from premiums. See [OIC model limitations](https://www.optionseducation.org/advancedconcepts/black-scholes-formula)
+  and [LEAPS pricing](https://www.optionseducation.org/optionsoverview/leaps-pricing).
+- Save, load, archive and restore private assumption sets. Loading a saved set preserves its
+  original date and premium; it does not refresh market observations. The list shows the latest
+  100 saved sets in the selected view. Logging a real trade requires actual journal entry data.
+- Journal writes and saved-scenario writes require paid access or an active trial, with no
+  credit charge. Signed-in users can still read/export their journal after a trial ends and
+  use the manual model. Chain requests and calculations make no AI-provider calls.
+
+Before deploying journal/LEAPS routes, review and apply
+`supabase/migrations/20261013083434_trading_journal_and_leaps.sql` through your migration workflow.
+It creates only `stocks.journal_trades`, `stocks.leaps_plans`, their indexes, RLS and the study-scope
+trigger. It does not change old trades/signals/reports or grant public API access. Migration tests
+replay it against the existing baseline locally. Production rollout is separate from committing
+these application changes.
+
 These features are adapted from [QuantEdgeResearch](https://github.com/Maleek23/QuantEdgeResearch). Each one was
 narrowed to fit Stock Studio's educational, no-advice framing for research features. Trade execution and
 options-flow alerts were left out. Directional trade calls and Discord/SMS signal alerts are now a separate
