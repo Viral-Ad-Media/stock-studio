@@ -90,7 +90,9 @@ stop are optional and are shown as separate fields.
   broken signal (null when intact); the app shows the result on `/signals`.
 - Recording and queueing are **one transaction**. The bot drains at startup and every five
   seconds. Failed sends retry with bounded backoff; abandoned leases are reclaimed after
-  90 seconds. 📥 acknowledges durable acceptance, not delivery. Inspect `signal_outbox.last_error`
+  90 seconds. The oldest undelivered signal blocks newer signals to that destination,
+  including during retry backoff, so a CLOSE cannot overtake its BUY. Persistent delivery
+  errors stop that channel until fixed; other destinations remain independent. 📥 acknowledges durable acceptance, not delivery. Inspect `signal_outbox.last_error`
   and service logs if delivery is delayed. Replaying the original message also recovers a
   historical recorded-but-undelivered signal.
 - Delivery uses a stable Discord nonce to suppress recent duplicates. It is at least once:
