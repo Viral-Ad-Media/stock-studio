@@ -67,9 +67,12 @@ export default async function Dashboard() {
           <h1 className="text-2xl font-bold text-slate-100 mb-1">Dashboard</h1>
           <p className="text-sm text-fg-subtle">Fact-checked stock case studies, built by the research engine.</p>
         </div>
-        <Link href="/new" className="btn-primary text-sm px-4 py-2">
-          New study
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/today" className="btn-secondary text-sm px-4 py-2">Today&apos;s overview</Link>
+          <Link href="/new" className="btn-primary text-sm px-4 py-2">
+            New study
+          </Link>
+        </div>
       </div>
 
       <QueuePanel jobs={pendingJobs} />

@@ -66,6 +66,21 @@ the full methodology of each.
 
 ## Insights: grades, thesis tracking, earnings, market context, setup bots, gamma
 
+- **Today (`/today`).** A signed-in daily overview of the latest research, weakening or broken
+  watchlist theses, earnings for followed companies, market context, the latest completed setup
+  scan and recent member signals. Each section loads independently, so an unavailable feed does
+  not hide the rest of the overview. Research and watchlist queries are scoped to the server-resolved
+  workspace. Signal previews use the same paid-access/admin gate as `/signals`; trial users do not
+  see the feed. Opening Today does not queue research, call the AI provider or charge credits.
+  Today and Market reuse cached market data and coalesce concurrent uncached loads within a process.
+  Market-wide caches never contain workspace data.
+- **Data timestamps.** Gamma distinguishes CBOE's source timestamp from the time Stock Studio
+  retrieved the chain. Missing or timezone-ambiguous source timestamps are explicitly unknown;
+  retrieval time is never presented as evidence of freshness. The delayed-feed label remains visible.
+  Daily market bars identify their session date and may be in progress during trading hours.
+  This release adds no schema migrations or new paid data feeds. Personal journaling, CSV imports
+  and a LEAPS workspace are future work, not included features.
+
 These features are adapted from [QuantEdgeResearch](https://github.com/Maleek23/QuantEdgeResearch). Each one was
 narrowed to fit Stock Studio's educational, no-advice framing for research features. Trade execution and
 options-flow alerts were left out. Directional trade calls and Discord/SMS signal alerts are now a separate

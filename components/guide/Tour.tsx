@@ -11,6 +11,11 @@ export type TourStep = { target: string; title: string; body: string };
 
 export const TOUR_STEPS: TourStep[] = [
   {
+    target: "today",
+    title: "Start with Today",
+    body: "Your latest research, theses needing review, earnings, market context and the latest completed setup scan. Full-access members also see recent trader calls. Each section identifies the date its data describes.",
+  },
+  {
     target: "dashboard",
     title: "Your dashboard",
     body: "Every study you queue lands here with its build status, research grade and a one-line summary. Earnings dates for the companies you follow sit on top.",

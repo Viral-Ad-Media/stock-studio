@@ -10,6 +10,7 @@ import { getSupabase } from "@/lib/supabase/lazy";
 import { setRememberMe } from "@/lib/supabase/remember";
 
 const links = [
+  { href: "/today", label: "Today", icon: Globe2, tour: "today" },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, tour: "dashboard" },
   { href: "/new", label: "New study", icon: FilePlus2, tour: "new" },
   { href: "/watchlist", label: "Watchlist", icon: Eye, tour: "watchlist" },

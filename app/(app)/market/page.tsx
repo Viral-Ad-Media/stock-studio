@@ -105,7 +105,7 @@ async function ContextSections() {
 
   return (
     <div className="space-y-6">
-      {asOf && <p className="text-sm font-medium text-slate-300">As of the {asOf} close</p>}
+      {asOf && <p className="text-sm font-medium text-slate-300">Latest daily bar: {asOf} · May be in progress during the session</p>}
 
       {ctx.spy && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
