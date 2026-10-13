@@ -57,6 +57,18 @@ point to `/api/engine/run`, and the secret must equal `ENGINE_WEBHOOK_SECRET`.
 These repository changes do not execute migrations or change production history automatically.
 Reconstructed foundation definitions must be compared with the staging clone before rollout.
 
+## Trading journal and LEAPS storage
+
+`20261013083434_trading_journal_and_leaps.sql` is an additive forward migration for both new
+and existing complete Stock Studio schemas. Apply it in staging, verify the journal tests and
+role grants, then apply the same reviewed file before deploying the journal/LEAPS app routes.
+Do not reset a remote database or replay the archived fragments to install it.
+
+It adds private journal lots (including edit revisions, import keys and archive state) and
+private saved option scenarios. `stocks_app` can select/insert/update but cannot delete from
+either table; anon/authenticated have no direct table grants. A trigger rejects links to
+another workspace's case study. No existing records or provider credentials are modified.
+
 For old dead-lettered jobs or refunds lost before this fix, reconciliation requires actual
 Stripe/job records. The forward fix restores the refund-aware claim function and records future
 refund tombstones; it does not invent past refund events. Replay verified signed refund events

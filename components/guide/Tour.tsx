@@ -56,6 +56,16 @@ export const TOUR_STEPS: TourStep[] = [
     body: "Your trial, access and credit balance. Failed studies are refunded automatically.",
   },
   {
+    target: "journal",
+    title: "Review your trades",
+    body: "Record actual stock and purchased-options lots, link research, preview CSV imports and review realized results after fees. Archived entries can be restored.",
+  },
+  {
+    target: "leaps",
+    title: "Explore long-dated options",
+    body: "Compare delayed contract quotes or manual assumptions, model early exits under different prices and volatility, and save scenarios. No orders are placed.",
+  },
+  {
     target: "help",
     title: "Replay any time",
     body: "Open this tour again from the Help button whenever you need a refresher.",

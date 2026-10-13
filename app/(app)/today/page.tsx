@@ -46,6 +46,10 @@ export default async function TodayPage() {
         <Suspense fallback={<Loading title="Member signals" />}><SignalOverview userId={user.id} ws={ws} /></Suspense>
       </div>
       <p className="text-xs text-fg-subtle">This overview reads existing reports and scans; opening it does not queue research or spend report credits. Research and pattern scans are educational, not trade recommendations.</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Panel title="Review your trades" href="/journal"><p className="text-sm text-fg-subtle">Log actual entries and exits, connect your thesis, and review realized results after fees.</p></Panel>
+        <Panel title="Explore LEAPS scenarios" href="/leaps"><p className="text-sm text-fg-subtle">Compare time to expiration and hypothetical early exits with price and volatility assumptions.</p></Panel>
+      </div>
     </div>
   );
 }

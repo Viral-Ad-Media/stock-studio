@@ -13,6 +13,8 @@ export default function robots(): MetadataRoute.Robots {
           "/auth/",
           "/dashboard",
           "/today",
+          "/journal",
+          "/leaps",
           "/new",
           "/study/",
           "/watchlist",
