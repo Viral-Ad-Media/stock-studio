@@ -74,6 +74,13 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
         <StudyActions study={{ id: study.id, ticker: study.ticker, company: study.company, status: study.status, variant: study.variant, content_md: study.content_md }} />
       </div>
 
+      {study.status === "ready" && /^[A-Z][A-Z0-9.\-]{0,11}$/.test(study.ticker) && study.variant !== "movers_digest" && (
+        <div className="mb-5 flex flex-wrap gap-3 text-sm">
+          <Link href={`/journal?ticker=${encodeURIComponent(study.ticker)}&study=${study.id}`} className="text-emerald-400 underline underline-offset-2">Link this research to an actual trade</Link>
+          <Link href={`/leaps?ticker=${encodeURIComponent(study.ticker)}`} className="text-emerald-400 underline underline-offset-2">Explore options scenarios</Link>
+        </div>
+      )}
+
       {study.status === "queued" && (
         <div className="card p-6 text-sm text-slate-300" role="status">
           Queued. It usually starts within a minute or two, and this page updates on its own.

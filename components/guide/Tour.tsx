@@ -11,6 +11,11 @@ export type TourStep = { target: string; title: string; body: string };
 
 export const TOUR_STEPS: TourStep[] = [
   {
+    target: "today",
+    title: "Start with Today",
+    body: "Your latest research, theses needing review, earnings, market context and the latest completed setup scan. Full-access members also see recent trader calls. Each section identifies the date its data describes.",
+  },
+  {
     target: "dashboard",
     title: "Your dashboard",
     body: "Every study you queue lands here with its build status, research grade and a one-line summary. Earnings dates for the companies you follow sit on top.",
@@ -49,6 +54,16 @@ export const TOUR_STEPS: TourStep[] = [
     target: "billing",
     title: "Credits and billing",
     body: "Your trial, access and credit balance. Failed studies are refunded automatically.",
+  },
+  {
+    target: "journal",
+    title: "Review your trades",
+    body: "Record actual stock and purchased-options lots, link research, preview CSV imports and review realized results after fees. Archived entries can be restored.",
+  },
+  {
+    target: "leaps",
+    title: "Explore long-dated options",
+    body: "Compare delayed contract quotes or manual assumptions, model early exits under different prices and volatility, and save scenarios. No orders are placed.",
   },
   {
     target: "help",

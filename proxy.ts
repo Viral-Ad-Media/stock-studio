@@ -56,6 +56,11 @@ export async function proxy(req: NextRequest) {
 // than a denylist now that public routes outnumber protected ones.
 export const config = {
   matcher: [
+    "/today/:path*",
+    "/journal/:path*",
+    "/leaps/:path*",
+    "/api/journal/:path*",
+    "/api/leaps/:path*",
     "/dashboard/:path*",
     "/new/:path*",
     "/watchlist/:path*",

@@ -4,6 +4,8 @@
 // unverifiable assumption about who holds which side. The UI says so, and
 // nothing here produces a directional call.
 
+import { sourceTimestamp } from "./data-freshness";
+
 // Index options are served under a leading underscore.
 const CBOE_INDEX = new Set(["SPX", "NDX", "RUT", "VIX", "XSP", "DJX"]);
 export const GEX_PRESETS = ["SPY", "SPX", "QQQ", "IWM"];
@@ -64,6 +66,7 @@ export type GexSnapshot = {
   symbol: string;
   spot: number;
   fetchedAt: string;
+  sourceAt: string | null; // vendor timestamp, never synthesized from retrieval time
   contracts: number;
   expirations: number;
   totalGex: number; // $ per 1% move, calls minus puts
@@ -145,7 +148,7 @@ export function readGex(s: Pick<GexSnapshot, "symbol" | "spot" | "totalGex" | "z
   return parts.join(" ");
 }
 
-export function buildGexSnapshot(symbol: string, spot: number, contracts: GexContract[], expirations: number): GexSnapshot | null {
+export function buildGexSnapshot(symbol: string, spot: number, contracts: GexContract[], expirations: number, sourceAt: string | null = null): GexSnapshot | null {
   if (!(spot > 0) || contracts.length === 0) return null;
   const byStrike = new Map<number, GexStrike>();
   let callGex = 0;
@@ -180,6 +183,7 @@ export function buildGexSnapshot(symbol: string, spot: number, contracts: GexCon
   return {
     ...base,
     fetchedAt: new Date().toISOString(),
+    sourceAt,
     contracts: contracts.length,
     expirations,
     callGex,
@@ -191,7 +195,7 @@ export function buildGexSnapshot(symbol: string, spot: number, contracts: GexCon
 
 // Parses CBOE's delayed-quotes payload. CBOE has moved the quote fields
 // between data.quote and data itself; accept both.
-export function parseCboeChain(symbol: string, body: unknown, now = Date.now()): { spot: number; contracts: GexContract[]; expirations: number } | null {
+export function parseCboeChain(symbol: string, body: unknown, now = Date.now()): { spot: number; contracts: GexContract[]; expirations: number; sourceAt: string | null } | null {
   const data = (body as { data?: Record<string, any> })?.data;
   if (!data) return null;
   const quote = data.quote ?? data;
@@ -212,7 +216,9 @@ export function parseCboeChain(symbol: string, body: unknown, now = Date.now()):
     exps.add(occ.expiration);
     contracts.push({ type: occ.type, strike: occ.strike, years, iv: Number(o.iv) || 0, oi, gamma: Number(o.gamma) || 0 });
   }
-  return { spot, contracts, expirations: exps.size };
+  const timestamp = (body as { timestamp?: unknown })?.timestamp;
+  return { spot, contracts, expirations: exps.size,
+    sourceAt: sourceTimestamp(timestamp) ?? sourceTimestamp(data.timestamp) ?? sourceTimestamp(quote.timestamp) };
 }
 
 export function cboeSymbol(symbol: string): string {
@@ -240,7 +246,7 @@ export async function getGexSnapshot(symbol: string): Promise<GexSnapshot | null
     // 403/404: no listed options for this symbol.
     if (!res.ok) throw new Error(`CBOE returned ${res.status}`);
     const parsed = parseCboeChain(display, await res.json());
-    value = parsed ? buildGexSnapshot(display, parsed.spot, parsed.contracts, parsed.expirations) : null;
+    value = parsed ? buildGexSnapshot(display, parsed.spot, parsed.contracts, parsed.expirations, parsed.sourceAt) : null;
   }
   memo.set(display, { at: Date.now(), value });
   if (memo.size > 200) memo.delete(memo.keys().next().value!);
