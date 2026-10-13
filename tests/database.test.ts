@@ -30,6 +30,12 @@ test("fresh migration replay, refunds, dead letters, immutable chain, durable de
     assert.equal((await db.query<{status:string}>("SELECT status FROM stocks.payments WHERE stripe_session_id=$1",[`cs_${ref}`])).rows[0].status,'refunded');
    }
   }
+  // Refunding one of several access payments must keep the remaining grant.
+  for (const ref of ['a','b']) await db.query("SELECT stocks.fulfill_checkout($1,$2,$3,$4,'access',100,0)",[`access_${ref}`,`access_pi_${ref}`,ws,user]);
+  await db.exec("SELECT stocks.refund_payment('access_pi_a')");
+  assert.equal((await db.query<{access_granted:boolean}>("SELECT access_granted FROM stocks.profiles")).rows[0].access_granted,true);
+  await db.exec("SELECT stocks.refund_payment('access_pi_b')");
+  assert.equal((await db.query<{access_granted:boolean}>("SELECT access_granted FROM stocks.profiles")).rows[0].access_granted,false);
   await db.query("INSERT INTO stocks.case_studies(workspace_id,ticker,variant) VALUES($1,'TEST','one_candle')",[ws]);
   await db.query(`INSERT INTO stocks.jobs(workspace_id,type,payload,status,attempts,locked_at) VALUES($1,'build_case_study','{"case_study_id":1}','running',3,now()-interval '20 minutes')`,[ws]);
   await db.exec(`SELECT stocks.charge_job_credits(1,2); SELECT stocks.claim_job(); SELECT stocks.claim_job();`);
@@ -73,4 +79,28 @@ test("baseline refuses a partial existing schema without rebuilding it", async (
   await assert.rejects(db.exec(await readFile("supabase/migrations/20261004152454_stock_studio_baseline.sql", "utf8")), /Partial stocks schema/);
   assert.equal((await db.query<{id:number}>("SELECT id FROM stocks.keep_me")).rows[0].id, 42);
  } finally { await db.close(); }
+});
+
+test("a retrying BUY blocks its CLOSE until the BUY is acknowledged", async () => {
+ const db = new PGlite();
+ try {
+  await db.exec(`CREATE SCHEMA auth; CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
+   CREATE TABLE auth.users(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),email text,raw_user_meta_data jsonb,raw_app_meta_data jsonb,created_at timestamptz DEFAULT now(),last_sign_in_at timestamptz);
+   CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT null::uuid $$;`);
+  for (const name of (await readdir("supabase/migrations")).filter(n=>n.endsWith(".sql")).sort()) await db.exec(await readFile(`supabase/migrations/${name}`,"utf8"));
+  for (const [action, source] of [['BUY','12345000'],['CLOSE','12345001']]) {
+   await db.query("SELECT stocks.record_signal($1::jsonb,'123456','tester',$2,'654321')",[JSON.stringify({action,ticker:'TEST',detail:''}),source]);
+  }
+  const first=(await db.query<any>("SELECT * FROM stocks.claim_signal_delivery('654321')")).rows[0];
+  assert.equal(first.signal.action,'BUY');
+  assert.equal((await db.query("SELECT * FROM stocks.claim_signal_delivery('654321')")).rows.length,0);
+  await db.query("SELECT stocks.retry_signal_delivery($1,$2,'send failed')",[first.signal.id,first.lease_token]);
+  assert.equal((await db.query("SELECT * FROM stocks.claim_signal_delivery('654321')")).rows.length,0);
+  await db.exec("UPDATE stocks.signal_outbox SET next_attempt_at=now()-interval '1 minute'");
+  const retry=(await db.query<any>("SELECT * FROM stocks.claim_signal_delivery('654321')")).rows[0];
+  assert.equal(retry.signal.id,first.signal.id);
+  await db.query("SELECT stocks.finish_signal_delivery($1,$2,'message-1')",[retry.signal.id,retry.lease_token]);
+  const next=(await db.query<any>("SELECT * FROM stocks.claim_signal_delivery('654321')")).rows[0];
+  assert.equal(next.signal.action,'CLOSE');
+ } finally {await db.close();}
 });
