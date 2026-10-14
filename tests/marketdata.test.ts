@@ -52,3 +52,48 @@ test('slow requests and retries respect the invocation deadline',async(t)=>{
   assert.equal(scheduled,8);
  } finally {clearInterval(keepAlive);}
 });
+test('alpaca fallback serves charts and movers when Yahoo rate-limits', async(t)=>{
+ const {resetYahooCooldown}=await import('../lib/marketdata');
+ const {fetchMovers,fetchDailyBars}=await import('../lib/marketdata');
+ const iso=(u:number)=>new Date(u*1000).toISOString();
+ const urls:string[]=[];
+ const respond=(url:string)=>{
+  urls.push(url);
+  if (url.includes('yahoo.com')) return new Response('',{status:429});
+  if (url.includes('/screener/stocks/movers')) return Response.json({gainers:[{symbol:'ABC',price:5,percent_change:12.345}],losers:[]});
+  const u=new URL(url);
+  if (u.searchParams.get('timeframe')==='1Day') {
+   const adj=u.searchParams.get('adjustment')==='all';
+   return Response.json({bars:[{t:'2026-09-23T04:00:00Z',o:1,h:2,l:1,c:2,v:9},{t:'2026-09-24T04:00:00Z',o:2,h:3,l:2,c:adj?2.5:3,v:9}],next_page_token:null});
+  }
+  // 9:25 premarket bar (dropped), then the five opening bars, split across two pages.
+  const all=[-5,0,1,2,3,4].map(i=>({t:iso(start+i*60),o:10,h:12,l:9,c:11,v:100}));
+  return u.searchParams.get('page_token') ? Response.json({bars:all.slice(3)}) : Response.json({bars:all.slice(0,3),next_page_token:'p2'});
+ };
+ process.env.ALPACA_KEY_ID='k'; process.env.ALPACA_SECRET_KEY='s';
+ try {
+  resetYahooCooldown();
+  t.mock.method(globalThis,'fetch',async(url:string)=>respond(String(url)));
+  const data=await fetchOpeningCandle('BRK-B',date);
+  assert.equal(data.first_five_minute_candle.volume,500);
+  assert.ok(urls.some(u=>u.includes('/v2/stocks/BRK.B/bars')));
+  // Yahoo is now cooling down: the next request goes straight to Alpaca.
+  urls.length=0;
+  const daily=await fetchDailyBars('SPY','1y',0);
+  assert.deepEqual(daily.closes,[2,3]);
+  assert.deepEqual(daily.adjCloses,[2,2.5]);
+  assert.ok(!urls.some(u=>u.includes('yahoo.com')));
+  const movers=await fetchMovers(5);
+  assert.equal(movers.gainers[0].change_pct,12.35);
+  assert.match(movers.note,/Alpaca/);
+ } finally {
+  delete process.env.ALPACA_KEY_ID; delete process.env.ALPACA_SECRET_KEY; resetYahooCooldown();
+ }
+});
+test('without Alpaca keys a Yahoo 429 still surfaces as before', async(t)=>{
+ const {resetYahooCooldown}=await import('../lib/marketdata');
+ resetYahooCooldown();
+ t.mock.method(globalThis,'fetch',async()=>new Response('',{status:429}));
+ await assert.rejects(fetchHistory('TEST','5m','5d'),/Yahoo chart API returned 429/);
+ resetYahooCooldown();
+});
