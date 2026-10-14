@@ -1,10 +1,24 @@
 // Pure market-data fetchers, shared by the CLI scripts (npm run
 // candles/history/movers — kept for manual debugging) and the automated
-// worker (lib/engine/worker.ts). All Yahoo Finance public endpoints, no API
-// key. Functions throw on failure rather than process.exit, so callers
-// (CLI or worker) decide how to handle it.
+// worker (lib/engine/worker.ts). Yahoo Finance public endpoints first (no API
+// key); when Yahoo rate-limits us and Alpaca keys are set, the same request is
+// served from Alpaca instead (lib/alpaca.ts). Functions throw on failure
+// rather than process.exit, so callers (CLI or worker) decide how to handle it.
 
+import { alpacaChart, alpacaConfigured, alpacaMovers, type ChartQuery } from "./alpaca";
 import { assertTimeLeft, deadlineSignal, waitWithinBudget } from "./deadline";
+
+// Yahoo refused the request (429 or 5xx after retries), as opposed to a bad
+// ticker or malformed response. Only these fall back to Alpaca.
+export class YahooUnavailable extends Error {}
+
+// After Yahoo refuses once, skip it for a while when a fallback exists, so a
+// scan over many tickers doesn't spend its time budget on doomed retries.
+const YAHOO_COOLDOWN_MS = 10 * 60_000;
+let yahooCooldownUntil = 0;
+export function resetYahooCooldown() {
+  yahooCooldownUntil = 0;
+}
 
 export type Candle = { t: string; o: number; h: number; l: number; c: number; v: number };
 
@@ -14,7 +28,10 @@ async function yahooFetch(url: string, label: string, revalidateSec?: number, de
   // Bounded: the worker has a fixed per-invocation time budget.
   const get = (u: string) =>
     fetch(u, {
-      headers: { "User-Agent": "Mozilla/5.0 (stock-studio market data fetcher)" },
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+        Accept: "application/json,text/plain,*/*",
+      },
       signal: deadlineSignal(deadline, 15_000),
       ...(revalidateSec ? { cache: "force-cache" as const, next: { revalidate: revalidateSec } } : {}),
     });
@@ -26,28 +43,51 @@ async function yahooFetch(url: string, label: string, revalidateSec?: number, de
     const alt = /\/\/query1\./.test(url) ? url.replace("//query1.", "//query2.") : url.replace("//query2.", "//query1.");
     res = await get(attempt % 2 === 1 ? alt : url);
   }
+  if (res.status === 429 || res.status >= 500) {
+    yahooCooldownUntil = Date.now() + YAHOO_COOLDOWN_MS;
+    throw new YahooUnavailable(`Yahoo ${label} API returned ${res.status}`);
+  }
   if (!res.ok) throw new Error(`Yahoo ${label} API returned ${res.status}`);
   const body: any = await res.json();
   return body;
 }
 
+function useFallback(err: unknown): boolean {
+  return err instanceof YahooUnavailable && alpacaConfigured();
+}
+
+async function chartBody(ticker: string, q: ChartQuery, revalidateSec?: number, deadline?: number) {
+  const params = new URLSearchParams({ interval: q.interval, includePrePost: "false" });
+  if (q.period1 != null) {
+    params.set("period1", String(q.period1));
+    params.set("period2", String(q.period2));
+  } else {
+    params.set("range", q.range ?? "1d");
+  }
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?${params}`;
+  if (alpacaConfigured() && Date.now() < yahooCooldownUntil) return alpacaChart(ticker, q, revalidateSec, deadline);
+  try {
+    return await yahooFetch(url, "chart", revalidateSec, deadline);
+  } catch (err) {
+    if (!useFallback(err)) throw err;
+    return alpacaChart(ticker, q, revalidateSec, deadline);
+  }
+}
+
 // The one-candle strategy's fixed "first 5 minutes of the regular session"
 // rule — see lib/engine/methodology.md's One-candle section.
 export async function fetchOpeningCandle(ticker: string, date?: string, deadline?: number) {
-  let url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
-    ticker
-  )}?interval=1m&includePrePost=false`;
+  const query: ChartQuery = { interval: "1m", range: "1d" };
   if (date) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) {
       throw new Error(`Invalid session date "${date}" — expected YYYY-MM-DD`);
     }
     const start = Math.floor(new Date(`${date}T00:00:00-05:00`).getTime() / 1000);
-    url += `&period1=${start}&period2=${start + 86400}`;
-  } else {
-    url += `&range=1d`;
+    query.period1 = start;
+    query.period2 = start + 86400;
   }
 
-  const body = await yahooFetch(url, "chart", undefined, deadline);
+  const body = await chartBody(ticker, query, undefined, deadline);
   const result = body?.chart?.result?.[0];
   if (!result || body?.chart?.error) {
     throw new Error(`No chart data for ${ticker}: ${JSON.stringify(body?.chart?.error ?? "empty result")}`);
@@ -128,11 +168,7 @@ export async function fetchOpeningCandle(ticker: string, date?: string, deadline
 // like the Da Vinci liquidity model, where a single opening range isn't
 // enough. See lib/engine/methodology.md's Da Vinci section.
 export async function fetchHistory(ticker: string, interval = "5m", range = "5d", deadline?: number) {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
-    ticker
-  )}?interval=${encodeURIComponent(interval)}&range=${encodeURIComponent(range)}&includePrePost=false`;
-
-  const body = await yahooFetch(url, "chart", undefined, deadline);
+  const body = await chartBody(ticker, { interval, range }, undefined, deadline);
   const result = body?.chart?.result?.[0];
   if (!result || body?.chart?.error) {
     throw new Error(`No chart data for ${ticker}: ${JSON.stringify(body?.chart?.error ?? "empty result")}`);
@@ -208,16 +244,26 @@ async function screener(scrId: string, count: number, revalidateSec?: number, de
 }
 
 export async function fetchMovers(count = 5, revalidateSec?: number, deadline?: number) {
-  const [gainers, losers] = await Promise.all([
-    screener("day_gainers", count, revalidateSec, deadline),
-    screener("day_losers", count, revalidateSec, deadline),
-  ]);
+  let gainers: Mover[];
+  let losers: Mover[];
+  let source = "Yahoo Finance predefined screeners";
+  try {
+    if (alpacaConfigured() && Date.now() < yahooCooldownUntil) throw new YahooUnavailable("Yahoo cooling down");
+    [gainers, losers] = await Promise.all([
+      screener("day_gainers", count, revalidateSec, deadline),
+      screener("day_losers", count, revalidateSec, deadline),
+    ]);
+  } catch (err) {
+    if (!useFallback(err)) throw err;
+    ({ gainers, losers } = await alpacaMovers(count, revalidateSec, deadline));
+    source = "Alpaca market movers (IEX feed)";
+  }
   if (gainers.length === 0 && losers.length === 0) {
     throw new Error("Yahoo screeners returned no quotes — try again later or fall back to web research.");
   }
   return {
     as_of: new Date().toISOString(),
-    note: "Yahoo Finance predefined screeners (US equities). Percent moves are for the current/most recent regular session.",
+    note: `${source} (US equities). Percent moves are for the current/most recent regular session.`,
     gainers,
     losers,
   };
@@ -239,10 +285,7 @@ export type DailyBars = {
 };
 
 export async function fetchDailyBars(ticker: string, range = "1y", revalidateSec = 1800, deadline?: number): Promise<DailyBars> {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
-    ticker
-  )}?interval=1d&range=${encodeURIComponent(range)}&includePrePost=false`;
-  const body = await yahooFetch(url, "chart", revalidateSec, deadline);
+  const body = await chartBody(ticker, { interval: "1d", range }, revalidateSec, deadline);
   const result = body?.chart?.result?.[0];
   if (!result || body?.chart?.error) throw new Error(`No chart data for ${ticker}`);
   const ts: number[] = result.timestamp ?? [];
