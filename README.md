@@ -1,5 +1,24 @@
 # Stock Studio
 
+Public home and pricing pages use a lazy-loaded Three.js / React Three Fiber / Drei
+decorative scene. It runs on desktop only when visible, respects reduced-motion
+preferences, and offers a pause control. Product screenshots reveal as they enter
+the viewport where scroll-driven CSS is supported. WebGL failure keeps the static
+page usable. These visuals are abstract and never represent live market data.
+
+The product tour and first-run onboarding share a layered research → thesis →
+journal preview. The optional LEAPS 3D explorer reuses the deterministic pricing
+model for price/time/IV comparisons while keeping exact values accessible in the
+numeric readout and existing SVG charts. Its sliders are local illustrations and
+do not save scenarios. Motion visibility, pause controls, WebGL fallbacks, canvas
+defaults, page headers and range inputs live in reusable components under
+`components/motion` and `components/ui`.
+
+The navy/teal theme uses shared CSS tokens in both dark and light mode. Explicit
+root and marketing-shell backgrounds prevent default canvas/background colors
+from showing through. Text, accents, input borders and primary-button contrast
+were checked against both palettes.
+
 Fact-checked, source-cited stock case studies as a multi-tenant SaaS. A user queues a ticker, a
 research engine builds the report, and the finished study appears in the app.
 

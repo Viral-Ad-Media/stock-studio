@@ -4,6 +4,7 @@ import { Check, ArrowRight } from "lucide-react";
 import { creditCost } from "@/lib/shared";
 import { SITE, absoluteUrl } from "@/lib/site";
 import Breadcrumbs from "@/components/marketing/Breadcrumbs";
+import MarketMotion from "@/components/marketing/MarketMotion";
 import JsonLd, { ORGANIZATION_ID } from "@/components/seo/JsonLd";
 
 export const metadata: Metadata = {
@@ -54,11 +55,14 @@ export default function PricingPage() {
       <JsonLd data={ld} />
       <Breadcrumbs items={[{ name: "Home", path: "/" }, { name: "Pricing", path: "/pricing" }]} />
 
-      <div className="mb-14 text-center">
+      <div className="relative isolate mb-14 overflow-hidden rounded-2xl border border-ink-700 px-6 py-14 text-center">
+        <MarketMotion />
+        <div className="relative pointer-events-none">
         <h1 className="text-3xl font-bold tracking-tight text-slate-100 md:text-5xl">Simple, usage-based pricing</h1>
         <p className="mx-auto mt-4 max-w-xl text-slate-300">
           Try the research tools free for {SITE.trialDays} days. Unlock once, then pay only for the studies you actually queue.
         </p>
+        </div>
       </div>
 
       <div className="mb-16 grid grid-cols-1 gap-6 md:grid-cols-2">

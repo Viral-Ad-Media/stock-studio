@@ -35,7 +35,7 @@ const FOOTER = [
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="marketing-shell flex min-h-screen flex-col bg-ink-950">
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-emerald-500 focus:px-4 focus:py-2 focus:text-ink-950"
@@ -67,7 +67,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
         </div>
       </header>
 
-      <main id="main" className="flex-1">
+      <main id="main" className="flex-1 bg-ink-950">
         {children}
       </main>
 
