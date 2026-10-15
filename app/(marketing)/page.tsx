@@ -25,7 +25,7 @@ import { SITE, absoluteUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: {
-    absolute: "Stock Studio: fact-checked, source-cited stock case studies",
+    absolute: "Stock Studio: research-led LEAPS planning & decision review",
   },
   description: SITE.description,
   alternates: { canonical: "/" },
@@ -296,12 +296,12 @@ export default function LandingPage() {
               sourced, every study dated
             </p>
             <h1 className="text-4xl font-bold tracking-tight text-slate-100 sm:text-5xl lg:text-[3.4rem] lg:leading-[1.05]">
-              Stock research that shows its work.
+              Research the company. Plan the trade. Review the decision.
             </h1>
             <p className="mt-5 max-w-xl text-lg text-slate-300">
-              Queue a ticker. Get a fact-checked, source-cited case study on
-              growth, profitability, valuation and moat, verified against
-              filings and earnings releases instead of generated from memory.
+              Build a source-cited company thesis, track what changes, compare
+              long-dated options scenarios, then record your actual fills and
+              review the decision. Research-led LEAPS planning in one workspace.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -312,10 +312,10 @@ export default function LandingPage() {
                 <ArrowRight className="h-4 w-4" aria-hidden />
               </Link>
               <Link
-                href="#features"
-                className="btn-secondary w-full whitespace-nowrap px-6 py-3 sm:w-auto"
+                href="/examples"
+                className="btn-secondary w-full px-5 py-3 text-center sm:w-auto"
               >
-                See what it does
+                Explore a real research example
               </Link>
             </div>
             <p className="mt-4 text-sm text-fg-subtle">
@@ -422,6 +422,27 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section
+        className="mx-auto max-w-6xl px-6 py-12"
+        aria-labelledby="evidence-heading"
+      >
+        <div className="card flex flex-wrap items-center justify-between gap-6 p-6 sm:p-8">
+          <div className="max-w-2xl">
+            <p className="desk-eyebrow">From illustration to evidence</p>
+            <h2 id="evidence-heading" className="text-2xl font-semibold">
+              Check a source. Try the decision workflow.
+            </h2>
+            <p className="mt-3 text-sm text-fg-subtle">
+              Inspect a dated Apple earnings excerpt with primary-source links,
+              then explore a hypothetical research-to-review demonstration. No
+              account required.
+            </p>
+          </div>
+          <Link href="/examples" className="btn-primary px-5 py-3">
+            View example &amp; interactive demo
+          </Link>
+        </div>
+      </section>
       {/* How it works — follows the selected theme */}
       <section
         id="how-it-works"

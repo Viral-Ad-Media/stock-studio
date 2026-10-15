@@ -1,6 +1,9 @@
 "use client";
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import ResearchContextCard from "@/components/leaps/ResearchContextCard";
+import { EMPTY_CONTEXT, type ResearchContext } from "@/lib/research-workflow";
+import DecisionAnalysis from "./DecisionAnalysis";
 import { useRouter } from "next/navigation";
 import { journalStats, realizedPnl, type JournalTrade } from "@/lib/journal";
 import JournalCharts from "@/components/charts/JournalCharts";
@@ -59,6 +62,9 @@ export default function JournalClient({
   archived,
   initialTicker,
   initialStudy,
+  initialDraft = {},
+  context = EMPTY_CONTEXT,
+  draftError = "",
 }: {
   rows: JournalTrade[];
   studies: { id: number; ticker: string; variant: string }[];
@@ -66,17 +72,24 @@ export default function JournalClient({
   archived: boolean;
   initialTicker: string;
   initialStudy: string;
+  initialDraft?: Partial<Form>;
+  context?: ResearchContext;
+  draftError?: string;
 }) {
   const router = useRouter();
   const [form, setForm] = useState<Form>({
     ...BLANK,
     opened_on: today,
+    ...initialDraft,
     ticker: /^[A-Za-z][A-Za-z0-9.\-]{0,11}$/.test(initialTicker)
       ? initialTicker.toUpperCase()
       : "",
-    case_study_id: studies.some((s) => String(s.id) === initialStudy)
-      ? initialStudy
-      : "",
+    case_study_id:
+      initialDraft.case_study_id ||
+      (studies.some((s) => String(s.id) === initialStudy) ? initialStudy : ""),
+    entry_price: "",
+    exit_price: "",
+    closed_on: "",
   });
   const [editing, setEditing] = useState<JournalTrade | null>(null),
     [busy, setBusy] = useState(false),
@@ -100,6 +113,7 @@ export default function JournalClient({
     setForm((f) => ({
       ...f,
       [key]: value,
+      ...(key === "ticker" ? { case_study_id: "" } : {}),
       ...(key === "asset" ? { side: "long", strike: "", expiration: "" } : {}),
     }));
   }
@@ -314,10 +328,31 @@ export default function JournalClient({
         )}
       </section>
       {!archived && (
+        <DecisionAnalysis
+          rows={rows}
+          studies={studies}
+          today={today}
+          onReview={edit}
+        />
+      )}
+      {draftError && (
+        <p role="alert" className="card p-4 text-sm text-amber-300">
+          {draftError}
+        </p>
+      )}
+      {!editing && form.ticker === initialTicker && (
+        <ResearchContextCard context={context} />
+      )}
+      {!archived && (
         <section id="journal-form" className="card scroll-mt-6 p-5">
           <h2 className="mb-4 text-lg font-semibold">
             {editing ? "Edit / close this lot" : "Log a trade"}
           </h2>
+          <p className="mb-4 text-sm text-fg-subtle">
+            Contract details and research may be carried from a scenario. Enter
+            your actual executed entry price, date, quantity and fees. Delayed
+            quotes and model prices are never saved as fills automatically.
+          </p>
           <form
             onSubmit={save}
             className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
@@ -559,7 +594,7 @@ export default function JournalClient({
         ) : (
           <ul className="divide-y divide-ink-700">
             {visible.map((r) => (
-              <li key={r.id} className="py-4">
+              <li key={r.id} id={`trade-${r.id}`} className="scroll-mt-6 py-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-mono font-semibold text-slate-100">

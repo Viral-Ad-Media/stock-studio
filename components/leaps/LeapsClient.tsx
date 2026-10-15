@@ -13,6 +13,18 @@ import LeapsCharts from "@/components/charts/LeapsCharts";
 import SensitivityExplorer from "./SensitivityExplorer";
 import PageHeader from "@/components/ui/PageHeader";
 import DataStamp from "@/components/insights/DataStamp";
+import {
+  EMPTY_CONTEXT,
+  scenarioJournalHref,
+  type ResearchContext,
+} from "@/lib/research-workflow";
+import ResearchContextCard from "./ResearchContextCard";
+import {
+  DEFAULT_FILTERS,
+  FILTER_LABELS,
+  filterContracts,
+  type DiscoveryFilters,
+} from "@/lib/leaps-discovery";
 import { apiError } from "@/lib/shared";
 const money = (v: number) =>
   new Intl.NumberFormat("en-US", {
@@ -20,7 +32,12 @@ const money = (v: number) =>
     currency: "USD",
     maximumFractionDigits: 2,
   }).format(v);
-type Plan = { id: string; name: string; ticker: string; inputs: LeapsInput };
+type Plan = {
+  id: string;
+  name: string;
+  ticker: string;
+  inputs: LeapsInput & { context?: ResearchContext };
+};
 const LABELS: Record<keyof LeapsInput, string> = {
   ticker: "Ticker",
   type: "Option type",
@@ -44,12 +61,16 @@ export default function LeapsClient({
   plans,
   savedUnavailable,
   archived,
+  initialContext = EMPTY_CONTEXT,
+  contextError = "",
 }: {
   today: string;
   initialTicker: string;
   plans: Plan[];
   savedUnavailable: boolean;
   archived: boolean;
+  initialContext?: ResearchContext;
+  contextError?: string;
 }) {
   const router = useRouter();
   const expiration = new Date(Date.parse(today) + 730 * 86400000)
@@ -68,6 +89,9 @@ export default function LeapsClient({
         }).map(([k, v]) => [k, String(v)]),
       ) as Record<keyof LeapsInput, string>,
   );
+  const [context, setContext] = useState(initialContext);
+  const [loadedPlanId, setLoadedPlanId] = useState<string | undefined>();
+  const [filters, setFilters] = useState<DiscoveryFilters>(DEFAULT_FILTERS);
   const [chain, setChain] = useState<LeapsChain | null>(null),
     [chainTicker, setChainTicker] = useState(initialTicker),
     [expiry, setExpiry] = useState("");
@@ -89,6 +113,10 @@ export default function LeapsClient({
   }, [form]);
   function update(key: keyof LeapsInput, v: string) {
     setForm((f) => ({ ...f, [key]: v }));
+    setLoadedPlanId(undefined);
+    if (key === "ticker") setContext(EMPTY_CONTEXT);
+    else if (["type", "strike", "expiration"].includes(key))
+      setContext((c) => ({ ...c, contractSymbol: "" }));
   }
   async function loadChain(e: React.FormEvent) {
     e.preventDefault();
@@ -102,7 +130,7 @@ export default function LeapsClient({
       if (!res.ok) throw new Error(await apiError(res, "Options unavailable"));
       const { chain: c } = await res.json();
       setChain(c);
-      setExpiry(c?.options[0]?.expiration ?? "");
+      setExpiry("");
       if (!c || !c.options.length)
         setNotice(
           "No supported long-dated contracts returned. Continue with manual assumptions below.",
@@ -116,6 +144,11 @@ export default function LeapsClient({
   }
   function useOption(o: ChainOption) {
     if (!chain) return;
+    setLoadedPlanId(undefined);
+    setContext((c) => ({
+      ...(form.ticker === chain.symbol ? c : EMPTY_CONTEXT),
+      contractSymbol: o.symbol,
+    }));
     setForm((f) => ({
       ...f,
       ticker: chain.symbol,
@@ -124,9 +157,10 @@ export default function LeapsClient({
       strike: String(o.strike),
       expiration: o.expiration,
       as_of: today,
-      premium: o.ask != null && o.ask > 0 ? String(o.ask) : f.premium,
-      iv: o.iv != null ? String(o.iv) : f.iv,
-      scenario_iv: o.iv != null ? String(o.iv) : f.scenario_iv,
+      premium: o.ask != null && o.ask > 0 ? String(o.ask) : "",
+      contracts: filters.contracts,
+      iv: o.iv != null ? String(o.iv) : "",
+      scenario_iv: o.iv != null ? String(o.iv) : "",
       exit_days: String(Math.min(Number(f.exit_days) || 30, o.days)),
     }));
     setNotice(
@@ -142,10 +176,12 @@ export default function LeapsClient({
       const res = await fetch("/api/leaps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, inputs: computed.input }),
+        body: JSON.stringify({ name, inputs: computed.input, context }),
       });
       if (!res.ok)
         throw new Error(await apiError(res, "Couldn't save scenario"));
+      const saved = await res.json();
+      setLoadedPlanId(saved.id);
       setNotice(
         "Scenario saved. This does not record a trade or place an order.",
       );
@@ -180,10 +216,13 @@ export default function LeapsClient({
     }
   }
   const result = computed.result;
-  const options =
+  const discovery = filterContracts(
     chain?.options.filter(
-      (o) => o.expiration === expiry && o.type === form.type,
-    ) ?? [];
+      (o) => (!expiry || o.expiration === expiry) && o.type === form.type,
+    ) ?? [],
+    filters,
+  );
+  const options = discovery.rows;
   return (
     <div className="space-y-6">
       <PageHeader
@@ -191,6 +230,12 @@ export default function LeapsClient({
         title="LEAPS workspace"
         description="Explore long-dated purchased calls and puts, then compare a shorter holding period with the time remaining on the contract. Educational scenarios, not recommended contracts or trade calls."
       />
+      {contextError && (
+        <p role="alert" className="card p-4 text-sm text-amber-300">
+          {contextError}
+        </p>
+      )}
+      <ResearchContextCard context={context} />
       {error && (
         <p
           role="alert"
@@ -253,6 +298,7 @@ export default function LeapsClient({
                     value={expiry}
                     onChange={(e) => setExpiry(e.target.value)}
                   >
+                    <option value="">All supported expirations</option>
                     {[...new Set(chain.options.map((o) => o.expiration))].map(
                       (d) => (
                         <option key={d}>{d}</option>
@@ -260,6 +306,50 @@ export default function LeapsClient({
                     )}
                   </select>
                 </label>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {(
+                    Object.keys(FILTER_LABELS) as (keyof DiscoveryFilters)[]
+                  ).map((k) => (
+                    <label key={k}>
+                      <span className="field-label">{FILTER_LABELS[k]}</span>
+                      <input
+                        className="input"
+                        type="number"
+                        min="0"
+                        step={
+                          k.toLowerCase().includes("delta") ? "0.01" : "any"
+                        }
+                        value={filters[k]}
+                        onChange={(e) =>
+                          setFilters((f) => ({ ...f, [k]: e.target.value }))
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="mt-3 text-sm text-emerald-400 underline"
+                  onClick={() => {
+                    setFilters(DEFAULT_FILTERS);
+                    setExpiry("");
+                  }}
+                >
+                  Reset discovery filters
+                </button>
+                {discovery.error && (
+                  <p role="alert" className="mt-3 text-sm text-red-400">
+                    {discovery.error}
+                  </p>
+                )}
+                <p role="status" className="mt-3 text-xs text-fg-subtle">
+                  {options.length} contracts pass your filters within the
+                  sampled feed. Missing values fail an active filter; blank
+                  filters are off. Delta is the feed value, not a computed
+                  substitute. Budget uses ask × 100 × contracts, excludes fees
+                  and does not predict your fill. Spreads use (ask − bid) /
+                  midpoint. Rows remain ordered by expiration and strike.
+                </p>
                 <p className="mt-2 text-xs text-fg-subtle">
                   Use the option-type field below to switch between calls and
                   puts. Spreads describe quoted liquidity, not your likely fill.
@@ -271,7 +361,9 @@ export default function LeapsClient({
                     </caption>
                     <thead>
                       <tr>
+                        <th>Expiration</th>
                         <th>Strike</th>
+                        <th>Delta</th>
                         <th>Bid / ask</th>
                         <th>Spread</th>
                         <th>IV</th>
@@ -282,7 +374,11 @@ export default function LeapsClient({
                     <tbody>
                       {options.map((o) => (
                         <tr key={o.symbol} className="border-t border-ink-700">
-                          <td className="py-2">{o.strike}</td>
+                          <td className="py-2">
+                            {o.expiration} · {o.days}d
+                          </td>
+                          <td>{o.strike}</td>
+                          <td>{o.delta?.toFixed(3) ?? "—"}</td>
                           <td>
                             {o.bid ?? "—"} / {o.ask ?? "—"}
                           </td>
@@ -307,6 +403,12 @@ export default function LeapsClient({
                       ))}
                     </tbody>
                   </table>
+                  {!options.length && !discovery.error && (
+                    <p className="py-4 text-sm text-fg-subtle">
+                      No contracts match these filters. Adjust or reset them;
+                      missing liquidity data is not treated as zero.
+                    </p>
+                  )}
                 </div>
               </>
             )}
@@ -521,7 +623,11 @@ export default function LeapsClient({
                 Save scenario
               </button>
               <Link
-                href={`/journal?ticker=${encodeURIComponent(form.ticker)}`}
+                href={scenarioJournalHref(
+                  computed.input!,
+                  context,
+                  loadedPlanId,
+                )}
                 className="btn-secondary px-4 py-2 text-sm"
               >
                 Log an actual trade
@@ -571,12 +677,14 @@ export default function LeapsClient({
                     onClick={() => {
                       setForm(
                         Object.fromEntries(
-                          Object.entries(p.inputs).map(([k, v]) => [
+                          Object.keys(DEFAULT_LEAPS).map((k) => [
                             k,
-                            String(v),
+                            String(p.inputs[k as keyof LeapsInput]),
                           ]),
                         ) as Record<keyof LeapsInput, string>,
                       );
+                      setContext(p.inputs.context ?? EMPTY_CONTEXT);
+                      setLoadedPlanId(p.id);
                       setNotice(
                         "Saved assumptions loaded; dates and premiums have not been refreshed.",
                       );
@@ -584,6 +692,18 @@ export default function LeapsClient({
                   >
                     Load assumptions
                   </button>
+                  {!archived && (
+                    <Link
+                      className="text-emerald-400 underline"
+                      href={scenarioJournalHref(
+                        p.inputs,
+                        p.inputs.context ?? EMPTY_CONTEXT,
+                        p.id,
+                      )}
+                    >
+                      Draft actual trade
+                    </Link>
+                  )}
                   <button
                     disabled={busy}
                     className="underline"
