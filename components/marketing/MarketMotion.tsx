@@ -15,6 +15,7 @@ const Scene = dynamic(() => import("./MarketScene"), {
 export default function MarketMotion() {
   const { containerRef, visible } = useMotionVisibility(1024);
   const [paused, setPaused] = useState(false);
+  const [enabled, setEnabled] = useState(false);
   return (
     <>
       <div
@@ -22,13 +23,22 @@ export default function MarketMotion() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 overflow-hidden opacity-35"
       >
-        {visible && !paused && (
+        {visible && enabled && !paused && (
           <MotionBoundary>
             <Scene />
           </MotionBoundary>
         )}
       </div>
-      {visible && (
+      {visible && !enabled && (
+        <button
+          type="button"
+          onClick={() => setEnabled(true)}
+          className="absolute bottom-3 right-6 z-10 rounded border border-ink-600 bg-ink-900/90 px-2 py-1 text-xs text-fg-subtle"
+        >
+          Enable ambient animation
+        </button>
+      )}
+      {visible && enabled && (
         <MotionToggle
           paused={paused}
           onToggle={() => setPaused((v) => !v)}
