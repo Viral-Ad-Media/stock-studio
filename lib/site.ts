@@ -9,7 +9,11 @@
 // publishes localhost canonicals.
 function siteUrl(): string {
   const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL;
-  const candidates = [process.env.NEXT_PUBLIC_APP_URL, process.env.RENDER_EXTERNAL_URL, vercel ? `https://${vercel}` : undefined];
+  const candidates = [
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.RENDER_EXTERNAL_URL,
+    vercel ? `https://${vercel}` : undefined,
+  ];
   for (const c of candidates) {
     if (!c) continue;
     try {
@@ -24,9 +28,9 @@ function siteUrl(): string {
 export const SITE = {
   name: "Stock Studio",
   url: siteUrl(),
-  tagline: "Stock research that shows its work.",
+  tagline: "Research-led LEAPS planning and decision review.",
   description:
-    "Fact-checked, source-cited stock case studies. Queue a ticker and get growth, profitability, valuation and moat analysis verified against SEC filings and earnings releases.",
+    "Source-cited company research, thesis tracking, LEAPS scenario planning and trade decision review. Connect research to your actual journal fills.",
   operator: "Viral Ad Media",
   email: "viraladmediacontent@gmail.com",
   // Displayed prices. Charged amounts come from the Stripe prices the

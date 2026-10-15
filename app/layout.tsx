@@ -5,7 +5,10 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE.url),
-  title: { default: `${SITE.name}: fact-checked stock case studies`, template: `%s | ${SITE.name}` },
+  title: {
+    default: `${SITE.name}: research-led LEAPS planning`,
+    template: `%s | ${SITE.name}`,
+  },
   description: SITE.description,
   applicationName: SITE.name,
   authors: [{ name: SITE.operator }],
@@ -16,12 +19,12 @@ export const metadata: Metadata = {
     siteName: SITE.name,
     locale: "en_US",
     url: "/",
-    title: `${SITE.name}: fact-checked stock case studies`,
+    title: `${SITE.name}: research-led LEAPS planning`,
     description: SITE.description,
   },
   twitter: {
     card: "summary_large_image",
-    title: `${SITE.name}: fact-checked stock case studies`,
+    title: `${SITE.name}: research-led LEAPS planning`,
     description: SITE.description,
   },
   formatDetection: { telephone: false },
@@ -34,7 +37,11 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     // data-theme is set before paint by the inline script (saved preference),
     // so the server's default can legitimately differ from the client's.
