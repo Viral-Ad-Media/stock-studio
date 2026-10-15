@@ -37,7 +37,11 @@ export default function FailJobButton({ jobId }: { jobId: number }) {
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="btn-secondary px-3 py-1.5 text-xs">
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="btn-secondary px-3 py-1.5 text-xs"
+      >
         Fail and refund
       </button>
     );
@@ -45,7 +49,9 @@ export default function FailJobButton({ jobId }: { jobId: number }) {
   return (
     <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
       <div>
-        <label htmlFor={`fail-note-${jobId}`} className="sr-only">Reason for failing job {jobId}</label>
+        <label htmlFor={`fail-note-${jobId}`} className="sr-only">
+          Reason for failing job {jobId}
+        </label>
         <input
           id={`fail-note-${jobId}`}
           value={note}
@@ -58,9 +64,25 @@ export default function FailJobButton({ jobId }: { jobId: number }) {
           autoFocus
         />
       </div>
-      <button type="submit" disabled={busy} className="btn-primary px-3 py-1.5 text-xs">{busy ? "Failing…" : "Confirm"}</button>
-      <button type="button" onClick={() => setOpen(false)} className="text-xs text-fg-subtle hover:text-slate-200">Cancel</button>
-      {error && <p role="alert" className="w-full text-xs text-red-400">{error}</p>}
+      <button
+        type="submit"
+        disabled={busy}
+        className="btn-primary px-3 py-1.5 text-xs"
+      >
+        {busy ? "Failing…" : "Confirm"}
+      </button>
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        className="text-xs text-fg-subtle hover:text-slate-200"
+      >
+        Cancel
+      </button>
+      {error && (
+        <p role="alert" className="w-full text-xs text-red-400">
+          {error}
+        </p>
+      )}
     </form>
   );
 }
