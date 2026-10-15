@@ -32,7 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <TourProvider>
       <div className="min-h-screen md:flex">
         <Nav userEmail={user?.email ?? null} userName={user?.name ?? null} credits={billing?.balance ?? null} isAdmin={Boolean(admin)} />
-        <main id="main" className="w-full min-w-0 flex-1 p-4 sm:p-6 md:p-8 max-w-5xl mx-auto">
+        <main id="main" className="w-full min-w-0 flex-1 p-4 sm:p-6 md:p-8 max-w-[1440px] mx-auto">
           {children}
         </main>
       </div>

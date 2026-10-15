@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import SectorChart from "@/components/charts/SectorChart";
 import { Activity, BarChart3, Layers } from "lucide-react";
 import { sql, formatDate } from "@/lib/db";
 import { currentWorkspaceId } from "@/lib/workspace";
@@ -37,12 +38,12 @@ export default async function MarketPage() {
 
   return (
     <div>
-      <h1 className="mb-1 text-2xl font-bold text-slate-100">Market context</h1>
-      <p className="mb-6 max-w-[70ch] text-sm text-fg-subtle">
+      <header className="workspace-heading mb-6"><p className="desk-eyebrow">Your trading desk / Market intelligence</p><h1 className="mb-1 text-3xl font-bold tracking-tight text-slate-100 sm:text-4xl">Market context</h1>
+      <p className="mt-2 max-w-[70ch] text-sm text-fg-subtle">
         Where the market is, in plain numbers: sector leadership against the S&amp;P 500, how many large caps are
         participating, and today&apos;s biggest movers. Context for reading your studies. It describes what happened, not
         what to do next.
-      </p>
+      </p></header>
 
       <Suspense fallback={<Loading label="Loading sector and breadth data…" />}>
         <ContextSections />
@@ -125,7 +126,7 @@ async function ContextSections() {
           <Layers className="h-4 w-4 text-emerald-400" aria-hidden /> Sector rotation
         </h2>
         <p className="mb-3 text-sm text-slate-300">{ctx.readings.rotation}</p>
-        <div className="overflow-x-auto">
+        <SectorChart sectors={ctx.sectors} asOf={ctx.asOf}/><div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[480px] text-sm">
             <caption className="sr-only">Sector ETF performance, sorted by one-month performance relative to SPY</caption>
             <thead>
