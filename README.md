@@ -11,7 +11,7 @@ opens with an "As of [date]" line and ends with a "Not investment advice" line.
 - **Auth**: Supabase Auth. Each signup gets its own workspace.
 - **Billing**: Stripe. A 30-day trial, then a one-time access fee, then per-report credits.
 - **Research engine**: an automated Anthropic API worker, with a manual CLI fallback.
-- **Market data**: unauthenticated Yahoo Finance endpoints (no API key).
+- **Market data**: unauthenticated Yahoo Finance endpoints (no API key), with an optional Alpaca fallback for when Yahoo rate-limits the host.
 
 ---
 
@@ -289,6 +289,7 @@ All variables are listed in [`.env.example`](.env.example).
 | `ENGINE_WEBHOOK_SECRET` | automated worker | Must equal the Vault secret `engine_webhook_secret`. |
 | `ENGINE_WEB_RESEARCH` | automated worker | `1` also automates web-research variants. Off by default ([why](#automated-worker)). |
 | `ENGINE_INVOCATION_BUDGET_MS` / `ENGINE_MIN_CLAIM_MS` / `ENGINE_MAX_CALL_MS` | automated worker | Optional tuning: total budget per invocation, the minimum time left to start another job, and the cap on one model call. Defaults 280000 / 150000 / 170000 fit a 300 s serverless limit. On Render (no function limit) deep-research jobs need more, e.g. 720000 / 150000 / 600000. A running job's lock goes stale after the budget plus 2 minutes. |
+| `ALPACA_KEY_ID` / `ALPACA_SECRET_KEY` | market data | Optional. Keys from a free Alpaca account (paper keys work). When Yahoo answers 429/5xx, charts, daily bars and movers come from Alpaca's IEX feed instead, and Yahoo is skipped for 10 minutes. Recommended on Render, whose shared IPs Yahoo rate-limits. IEX volumes are partial, and indices (`^GSPC`) aren't covered. |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | billing | |
 | `BILLING_DATABASE_URL` | billing (webhook only) | Pooler URL for the `stocks_billing` role, the only role allowed to grant access or credits. Set its password first in the Supabase SQL editor: `ALTER ROLE stocks_billing WITH PASSWORD '…';`. |
 | `STRIPE_PRICE_ACCESS` | billing | Price id of the one-time access fee. |
