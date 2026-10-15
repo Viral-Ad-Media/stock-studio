@@ -19,6 +19,11 @@ root and marketing-shell backgrounds prevent default canvas/background colors
 from showing through. Text, accents, input borders and primary-button contrast
 were checked against both palettes.
 
+Marketing product previews are responsive HTML/SVG illustrations using the same
+theme tokens as the app, including journal and LEAPS previews. They use fictional
+companies and synthetic values, with visible sample-data labels. The “How it
+works” and format cards follow the selected theme rather than fixed light colors.
+
 Fact-checked, source-cited stock case studies as a multi-tenant SaaS. A user queues a ticker, a
 research engine builds the report, and the finished study appears in the app.
 
@@ -676,3 +681,5 @@ Trade signals:
 | `DATABASE_URL is not set` from a CLI | `.env.local` is missing from the repo root. |
 | `npm run candles` returns no data | The market isn't open yet, or the date is beyond Yahoo's ~30-day 1-minute history. |
 
+
+The superadmin console includes paginated job and audit history, job/workspace search, action/reason filters, expandable job results, manual data refresh, aggregate journal/LEAPS adoption and workspace-level usage counts. Existing superadmin gates and audited account mutations remain required. Admin credit adjustments are limited to ±10,000 per request in both the form and API.
