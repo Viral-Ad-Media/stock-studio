@@ -16,16 +16,28 @@ import { ArrowLeft, AlertTriangle } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 // Tab title names the ticker, e.g. "NWRB · Full 4-card study".
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
   const ws = await currentWorkspaceId();
-  const [row] = ws && Number(id) ? await sql`SELECT ticker, variant FROM case_studies WHERE id = ${Number(id)} AND workspace_id = ${ws}` : [];
+  const [row] =
+    ws && Number(id)
+      ? await sql`SELECT ticker, variant FROM case_studies WHERE id = ${Number(id)} AND workspace_id = ${ws}`
+      : [];
   if (!row) return { title: "Case study" };
-  const label = VARIANTS.find((v) => v.value === row.variant)?.label ?? "Case study";
+  const label =
+    VARIANTS.find((v) => v.value === row.variant)?.label ?? "Case study";
   return { title: `${row.ticker} · ${label}` };
 }
 
-export default async function StudyPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function StudyPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
   const ws = await currentWorkspaceId();
   if (!ws) notFound();
@@ -49,15 +61,25 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
             AND (parent_id IS DISTINCT FROM ${study.id})
           ORDER BY id DESC LIMIT 20
         `) as unknown as CaseStudy[]);
-  const variantLabel = VARIANTS.find((v) => v.value === study.variant)?.label ?? study.variant;
-  const grade = study.status === "ready" ? parseStoredGrade(study.grade_json) : null;
+  const variantLabel =
+    VARIANTS.find((v) => v.value === study.variant)?.label ?? study.variant;
+  const grade =
+    study.status === "ready" ? parseStoredGrade(study.grade_json) : null;
   // Price since the as-of date only means something for a single-company study.
-  const showTrack = study.status === "ready" && !!study.as_of_date && GRADED_VARIANTS.has(study.variant);
+  const showTrack =
+    study.status === "ready" &&
+    !!study.as_of_date &&
+    GRADED_VARIANTS.has(study.variant);
 
   return (
     <div>
-      {(study.status === "queued" || study.status === "building") && <AutoRefresh />}
-      <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-fg-subtle hover:text-slate-300 mb-4">
+      {(study.status === "queued" || study.status === "building") && (
+        <AutoRefresh />
+      )}
+      <Link
+        href="/dashboard"
+        className="inline-flex items-center gap-1.5 text-sm text-fg-subtle hover:text-slate-300 mb-4"
+      >
         <ArrowLeft className="w-4 h-4" /> Dashboard
       </Link>
 
@@ -71,41 +93,77 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
             {study.as_of_date && <> · as of {study.as_of_date}</>}
           </p>
         </div>
-        <StudyActions study={{ id: study.id, ticker: study.ticker, company: study.company, status: study.status, variant: study.variant, content_md: study.content_md }} />
+        <StudyActions
+          study={{
+            id: study.id,
+            ticker: study.ticker,
+            company: study.company,
+            status: study.status,
+            variant: study.variant,
+            content_md: study.content_md,
+          }}
+        />
       </div>
 
-      {study.status === "ready" && /^[A-Z][A-Z0-9.\-]{0,11}$/.test(study.ticker) && study.variant !== "movers_digest" && (
-        <div className="mb-5 flex flex-wrap gap-3 text-sm">
-          <Link href={`/journal?ticker=${encodeURIComponent(study.ticker)}&study=${study.id}`} className="text-emerald-400 underline underline-offset-2">Link this research to an actual trade</Link>
-          <Link href={`/leaps?ticker=${encodeURIComponent(study.ticker)}`} className="text-emerald-400 underline underline-offset-2">Explore options scenarios</Link>
-        </div>
-      )}
+      {study.status === "ready" &&
+        /^[A-Z][A-Z0-9.\-]{0,11}$/.test(study.ticker) &&
+        study.variant !== "movers_digest" && (
+          <div className="mb-5 flex flex-wrap gap-3 text-sm">
+            <Link
+              href={`/journal?ticker=${encodeURIComponent(study.ticker)}&study=${study.id}`}
+              className="text-emerald-400 underline underline-offset-2"
+            >
+              Link this research to an actual trade
+            </Link>
+            <Link
+              href={`/leaps?ticker=${encodeURIComponent(study.ticker)}&study=${study.id}`}
+              className="text-emerald-400 underline underline-offset-2"
+            >
+              Explore options scenarios
+            </Link>
+          </div>
+        )}
 
       {study.status === "queued" && (
         <div className="card p-6 text-sm text-slate-300" role="status">
-          Queued. It usually starts within a minute or two, and this page updates on its own.
+          Queued. It usually starts within a minute or two, and this page
+          updates on its own.
         </div>
       )}
       {study.status === "building" && (
-        <div className="card p-6 text-sm text-sky-400 border-sky-500/30" role="status">
+        <div
+          className="card p-6 text-sm text-sky-400 border-sky-500/30"
+          role="status"
+        >
           The engine is researching this one right now…
         </div>
       )}
       {study.status === "error" && (
-        <div className="card p-6 text-sm text-red-400 border-red-500/30" role="alert">
-          {study.error ?? "We couldn't build this report. Your credits have been refunded."}
-          <RetryStudyButton id={study.id} ticker={study.ticker} variant={study.variant} />
+        <div
+          className="card p-6 text-sm text-red-400 border-red-500/30"
+          role="alert"
+        >
+          {study.error ??
+            "We couldn't build this report. Your credits have been refunded."}
+          <RetryStudyButton
+            id={study.id}
+            ticker={study.ticker}
+            variant={study.variant}
+          />
         </div>
       )}
 
       {study.corrections_md && (
         <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/5 p-4">
           <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-400">
-            <AlertTriangle className="h-4 w-4" aria-hidden /> Corrections to your notes
+            <AlertTriangle className="h-4 w-4" aria-hidden /> Corrections to
+            your notes
           </h2>
           <div
             className="markdown text-sm"
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(study.corrections_md) }}
+            dangerouslySetInnerHTML={{
+              __html: renderMarkdown(study.corrections_md),
+            }}
           />
         </div>
       )}
@@ -137,18 +195,27 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
 
       {sources.length > 0 && (
         <div className="card p-4 mt-4">
-          <div className="text-xs uppercase tracking-wide text-fg-subtle mb-2 font-medium">Sources</div>
+          <div className="text-xs uppercase tracking-wide text-fg-subtle mb-2 font-medium">
+            Sources
+          </div>
           <ul className="space-y-1 text-sm">
             {sources.map((s, i) => {
               const href = safeHttpUrl(s.url);
               return (
                 <li key={i}>
                   {href ? (
-                    <a href={href} target="_blank" rel="noopener noreferrer nofollow" className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300">
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer nofollow"
+                      className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300"
+                    >
                       {s.title || href}
                     </a>
                   ) : (
-                    <span className="text-slate-400">{s.title || String(s.url)}</span>
+                    <span className="text-slate-400">
+                      {s.title || String(s.url)}
+                    </span>
                   )}
                 </li>
               );
@@ -173,10 +240,20 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
           </h2>
           <div className="space-y-2">
             {siblings.map((s) => (
-              <Link key={s.id} href={`/study/${s.id}`} className="card p-3 flex flex-wrap items-center justify-between gap-2 text-sm hover:border-ink-500">
-                <span>{VARIANTS.find((v) => v.value === s.variant)?.label ?? s.variant}</span>
+              <Link
+                key={s.id}
+                href={`/study/${s.id}`}
+                className="card p-3 flex flex-wrap items-center justify-between gap-2 text-sm hover:border-ink-500"
+              >
+                <span>
+                  {VARIANTS.find((v) => v.value === s.variant)?.label ??
+                    s.variant}
+                </span>
                 <span className="flex items-center gap-2 text-fg-subtle">
-                  <StatusBadge status={s.status} /> {s.as_of_date ? `As of ${s.as_of_date}` : formatDate(s.created_at)}
+                  <StatusBadge status={s.status} />{" "}
+                  {s.as_of_date
+                    ? `As of ${s.as_of_date}`
+                    : formatDate(s.created_at)}
                 </span>
               </Link>
             ))}
@@ -186,11 +263,20 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
 
       {updates.length > 0 && (
         <div className="mt-6">
-          <h2 className="text-sm uppercase tracking-wide text-fg-subtle font-medium mb-2">Follow-ups</h2>
+          <h2 className="text-sm uppercase tracking-wide text-fg-subtle font-medium mb-2">
+            Follow-ups
+          </h2>
           <div className="space-y-2">
             {updates.map((u) => (
-              <Link key={u.id} href={`/study/${u.id}`} className="card p-3 flex flex-wrap items-center justify-between gap-2 text-sm hover:border-ink-500">
-                <span>{VARIANTS.find((v) => v.value === u.variant)?.label ?? u.variant}</span>
+              <Link
+                key={u.id}
+                href={`/study/${u.id}`}
+                className="card p-3 flex flex-wrap items-center justify-between gap-2 text-sm hover:border-ink-500"
+              >
+                <span>
+                  {VARIANTS.find((v) => v.value === u.variant)?.label ??
+                    u.variant}
+                </span>
                 <span className="flex items-center gap-2 text-fg-subtle">
                   <StatusBadge status={u.status} /> {formatDate(u.created_at)}
                 </span>

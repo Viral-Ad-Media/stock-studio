@@ -13,6 +13,7 @@ const FOOTER = [
       { href: "/#features", label: "Features" },
       { href: "/#how-it-works", label: "How it works" },
       { href: "/pricing", label: "Pricing" },
+      { href: "/examples", label: "Research example & demo" },
       { href: "/#faq", label: "FAQ" },
     ],
   },
@@ -33,7 +34,11 @@ const FOOTER = [
   },
 ];
 
-export default function MarketingLayout({ children }: { children: React.ReactNode }) {
+export default function MarketingLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <div className="marketing-shell flex min-h-screen flex-col bg-ink-950">
       <a
@@ -44,22 +49,41 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       </a>
       <header className="sticky top-0 z-40 border-b border-ink-800 bg-ink-950/85 backdrop-blur supports-[backdrop-filter]:bg-ink-950/70">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
-          <Link href="/" className="flex shrink-0 items-center gap-2 whitespace-nowrap" aria-label="Stock Studio home">
-            <CandlestickChart className="h-6 w-6 text-emerald-400" aria-hidden />
+          <Link
+            href="/"
+            className="flex shrink-0 items-center gap-2 whitespace-nowrap"
+            aria-label="Stock Studio home"
+          >
+            <CandlestickChart
+              className="h-6 w-6 text-emerald-400"
+              aria-hidden
+            />
             <span className="font-bold text-slate-100">Stock Studio</span>
           </Link>
-          <nav aria-label="Main" className="flex items-center gap-3 whitespace-nowrap text-sm sm:gap-6">
-            <Link href="/#features" className="hidden text-slate-300 hover:text-slate-100 md:inline">
+          <nav
+            aria-label="Main"
+            className="flex items-center gap-3 whitespace-nowrap text-sm sm:gap-6"
+          >
+            <Link
+              href="/#features"
+              className="hidden text-slate-300 hover:text-slate-100 md:inline"
+            >
               Features
             </Link>
-            <Link href="/pricing" className="hidden text-slate-300 hover:text-slate-100 sm:inline">
+            <Link
+              href="/pricing"
+              className="hidden text-slate-300 hover:text-slate-100 sm:inline"
+            >
               Pricing
             </Link>
             <Link href="/login" className="text-slate-300 hover:text-slate-100">
               Sign in
             </Link>
             <ThemeToggle />
-            <Link href="/signup" className="btn-primary px-3 py-2 text-sm sm:px-4">
+            <Link
+              href="/signup"
+              className="btn-primary px-3 py-2 text-sm sm:px-4"
+            >
               <span className="sm:hidden">Try free</span>
               <span className="hidden sm:inline">Start free trial</span>
             </Link>
@@ -75,27 +99,38 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
         <div className="mx-auto grid max-w-6xl grid-cols-2 gap-8 px-6 py-12 md:grid-cols-5">
           <div className="col-span-2">
             <Link href="/" className="flex items-center gap-2">
-              <CandlestickChart className="h-5 w-5 text-emerald-400" aria-hidden />
+              <CandlestickChart
+                className="h-5 w-5 text-emerald-400"
+                aria-hidden
+              />
               <span className="font-bold text-slate-100">Stock Studio</span>
             </Link>
             <p className="mt-3 max-w-xs text-sm text-fg-subtle">
-              Fact-checked, source-cited stock case studies. Educational business analysis, not personalized
-              investment advice.
+              Fact-checked, source-cited stock case studies. Educational
+              business analysis, not personalized investment advice.
             </p>
             <p className="mt-3 text-sm text-fg-subtle">
               Contact:{" "}
-              <a href={`mailto:${SITE.email}`} className="text-slate-300 underline underline-offset-2 hover:text-slate-100">
+              <a
+                href={`mailto:${SITE.email}`}
+                className="text-slate-300 underline underline-offset-2 hover:text-slate-100"
+              >
                 {SITE.email}
               </a>
             </p>
           </div>
           {FOOTER.map((col) => (
             <nav key={col.heading} aria-label={col.heading}>
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-300">{col.heading}</h2>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+                {col.heading}
+              </h2>
               <ul className="mt-3 space-y-2 text-sm">
                 {col.links.map((l) => (
                   <li key={l.href}>
-                    <Link href={l.href} className="text-fg-subtle hover:text-slate-200">
+                    <Link
+                      href={l.href}
+                      className="text-fg-subtle hover:text-slate-200"
+                    >
                       {l.label}
                     </Link>
                   </li>
@@ -106,7 +141,8 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
         </div>
         <div className="border-t border-ink-800">
           <p className="mx-auto max-w-6xl px-6 py-5 text-xs text-fg-subtle">
-            © {new Date().getFullYear()} {SITE.operator}. Stock Studio is operated by {SITE.operator}.
+            © {new Date().getFullYear()} {SITE.operator}. Stock Studio is
+            operated by {SITE.operator}.
           </p>
         </div>
       </footer>

@@ -683,3 +683,22 @@ Trade signals:
 
 
 The superadmin console includes paginated job and audit history, job/workspace search, action/reason filters, expandable job results, manual data refresh, aggregate journal/LEAPS adoption and workspace-level usage counts. Existing superadmin gates and audited account mutations remain required. Admin credit adjustments are limited to ±10,000 per request in both the form and API.
+
+
+### Research-led decision workflow
+
+Studies and tracked theses now link into LEAPS planning with workspace- and ticker-checked research context. Scenario saves retain this context inside the existing inputs JSON. Both saved and unsaved scenarios can open a journal draft carrying option type, strike, expiry, contract count and linked research. Entry/exit fill prices are always blank in new drafts; a scenario is not a trade. The journal still requires actual executed prices and dates. No schema migration is needed, and older scenarios remain loadable.
+
+LEAPS discovery filters the existing sampled CBOE feed by expiry/remaining days, absolute provider delta, quoted spread as a percentage of midpoint, volume, open interest and ask-based premium budget. Blank filters are disabled; unknown values fail active filters. Budget is ask × 100 × selected contracts before fees. Calls/puts and expiration stay explicit, and the interface discloses feed sampling, delay and missing values. This is a single-ticker sampled discovery tool, not a complete cross-market scanner or recommended-contract ranking.
+
+Journal decision review uses active closed lots, actual calendar holding periods and realized dollar P&L after entered fees. It shows historical expectancy per lot (including flat lots), win/loss averages, holding-period buckets, linked-study results, review completion and a month calendar that opens actual lot review. Partial-exit lots count separately. No unrealized prices, deposit-based returns or performance forecasts are inferred.
+
+The public `/examples` page uses a manually prepared, dated Apple FY2025 Q4 excerpt linked to Apple's release and SEC 8-K. Its interactive demo uses separately labeled invented option assumptions and disposable local state, with no orders, account data or automatic copying of model prices into fill fields.
+
+### First-load reliability
+
+The current Render web service was confirmed on Free compute on 2026-10-15. Render spins Free services down after 15 idle minutes and serves its own wake-up page during restart; application HTML, loaders, caching headers and Three.js changes cannot remove this platform interstitial. Marketing and `/examples` stay prerendered and make no server database/provider calls. Ambient Three.js on marketing pages now loads only after an explicit Enable animation action. `/api/health` is a no-store, no-secret instance readiness check (not database/provider health).
+
+To remove the platform wake-up page at the current URL, move this service to always-on paid compute after approving the recurring charge. Render's entry paid web compute is listed at $7/month as checked 2026-10-15; usage charges can be additional. Set the service health check path to `/api/health` after this release is deployed, then verify a 200 response, signed-out marketing, signed-in workflow links and error logs. Keep the same repository, branch, URL, auth settings and database. Do not use artificial keep-alive traffic as a substitute. A separate static marketing site can avoid cold starts for public pages, but requires its own deployment and URL/domain routing; do not assume prerendered Next pages on the current sleeping web service are CDN-hosted.
+
+Sources: https://render.com/docs/free and https://render.com/pricing .
