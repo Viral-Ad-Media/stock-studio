@@ -7,13 +7,19 @@ import QueuePanel, { QueueJob } from "@/components/QueuePanel";
 import StatusBadge from "@/components/StatusBadge";
 import RetryStudyButton from "@/components/RetryStudyButton";
 import GradeBadge from "@/components/insights/GradeBadge";
-import EarningsPanel, { EarningsPanelSkeleton } from "@/components/insights/EarningsPanel";
+import EarningsPanel, {
+  EarningsPanelSkeleton,
+} from "@/components/insights/EarningsPanel";
 import { parseStoredGrade } from "@/lib/grades";
 import { FilePlus2 } from "lucide-react";
 import Onboarding from "@/components/guide/Onboarding";
 import EmptyState from "@/components/guide/EmptyState";
+import PageHeader from "@/components/ui/PageHeader";
 
-export const metadata = { title: "Dashboard", description: "Your case studies, their build status and upcoming earnings." };
+export const metadata = {
+  title: "Dashboard",
+  description: "Your case studies, their build status and upcoming earnings.",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +49,11 @@ export default async function Dashboard() {
       `) as unknown as CaseStudy[])
     : [];
   const watchTickers = ws
-    ? ((await sql`SELECT ticker FROM watchlist WHERE workspace_id = ${ws}`) as unknown as { ticker: string }[]).map((r) => r.ticker)
+    ? (
+        (await sql`SELECT ticker FROM watchlist WHERE workspace_id = ${ws}`) as unknown as {
+          ticker: string;
+        }[]
+      ).map((r) => r.ticker)
     : [];
 
   // Earnings for everything the workspace follows: watchlist + single-ticker
@@ -51,35 +61,53 @@ export default async function Dashboard() {
   // ready study per ticker is where an earnings update gets queued.
   const studyByTicker: Record<string, number> = {};
   for (const s of studies) {
-    if (s.status === "ready" && s.variant !== "movers_digest" && !(s.ticker in studyByTicker)) studyByTicker[s.ticker] = s.id;
+    if (
+      s.status === "ready" &&
+      s.variant !== "movers_digest" &&
+      !(s.ticker in studyByTicker)
+    )
+      studyByTicker[s.ticker] = s.id;
   }
-  const earningsTickers = [...watchTickers, ...Object.keys(studyByTicker)].filter((t) => t !== "MARKET");
+  const earningsTickers = [
+    ...watchTickers,
+    ...Object.keys(studyByTicker),
+  ].filter((t) => t !== "MARKET");
 
   // Only poll while something can still change.
-  const inFlight = pendingJobs.length > 0 || studies.some((s) => s.status === "queued" || s.status === "building");
+  const inFlight =
+    pendingJobs.length > 0 ||
+    studies.some((s) => s.status === "queued" || s.status === "building");
 
   return (
     <div>
       {inFlight && <AutoRefresh />}
       <Onboarding show={studies.length === 0 && pendingJobs.length === 0} />
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-100 mb-1">Dashboard</h1>
-          <p className="text-sm text-fg-subtle">Fact-checked stock case studies, built by the research engine.</p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/today" className="btn-secondary text-sm px-4 py-2">Today&apos;s overview</Link>
-          <Link href="/new" className="btn-primary text-sm px-4 py-2">
-            New study
-          </Link>
-        </div>
+      <div className="mb-6">
+        <PageHeader
+          eyebrow="Research library"
+          title="Dashboard"
+          description="Fact-checked stock case studies, built by the research engine."
+          actions={
+            <>
+              <Link href="/today" className="btn-secondary text-sm px-4 py-2">
+                Today&apos;s overview
+              </Link>
+              <Link href="/new" className="btn-primary text-sm px-4 py-2">
+                New study
+              </Link>
+            </>
+          }
+        />
       </div>
 
       <QueuePanel jobs={pendingJobs} />
 
       {earningsTickers.length > 0 && (
         <Suspense fallback={<EarningsPanelSkeleton />}>
-          <EarningsPanel tickers={earningsTickers} studyByTicker={studyByTicker} />
+          <EarningsPanel
+            tickers={earningsTickers}
+            studyByTicker={studyByTicker}
+          />
         </Suspense>
       )}
 
@@ -102,31 +130,44 @@ export default async function Dashboard() {
             const grade = parseStoredGrade(s.grade_json);
             return (
               <div key={s.id} className="relative">
-              <Link
-                href={`/study/${s.id}`}
-                className="card p-4 hover:border-ink-500 transition-colors block h-full"
-              >
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="flex items-center gap-2">
-                    {grade && <GradeBadge grade={grade} />}
-                    <span className="font-mono font-bold text-slate-100">{s.ticker}</span>
-                  </span>
-                  <StatusBadge status={s.status} />
-                </div>
-                <div className="text-sm text-slate-400 truncate">
-                  {s.company ?? "—"} · {variantLabel(s.variant)}
-                </div>
-                {s.summary_line && <p className="mt-2 text-sm text-slate-300 line-clamp-2">{s.summary_line}</p>}
-                <div className="text-xs text-fg-subtle mt-2">
-                  {s.as_of_date ? `As of ${s.as_of_date}` : `Queued ${formatDate(s.created_at)}`}
-                </div>
-              </Link>
-              {/* A sibling of the link, not inside it: no nested interactive elements. */}
-              {s.status === "error" && (
-                <div className="absolute bottom-3 right-3">
-                  <RetryStudyButton id={s.id} ticker={s.ticker} variant={s.variant} compact />
-                </div>
-              )}
+                <Link
+                  href={`/study/${s.id}`}
+                  className="card p-4 hover:border-ink-500 transition-colors block h-full"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="flex items-center gap-2">
+                      {grade && <GradeBadge grade={grade} />}
+                      <span className="font-mono font-bold text-slate-100">
+                        {s.ticker}
+                      </span>
+                    </span>
+                    <StatusBadge status={s.status} />
+                  </div>
+                  <div className="text-sm text-slate-400 truncate">
+                    {s.company ?? "—"} · {variantLabel(s.variant)}
+                  </div>
+                  {s.summary_line && (
+                    <p className="mt-2 text-sm text-slate-300 line-clamp-2">
+                      {s.summary_line}
+                    </p>
+                  )}
+                  <div className="text-xs text-fg-subtle mt-2">
+                    {s.as_of_date
+                      ? `As of ${s.as_of_date}`
+                      : `Queued ${formatDate(s.created_at)}`}
+                  </div>
+                </Link>
+                {/* A sibling of the link, not inside it: no nested interactive elements. */}
+                {s.status === "error" && (
+                  <div className="absolute bottom-3 right-3">
+                    <RetryStudyButton
+                      id={s.id}
+                      ticker={s.ticker}
+                      variant={s.variant}
+                      compact
+                    />
+                  </div>
+                )}
               </div>
             );
           })}
