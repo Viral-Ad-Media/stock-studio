@@ -1,3 +1,4 @@
+import PageHeader from "@/components/ui/PageHeader";
 import Link from "next/link";
 import { sql, formatDate } from "@/lib/db";
 import { requireSuperAdminPage, userDirectory } from "@/lib/admin";
@@ -7,7 +8,8 @@ import { creditCost } from "@/lib/shared";
 
 export const metadata = { title: "Overview" };
 
-const usd = (cents: number) => `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+const usd = (cents: number) =>
+  `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
 export default async function AdminOverview() {
   const admin = await requireSuperAdminPage();
@@ -68,46 +70,113 @@ export default async function AdminOverview() {
   const failures = await sql`
     SELECT id, type, result, updated_at FROM jobs WHERE status = 'error' ORDER BY updated_at DESC LIMIT 5
   `;
+  const [activity] = await sql`SELECT
+    (SELECT count(*) FROM journal_trades WHERE archived_at IS NULL)::int AS journal,
+    (SELECT count(DISTINCT workspace_id) FROM journal_trades WHERE archived_at IS NULL)::int AS journal_workspaces,
+    (SELECT count(*) FROM leaps_plans WHERE archived_at IS NULL)::int AS leaps,
+    (SELECT count(DISTINCT workspace_id) FROM leaps_plans WHERE archived_at IS NULL)::int AS leaps_workspaces`;
   const recent = await userDirectory(admin.id, { limit: 5 });
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-slate-100">Overview</h1>
-      <p className="mb-6 mt-1 text-sm text-fg-subtle">Across every workspace. Figures are live from the database.</p>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Superadmin"
+        title="Overview"
+        description={
+          <> Across every workspace. Figures are live from the database. </>
+        }
+      />
 
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Customers</h2>
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">
+        Customers
+      </h2>
       <div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Accounts" value={u.total} hint={`${u.new7} new in 7 days · ${u.new30} in 30`} />
+        <Stat
+          label="Accounts"
+          value={u.total}
+          hint={`${u.new7} new in 7 days · ${u.new30} in 30`}
+        />
         <Stat label="Paid access" value={u.paid} />
         <Stat label="On trial" value={u.trialing} />
         <Stat label="Trial expired, not paid" value={u.expired} />
       </div>
 
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Revenue and credits</h2>
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">
+        Product adoption
+      </h2>
       <div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Revenue, all time" value={usd(p.revenue)} hint={`${p.refunds} refunded payments`} />
+        <Stat
+          label="Journal trades"
+          value={activity.journal}
+          hint="Active saved records"
+        />
+        <Stat label="Journal workspaces" value={activity.journal_workspaces} />
+        <Stat
+          label="LEAPS plans"
+          value={activity.leaps}
+          hint="Active saved scenarios"
+        />
+        <Stat label="LEAPS workspaces" value={activity.leaps_workspaces} />
+      </div>
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">
+        Revenue and credits
+      </h2>
+      <div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat
+          label="Revenue, all time"
+          value={usd(p.revenue)}
+          hint={`${p.refunds} refunded payments`}
+        />
         <Stat label="Revenue, 30 days" value={usd(p.revenue30)} />
-        <Stat label="Credits outstanding" value={c.outstanding} hint="Unspent balance across all workspaces" />
+        <Stat
+          label="Credits outstanding"
+          value={c.outstanding}
+          hint="Unspent balance across all workspaces"
+        />
         <Stat label="Credits spent, 30 days" value={c.spent30} />
       </div>
 
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Research engine</h2>
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">
+        Research engine
+      </h2>
       <div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat
           label="Queue"
           value={`${j.pending} pending · ${j.running} running`}
-          hint={j.oldest_pending ? `Oldest pending since ${formatDate(j.oldest_pending)}` : "Nothing waiting"}
+          hint={
+            j.oldest_pending
+              ? `Oldest pending since ${formatDate(j.oldest_pending)}`
+              : "Nothing waiting"
+          }
         />
-        <Stat label="Stuck (running 15+ min)" value={j.stuck} tone={j.stuck ? "bad" : undefined} />
-        <Stat label="Last 24 hours" value={`${j.done24} done · ${j.failed24} failed`} tone={j.failed24 ? "warn" : undefined} />
-        <Stat label="Studies ready" value={s.ready} hint={`${s.ready7} in the last 7 days · last job done ${j.last_done ? formatDate(j.last_done) : "never"}`} />
+        <Stat
+          label="Stuck (running 15+ min)"
+          value={j.stuck}
+          tone={j.stuck ? "bad" : undefined}
+        />
+        <Stat
+          label="Last 24 hours"
+          value={`${j.done24} done · ${j.failed24} failed`}
+          tone={j.failed24 ? "warn" : undefined}
+        />
+        <Stat
+          label="Studies ready"
+          value={s.ready}
+          hint={`${s.ready7} in the last 7 days · last job done ${j.last_done ? formatDate(j.last_done) : "never"}`}
+        />
       </div>
 
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Model spend (estimated)</h2>
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">
+        Model spend (estimated)
+      </h2>
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Today (UTC)" value={formatCost(m.today)} />
         <Stat label="7 days" value={formatCost(m.d7)} />
-        <Stat label="30 days" value={formatCost(m.d30)} hint={`${m.searches30} web searches`} />
+        <Stat
+          label="30 days"
+          value={formatCost(m.d30)}
+          hint={`${m.searches30} web searches`}
+        />
         <Stat
           label="Spent on unbuilt reports, 30 days"
           value={formatCost(m.unbuilt30)}
@@ -115,35 +184,77 @@ export default async function AdminOverview() {
           tone={m.unbuilt30 > 0 ? "warn" : undefined}
         />
       </div>
-      <section aria-labelledby="cost-by-format" className="card mb-8 overflow-x-auto">
-        <h3 id="cost-by-format" className="px-4 pt-4 text-sm font-semibold text-slate-100">
+      <section
+        aria-labelledby="cost-by-format"
+        className="card mb-8 overflow-x-auto"
+      >
+        <h3
+          id="cost-by-format"
+          className="px-4 pt-4 text-sm font-semibold text-slate-100"
+        >
           Cost per finished report, last 30 days
         </h3>
         {byFormat.length === 0 ? (
-          <p className="px-4 pb-4 pt-2 text-sm text-fg-subtle">No finished reports with recorded cost yet.</p>
+          <p className="px-4 pb-4 pt-2 text-sm text-fg-subtle">
+            No finished reports with recorded cost yet.
+          </p>
         ) : (
           <table className="mt-2 w-full min-w-[560px] text-sm">
-            <caption className="sr-only">Average model cost per finished report by format</caption>
+            <caption className="sr-only">
+              Average model cost per finished report by format
+            </caption>
             <thead>
               <tr className="border-b border-ink-700 text-left text-xs text-fg-subtle">
-                <th scope="col" className="px-4 py-2 font-medium">Format</th>
-                <th scope="col" className="px-4 py-2 font-medium">Reports</th>
-                <th scope="col" className="px-4 py-2 font-medium">Average</th>
-                <th scope="col" className="px-4 py-2 font-medium">Highest</th>
-                <th scope="col" className="px-4 py-2 font-medium">Searches</th>
-                <th scope="col" className="px-4 py-2 font-medium">Credits charged</th>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  Format
+                </th>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  Reports
+                </th>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  Average
+                </th>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  Highest
+                </th>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  Searches
+                </th>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  Credits charged
+                </th>
               </tr>
             </thead>
             <tbody>
               {byFormat.map((f) => (
-                <tr key={f.format} className="border-b border-ink-800 last:border-0">
-                  <th scope="row" className="px-4 py-2 text-left font-normal text-slate-200">{f.format}</th>
-                  <td className="px-4 py-2 tabular-nums text-slate-300">{f.jobs}</td>
-                  <td className="px-4 py-2 tabular-nums text-slate-300">{formatCost(f.avg_cost)}</td>
-                  <td className="px-4 py-2 tabular-nums text-slate-300">{formatCost(f.max_cost)}</td>
-                  <td className="px-4 py-2 tabular-nums text-slate-300">{Math.round(f.avg_searches ?? 0)}</td>
+                <tr
+                  key={f.format}
+                  className="border-b border-ink-800 last:border-0"
+                >
+                  <th
+                    scope="row"
+                    className="px-4 py-2 text-left font-normal text-slate-200"
+                  >
+                    {f.format}
+                  </th>
                   <td className="px-4 py-2 tabular-nums text-slate-300">
-                    {f.format === "watchlist_entry" || f.format === "movers_digest" || f.format === "earnings_update" ? `${creditCost(f.format)} (free if sweep-queued)` : creditCost(f.format)}
+                    {f.jobs}
+                  </td>
+                  <td className="px-4 py-2 tabular-nums text-slate-300">
+                    {formatCost(f.avg_cost)}
+                  </td>
+                  <td className="px-4 py-2 tabular-nums text-slate-300">
+                    {formatCost(f.max_cost)}
+                  </td>
+                  <td className="px-4 py-2 tabular-nums text-slate-300">
+                    {Math.round(f.avg_searches ?? 0)}
+                  </td>
+                  <td className="px-4 py-2 tabular-nums text-slate-300">
+                    {f.format === "watchlist_entry" ||
+                    f.format === "movers_digest" ||
+                    f.format === "earnings_update"
+                      ? `${creditCost(f.format)} (free if sweep-queued)`
+                      : creditCost(f.format)}
                   </td>
                 </tr>
               ))}
@@ -155,22 +266,52 @@ export default async function AdminOverview() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section aria-labelledby="recent-users" className="card p-4">
           <div className="mb-3 flex items-baseline justify-between">
-            <h2 id="recent-users" className="text-sm font-semibold text-slate-100">Newest accounts</h2>
-            <Link href="/admin/users" className="text-sm text-emerald-400 underline-offset-2 hover:underline">All users</Link>
+            <h2
+              id="recent-users"
+              className="text-sm font-semibold text-slate-100"
+            >
+              Newest accounts
+            </h2>
+            <Link
+              href="/admin/users"
+              className="text-sm text-emerald-400 underline-offset-2 hover:underline"
+            >
+              All users
+            </Link>
           </div>
           <ul className="divide-y divide-ink-800 text-sm">
             {recent.map((r) => (
-              <li key={r.id} className="flex items-center justify-between gap-3 py-2">
-                <Link href={`/admin/users/${r.id}`} className="truncate text-slate-200 hover:underline">{r.email}</Link>
-                <span className="shrink-0 text-xs text-fg-subtle">{formatDate(r.created_at)}</span>
+              <li
+                key={r.id}
+                className="flex items-center justify-between gap-3 py-2"
+              >
+                <Link
+                  href={`/admin/users/${r.id}`}
+                  className="truncate text-slate-200 hover:underline"
+                >
+                  {r.email}
+                </Link>
+                <span className="shrink-0 text-xs text-fg-subtle">
+                  {formatDate(r.created_at)}
+                </span>
               </li>
             ))}
           </ul>
         </section>
         <section aria-labelledby="recent-failures" className="card p-4">
           <div className="mb-3 flex items-baseline justify-between">
-            <h2 id="recent-failures" className="text-sm font-semibold text-slate-100">Latest failed jobs</h2>
-            <Link href="/admin/jobs?status=error" className="text-sm text-emerald-400 underline-offset-2 hover:underline">All failures</Link>
+            <h2
+              id="recent-failures"
+              className="text-sm font-semibold text-slate-100"
+            >
+              Latest failed jobs
+            </h2>
+            <Link
+              href="/admin/jobs?status=error"
+              className="text-sm text-emerald-400 underline-offset-2 hover:underline"
+            >
+              All failures
+            </Link>
           </div>
           {failures.length === 0 ? (
             <p className="text-sm text-fg-subtle">No failed jobs.</p>
@@ -179,10 +320,16 @@ export default async function AdminOverview() {
               {failures.map((f) => (
                 <li key={f.id} className="py-2">
                   <div className="flex justify-between gap-3">
-                    <span className="text-slate-200">#{f.id} · {f.type}</span>
-                    <span className="text-xs text-fg-subtle">{formatDate(f.updated_at)}</span>
+                    <span className="text-slate-200">
+                      #{f.id} · {f.type}
+                    </span>
+                    <span className="text-xs text-fg-subtle">
+                      {formatDate(f.updated_at)}
+                    </span>
                   </div>
-                  <p className="mt-0.5 line-clamp-2 break-words font-mono text-xs text-fg-subtle">{f.result ?? "No error recorded"}</p>
+                  <p className="mt-0.5 line-clamp-2 break-words font-mono text-xs text-fg-subtle">
+                    {f.result ?? "No error recorded"}
+                  </p>
                 </li>
               ))}
             </ul>
