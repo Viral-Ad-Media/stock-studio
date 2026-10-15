@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { journalStats, realizedPnl, type JournalTrade } from "@/lib/journal";
+import JournalCharts from "@/components/charts/JournalCharts";
 import { CSV_TEMPLATE } from "@/lib/journal-csv";
 
 const money=(n:number)=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:2}).format(n);
@@ -35,14 +36,14 @@ export default function JournalClient({rows,studies,today,archived,initialTicker
   function template(){const url=URL.createObjectURL(new Blob([CSV_TEMPLATE],{type:"text/csv"}));const a=document.createElement("a");a.href=url;a.download="journal-template.csv";a.click();URL.revokeObjectURL(url);}
   const numberFields=["quantity","entry_price","exit_price","strike","fees","initial_risk"];
   return <div className="space-y-6">
-    <header className="flex flex-wrap justify-between gap-3"><div><h1 className="text-3xl font-bold text-slate-100">Trading journal</h1><p className="mt-2 max-w-[70ch] text-sm text-fg-subtle">Record a complete lot, its thesis and what happened. Stocks and purchased standard equity options only. For partial exits, split the entry into separate lots and allocate fees to each.</p></div><div className="flex items-start gap-2"><Link href={archived?"/journal":"/journal?archived=1"} className="btn-secondary px-3 py-2 text-sm">{archived?"Active trades":"Archived"}</Link><a href={`/api/journal?format=csv${archived?"&archived=1":""}`} className="btn-secondary px-3 py-2 text-sm">Export CSV</a></div></header>
+    <header className="workspace-heading flex flex-wrap justify-between gap-3"><div><p className="desk-eyebrow">Your trading desk / Journal</p><h1 className="text-3xl font-bold tracking-tight text-slate-100 sm:text-4xl">Trading journal</h1><p className="mt-2 max-w-[70ch] text-sm text-fg-subtle">Record a complete lot, its thesis and what happened. Stocks and purchased standard equity options only. For partial exits, split the entry into separate lots and allocate fees to each.</p></div><div className="flex items-start gap-2"><Link href={archived?"/journal":"/journal?archived=1"} className="btn-secondary px-3 py-2 text-sm">{archived?"Active trades":"Archived"}</Link><a href={`/api/journal?format=csv${archived?"&archived=1":""}`} className="btn-secondary px-3 py-2 text-sm">Export CSV</a></div></header>
     {error&&<p role="alert" className="whitespace-pre-line rounded border border-red-500/40 p-3 text-sm text-red-400">{error}</p>}
     {notice&&<p role="status" className="text-sm text-emerald-400">{notice}</p>}
     <section className="card p-5"><h2 className="mb-3 text-base font-semibold text-slate-100">{archived?"Archived-trade results":"Your recorded results"}</h2><div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {[["Realized P&L after fees",money(stats.net)],["Closed / open lots",`${stats.closed} / ${stats.open}`],["Win rate",stats.winRate==null?"No closed lots":`${stats.winRate.toFixed(1)}% · n=${stats.closed}`],["Profit factor",stats.profitFactor==null?"Unavailable":stats.profitFactor.toFixed(2)]].map(([label,value])=><div key={label}><p className="text-xs text-fg-subtle">{label}</p><p className="mt-1 text-lg font-semibold tabular-nums text-slate-100">{value}</p></div>)}</div>
+      {[["Realized P&L after fees",money(stats.net)],["Closed / open lots",`${stats.closed} / ${stats.open}`],["Win rate",stats.winRate==null?"No closed lots":`${stats.winRate.toFixed(1)}% · n=${stats.closed}`],["Profit factor",stats.profitFactor==null?"Unavailable":stats.profitFactor.toFixed(2)]].map(([label,value])=><div key={label} className="metric-tile"><p className="text-xs text-fg-subtle">{label}</p><p className="mt-1 text-lg font-semibold tabular-nums text-slate-100">{value}</p></div>)}</div>
       <p className="mt-3 text-xs text-fg-subtle">{stats.wins} wins, {stats.losses} losses, {stats.breakeven} flat lots. Profit factor is shown only after 30 closed lots with at least one loss. Open positions have no modeled unrealized P&amp;L. All figures cover the {rows.length} entries in this view, before table filters.</p>
       <p className="mt-2 text-xs text-fg-subtle">Realized drawdown: {money(stats.drawdown)}, measured from cumulative daily closed-lot P&amp;L, not account equity.{stats.averageR!=null&&` Average R: ${stats.averageR.toFixed(2)} across ${stats.riskCount} lots with user-entered initial risk.`}</p>
-      {stats.curve.length>1&&<PnlCurve points={stats.curve}/>}
+      <JournalCharts stats={stats}/>
       {stats.strategies.length>0&&<div className="mt-4 overflow-x-auto"><table className="w-full text-sm"><caption className="text-left text-xs text-fg-subtle">Realized results by strategy</caption><thead><tr className="text-left"><th className="py-2">Strategy</th><th>Closed lots</th><th>Net P&amp;L</th></tr></thead><tbody>{stats.strategies.map((s)=><tr key={s.name} className="border-t border-ink-700"><td className="py-2">{s.name}</td><td>{s.count}</td><td>{money(s.pnl)}</td></tr>)}</tbody></table></div>}
     </section>
     {!archived&&<section id="journal-form" className="card scroll-mt-6 p-5"><h2 className="mb-4 text-lg font-semibold">{editing?"Edit / close this lot":"Log a trade"}</h2><form onSubmit={save} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -64,9 +65,4 @@ export default function JournalClient({rows,studies,today,archived,initialTicker
     </section>
     <p className="text-xs text-fg-subtle">This is your editable, self-reported journal, not a verified broker statement or the program&apos;s immutable signal record. No orders are placed. No report credits are charged.</p>
   </div>;
-}
-function PnlCurve({points}:{points:{date:string;pnl:number}[]}) {
-  const values=[0,...points.map((p)=>p.pnl)],min=Math.min(...values),max=Math.max(...values),range=max-min||1;
-  const coords=values.map((v,i)=>`${10+i/(values.length-1)*580},${110-(v-min)/range*100}`).join(" ");
-  return <figure className="mt-4"><svg viewBox="0 0 600 130" className="w-full" role="img" aria-label={`Cumulative realized P&L, from zero to ${money(points.at(-1)!.pnl)} across ${points.length} closing dates`}><line x1="10" x2="590" y1={110-(0-min)/range*100} y2={110-(0-min)/range*100} stroke="currentColor" opacity=".2"/><polyline points={coords} fill="none" stroke="currentColor" strokeWidth="2" className="text-emerald-400"/></svg><figcaption className="text-xs text-fg-subtle">Cumulative realized P&amp;L · {points[0].date}–{points.at(-1)!.date} · {money(min)} to {money(max)}</figcaption></figure>;
 }
