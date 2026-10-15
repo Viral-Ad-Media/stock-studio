@@ -12,20 +12,20 @@
 :root,
 html[data-theme="dark"] {
   color-scheme: dark; /* native selects, scrollbars, autofill render dark */
-  --ink-950: 10 14 20;
-  --ink-900: 15 20 32;
-  --ink-800: 22 29 46;
-  --ink-700: 31 41 64;
-  --ink-600: 43 58 92;
-  --ink-500: 91 109 150;
-  --fg-subtle: 131 145 167;
+  --ink-950: 8 17 29;
+  --ink-900: 12 25 41;
+  --ink-800: 18 35 54;
+  --ink-700: 32 51 73;
+  --ink-600: 47 68 94;
+  --ink-500: 103 123 150;
+  --fg-subtle: 151 169 191;
   --slate-100: 241 245 249;
   --slate-200: 226 232 240;
   --slate-300: 203 213 225;
   --slate-400: 148 163 184;
-  --emerald-300: 110 231 183;
-  --emerald-400: 52 211 153;
-  --emerald-500: 16 185 129;
+  --emerald-300: 94 234 212;
+  --emerald-400: 45 212 191;
+  --emerald-500: 20 184 166;
   --red-300: 252 165 165;
   --red-400: 248 113 113;
   --red-500: 239 68 68;
@@ -40,10 +40,10 @@ html[data-theme="dark"] {
 
 html[data-theme="light"] {
   color-scheme: light;
-  --ink-950: 244 246 249; /* page */
+  --ink-950: 242 246 250; /* page */
   --ink-900: 255 255 255; /* cards, sidebar */
-  --ink-800: 238 241 246; /* inputs, hover */
-  --ink-700: 223 228 236; /* borders */
+  --ink-800: 235 241 247; /* inputs, hover */
+  --ink-700: 216 226 237; /* borders */
   --ink-600: 203 211 223;
   --ink-500: 122 134 154; /* field borders: 3.7:1 on white */
   --fg-subtle: 84 96 115; /* 6.0:1 on white */
@@ -51,9 +51,9 @@ html[data-theme="light"] {
   --slate-200: 30 41 59;
   --slate-300: 51 65 85;
   --slate-400: 71 85 105;
-  --emerald-300: 6 95 70; /* text on white 7.6:1 */
-  --emerald-400: 6 95 70;
-  --emerald-500: 4 120 87; /* primary button: near-white text 5.2:1 */
+  --emerald-300: 17 94 89;
+  --emerald-400: 15 118 110;
+  --emerald-500: 13 110 102;
   --red-300: 185 28 28;
   --red-400: 185 28 28;
   --red-500: 220 38 38;
@@ -66,9 +66,20 @@ html[data-theme="light"] {
   --sky-500: 2 132 199;
 }
 
+html {
+  min-height: 100%;
+  background-color: rgb(var(--ink-950));
+  color: rgb(var(--slate-200));
+}
 body {
   @apply bg-ink-950 text-slate-200 antialiased;
+  min-height: 100dvh;
+  background-color: rgb(var(--ink-950));
+  text-rendering: optimizeLegibility;
 }
+::selection { background: rgb(var(--emerald-500) / .25); }
+h1, h2, h3 { text-wrap: balance; }
+input, select, textarea, .metric-tile, table { font-variant-numeric: tabular-nums; }
 
 /* One visible keyboard-focus style everywhere (WCAG 2.4.7). */
 :focus-visible {
@@ -82,10 +93,14 @@ body {
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 font-medium text-ink-950
       transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60;
+    min-height: 2.5rem;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / .12), 0 2px 6px rgb(0 0 0 / .08);
   }
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 rounded-lg border border-ink-500 font-medium text-slate-200
       transition-colors hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60;
+    min-height: 2.5rem;
+    background: rgb(var(--ink-900) / .65);
   }
   /* 36px square minimum hit area for icon-only buttons. */
   .icon-btn {
@@ -95,6 +110,8 @@ body {
   .input {
     @apply w-full rounded-lg border border-ink-500 bg-ink-800 px-3 py-2 text-sm text-slate-100
       placeholder:text-fg-subtle focus:border-emerald-400;
+    min-height: 2.65rem;
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / .03);
   }
   .field-label {
     @apply mb-1 block text-sm text-slate-300;
@@ -103,14 +120,16 @@ body {
 
 .card {
   @apply bg-ink-900 border border-ink-700 rounded-xl;
-  box-shadow: 0 2px 12px rgb(0 0 0 / .04);
+  box-shadow: 0 6px 24px rgb(0 0 0 / .06);
 }
+.marketing-shell { background: rgb(var(--ink-950)); }
+.marketing-shell > main > div { background-color: rgb(var(--ink-950)); }
 
 .workspace-heading {
-  padding: 1.5rem;
+  padding: 1.75rem;
   border: 1px solid rgb(var(--ink-700));
   border-radius: 1rem;
-  background: linear-gradient(120deg, rgb(var(--emerald-500) / .08), transparent 60%), rgb(var(--ink-900));
+  background: radial-gradient(ellipse at top right, rgb(var(--sky-400) / .07), transparent 65%), linear-gradient(120deg, rgb(var(--emerald-500) / .08), transparent 60%), rgb(var(--ink-900));
 }
 .desk-eyebrow {
   margin-bottom: .75rem;
@@ -123,14 +142,14 @@ body {
 .metric-tile {
   border: 1px solid rgb(var(--ink-700));
   border-radius: .75rem;
-  padding: 1rem;
+  padding: 1.15rem;
   background: rgb(var(--ink-950) / .55);
 }
 .chart-panel {
   min-width: 0;
   border: 1px solid rgb(var(--ink-700));
   border-radius: .75rem;
-  padding: 1.25rem;
+  padding: 1.5rem;
   background: rgb(var(--ink-900));
 }
 .desk-badge {
@@ -144,6 +163,19 @@ body {
   text-transform: uppercase;
 }
 .chart-axis { fill: rgb(var(--fg-subtle)); font-size: 11px; font-variant-numeric: tabular-nums; }
+@keyframes marketing-reveal {
+  from { opacity: .4; translate: 0 24px; }
+  to { opacity: 1; translate: 0 0; }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .marketing-shot {
+      animation: marketing-reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 70%;
+    }
+  }
+}
 @media (max-width: 640px) {
   .chart-panel { padding: .85rem; }
   .workspace-heading { padding: 1.1rem; }
