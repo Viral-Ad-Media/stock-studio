@@ -1,7 +1,16 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { X } from "lucide-react";
+import GuideVisual from "./GuideVisual";
 
 // Guided product tour: spotlights one navigation item at a time with a short
 // explanation. Targets are elements carrying data-tour="<key>". When a target
@@ -92,14 +101,24 @@ function visibleRect(key: string): Rect | null {
   const els = document.querySelectorAll<HTMLElement>(`[data-tour="${key}"]`);
   for (const el of els) {
     const r = el.getBoundingClientRect();
-    if (r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden") {
+    if (
+      r.width > 0 &&
+      r.height > 0 &&
+      getComputedStyle(el).visibility !== "hidden"
+    ) {
       return { top: r.top, left: r.left, width: r.width, height: r.height };
     }
   }
   return null;
 }
 
-function TourOverlay({ step, setStep }: { step: number; setStep: (s: number | null) => void }) {
+function TourOverlay({
+  step,
+  setStep,
+}: {
+  step: number;
+  setStep: (s: number | null) => void;
+}) {
   const s = TOUR_STEPS[step];
   const last = step === TOUR_STEPS.length - 1;
   const [rect, setRect] = useState<Rect | null>(null);
@@ -136,7 +155,8 @@ function TourOverlay({ step, setStep }: { step: number; setStep: (s: number | nu
       const f = [...cardRef.current.querySelectorAll<HTMLElement>("button")];
       const i = f.indexOf(document.activeElement as HTMLElement);
       if (e.shiftKey && i <= 0) (e.preventDefault(), f[f.length - 1]?.focus());
-      else if (!e.shiftKey && i === f.length - 1) (e.preventDefault(), f[0]?.focus());
+      else if (!e.shiftKey && i === f.length - 1)
+        (e.preventDefault(), f[0]?.focus());
     }
   };
 
@@ -145,7 +165,7 @@ function TourOverlay({ step, setStep }: { step: number; setStep: (s: number | nu
   const cardStyle: React.CSSProperties =
     rect && window.innerWidth >= 640
       ? {
-          top: Math.min(Math.max(rect.top - 8, 12), window.innerHeight - 260),
+          top: Math.max(12, Math.min(rect.top - 8, window.innerHeight - 560)),
           left: Math.min(rect.left + rect.width + 16, window.innerWidth - 352),
         }
       : { top: "50%", left: "50%", transform: "translate(-50%, -50%)" };
@@ -173,34 +193,69 @@ function TourOverlay({ step, setStep }: { step: number; setStep: (s: number | nu
         aria-modal="true"
         aria-labelledby="tour-title"
         aria-describedby="tour-body"
-        className="fixed w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-ink-500 bg-ink-900 p-5 shadow-2xl"
+        className="fixed max-h-[90dvh] overflow-y-auto w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-ink-500 bg-ink-900 p-5 shadow-2xl"
         style={cardStyle}
       >
         <div className="flex items-start justify-between gap-3">
-          <p className="text-xs font-medium text-emerald-300" aria-live="polite">
+          <p
+            className="text-xs font-medium text-emerald-300"
+            aria-live="polite"
+          >
             Step {step + 1} of {TOUR_STEPS.length}
           </p>
-          <button type="button" onClick={close} className="-m-1 rounded-sm p-1 text-fg-subtle hover:text-slate-100" aria-label="Close the tour">
+          <button
+            type="button"
+            onClick={close}
+            className="-m-1 rounded-sm p-1 text-fg-subtle hover:text-slate-100"
+            aria-label="Close the tour"
+          >
             <X className="h-4 w-4" aria-hidden />
           </button>
         </div>
-        <h2 id="tour-title" className="mt-1 text-base font-semibold text-slate-100">
+        <h2
+          id="tour-title"
+          className="mt-1 text-base font-semibold text-slate-100"
+        >
           {s.title}
         </h2>
         <p id="tour-body" className="mt-2 text-sm text-slate-300">
           {s.body}
         </p>
+        <GuideVisual
+          stage={
+            s.target === "watchlist"
+              ? "thesis"
+              : s.target === "journal" || s.target === "leaps"
+                ? "journal"
+                : s.target === "new"
+                  ? "research"
+                  : "workspace"
+          }
+        />
         <div className="mt-4 flex items-center justify-between gap-2">
-          <button type="button" onClick={close} className="text-sm text-fg-subtle underline-offset-2 hover:text-slate-200 hover:underline">
+          <button
+            type="button"
+            onClick={close}
+            className="text-sm text-fg-subtle underline-offset-2 hover:text-slate-200 hover:underline"
+          >
             Skip tour
           </button>
           <div className="flex gap-2">
             {step > 0 && (
-              <button type="button" onClick={() => setStep(step - 1)} className="btn-secondary px-3 py-1.5 text-sm">
+              <button
+                type="button"
+                onClick={() => setStep(step - 1)}
+                className="btn-secondary px-3 py-1.5 text-sm"
+              >
                 Back
               </button>
             )}
-            <button type="button" data-primary onClick={() => (last ? close() : setStep(step + 1))} className="btn-primary px-3 py-1.5 text-sm">
+            <button
+              type="button"
+              data-primary
+              onClick={() => (last ? close() : setStep(step + 1))}
+              className="btn-primary px-3 py-1.5 text-sm"
+            >
               {last ? "Done" : "Next"}
             </button>
           </div>

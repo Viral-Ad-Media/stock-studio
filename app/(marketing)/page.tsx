@@ -14,6 +14,7 @@ import {
   BadgeCheck,
 } from "lucide-react";
 import ProductShot from "@/components/marketing/ProductShot";
+import MarketMotion from "@/components/marketing/MarketMotion";
 import JsonLd, { organizationLd, ORGANIZATION_ID } from "@/components/seo/JsonLd";
 import { SITE, absoluteUrl } from "@/lib/site";
 import studyShot from "@/public/screenshots/study.png";
@@ -180,6 +181,7 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="relative overflow-hidden">
+        <MarketMotion />
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0"
