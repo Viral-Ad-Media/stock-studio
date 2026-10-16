@@ -1,0 +1,7 @@
+{
+  "status": "PENDING_RANKED_SOURCE",
+  "asOf": null,
+  "ranking": "30 completed sessions: mean(close * volume), top 10 per GICS sector, plus Mag 7",
+  "note": "Intentionally empty. Do not substitute a hand-picked list for the required liquidity ranking.",
+  "tickers": []
+}
