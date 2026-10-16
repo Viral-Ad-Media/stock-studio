@@ -12,7 +12,9 @@
     "movers": "tsx scripts/movers.ts",
     "signal-bot": "tsx scripts/signal-bot.ts",
     "test": "node --import tsx --test tests/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "sweep-scanner": "node scripts/sweep-scanner.mjs",
+    "sweep-universe": "node scripts/sweep-universe.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

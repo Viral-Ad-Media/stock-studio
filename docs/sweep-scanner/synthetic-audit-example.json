@@ -1,0 +1,110 @@
+{
+  "synthetic": true,
+  "notice": "Illustrative schema only. Not a historical detection; targets/trend are hand-supplied examples.",
+  "id": "2026-10-16:DEMO:100:CALL",
+  "schemaVersion": 1,
+  "strategyVersion": "luqman-2026-10-16",
+  "date": "2026-10-16",
+  "timestamp": "2026-10-16T13:43:00.000Z",
+  "ticker": "DEMO",
+  "direction": "CALL",
+  "level": 100,
+  "levelName": "prior-session low",
+  "extreme": 99.9,
+  "entry": 100.2,
+  "t1": 101,
+  "t2": 102,
+  "trend": "Uptrend",
+  "grade": "A+",
+  "triggerAt": 1792158180,
+  "extremeAt": 1792158060,
+  "precedingBars": 10,
+  "bars": [
+    {
+      "t": 1792157460,
+      "o": 101,
+      "h": 101.1,
+      "l": 100.9,
+      "c": 101
+    },
+    {
+      "t": 1792157520,
+      "o": 101,
+      "h": 101.1,
+      "l": 100.9,
+      "c": 101
+    },
+    {
+      "t": 1792157580,
+      "o": 101,
+      "h": 101.1,
+      "l": 100.9,
+      "c": 101
+    },
+    {
+      "t": 1792157640,
+      "o": 101,
+      "h": 101.1,
+      "l": 100.9,
+      "c": 101
+    },
+    {
+      "t": 1792157700,
+      "o": 101,
+      "h": 101.1,
+      "l": 100.9,
+      "c": 101
+    },
+    {
+      "t": 1792157760,
+      "o": 101,
+      "h": 101.1,
+      "l": 100.9,
+      "c": 101
+    },
+    {
+      "t": 1792157820,
+      "o": 101,
+      "h": 101.1,
+      "l": 100.9,
+      "c": 101
+    },
+    {
+      "t": 1792157880,
+      "o": 101,
+      "h": 101.1,
+      "l": 100.9,
+      "c": 101
+    },
+    {
+      "t": 1792157940,
+      "o": 101,
+      "h": 101.1,
+      "l": 100.9,
+      "c": 101
+    },
+    {
+      "t": 1792158000,
+      "o": 101,
+      "h": 101.1,
+      "l": 100.9,
+      "c": 101
+    },
+    {
+      "t": 1792158060,
+      "o": 101,
+      "h": 101,
+      "l": 99.9,
+      "c": 99.95
+    },
+    {
+      "t": 1792158120,
+      "o": 99.95,
+      "h": 100.3,
+      "l": 99.92,
+      "c": 100.2
+    }
+  ],
+  "targetProvenance": "ILLUSTRATION_NOT_COMPUTED",
+  "alert": "🚨 SWEEP [A+] DEMO CALL — swept 100.00 (prior-session low), extreme 99.90, 1m reclaim close 100.20 → entry ~100.20 · t1 (OB) 101.00 · t2 102.00 · 15m trend: Uptrend"
+}

@@ -1,5 +1,7 @@
 # Stock Studio
 
+> **Sweep Scanner foundation:** capture/replay tooling and the protected `/sweeps` preview are available. Live detection is not enabled. See [setup and method blockers](docs/sweep-scanner/README.md) and the [initial delivery report](docs/sweep-scanner/delivery-report.md).
+
 Public home and pricing pages use a lazy-loaded Three.js / React Three Fiber / Drei
 decorative scene. It runs on desktop only when visible, respects reduced-motion
 preferences, and offers a pause control. Product screenshots reveal as they enter

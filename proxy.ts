@@ -66,6 +66,7 @@ export const config = {
     "/watchlist/:path*",
     "/market/:path*",
     "/setups/:path*",
+    "/sweeps/:path*",
     "/gamma/:path*",
     "/signals/:path*",
     "/study/:path*",

@@ -15,6 +15,7 @@ const links = [
   { href: "/new", label: "New study", icon: FilePlus2, tour: "new" },
   { href: "/watchlist", label: "Watchlist", icon: Eye, tour: "watchlist" },
   { href: "/market", label: "Market", icon: Globe2, tour: "market" },
+  { href: "/sweeps", label: "Sweep Scanner", icon: Radar, tour: "sweeps" },
   { href: "/setups", label: "Setup bots", icon: Radar, tour: "setups" },
   { href: "/gamma", label: "Gamma exposure", icon: Sigma, tour: "gamma" },
   { href: "/signals", label: "Signals", icon: Megaphone, tour: "signals" },
