@@ -19,10 +19,15 @@ import {
   type ResearchContext,
 } from "@/lib/research-workflow";
 import ResearchContextCard from "./ResearchContextCard";
+import ContractComparison from "./ContractComparison";
 import {
   DEFAULT_FILTERS,
   FILTER_LABELS,
   filterContracts,
+  contractMetrics,
+  sortContracts,
+  CONTRACT_SORTS,
+  type ContractSort,
   type DiscoveryFilters,
 } from "@/lib/leaps-discovery";
 import { apiError } from "@/lib/shared";
@@ -91,6 +96,8 @@ export default function LeapsClient({
   );
   const [context, setContext] = useState(initialContext);
   const [loadedPlanId, setLoadedPlanId] = useState<string | undefined>();
+  const [sort, setSort] = useState<ContractSort>("expiration");
+  const [selectedSymbols, setSelectedSymbols] = useState<string[]>([]);
   const [filters, setFilters] = useState<DiscoveryFilters>(DEFAULT_FILTERS);
   const [chain, setChain] = useState<LeapsChain | null>(null),
     [chainTicker, setChainTicker] = useState(initialTicker),
@@ -123,6 +130,7 @@ export default function LeapsClient({
     setBusy(true);
     setError("");
     setChain(null);
+    setSelectedSymbols([]);
     try {
       const res = await fetch(
         `/api/leaps?symbol=${encodeURIComponent(chainTicker.trim())}`,
@@ -159,6 +167,7 @@ export default function LeapsClient({
       as_of: today,
       premium: o.ask != null && o.ask > 0 ? String(o.ask) : "",
       contracts: filters.contracts,
+      fees: filters.fees || "0",
       iv: o.iv != null ? String(o.iv) : "",
       scenario_iv: o.iv != null ? String(o.iv) : "",
       exit_days: String(Math.min(Number(f.exit_days) || 30, o.days)),
@@ -222,7 +231,30 @@ export default function LeapsClient({
     ) ?? [],
     filters,
   );
-  const options = discovery.rows;
+  const options = sortContracts(
+    discovery.rows,
+    sort,
+    Number(filters.contracts),
+    Number(filters.fees),
+  );
+  const selectedOptions = selectedSymbols.flatMap(
+    (symbol) => chain?.options.find((o) => o.symbol === symbol) ?? [],
+  );
+  function toggleComparison(symbol: string) {
+    setSelectedSymbols((current) =>
+      current.includes(symbol)
+        ? current.filter((s) => s !== symbol)
+        : current.length < 3
+          ? [...current, symbol]
+          : current,
+    );
+  }
+  function modelContract(option: ChainOption) {
+    useOption(option);
+    document
+      .getElementById("scenario-assumptions")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   return (
     <div className="space-y-6">
       <PageHeader
@@ -346,14 +378,34 @@ export default function LeapsClient({
                   {options.length} contracts pass your filters within the
                   sampled feed. Missing values fail an active filter; blank
                   filters are off. Delta is the feed value, not a computed
-                  substitute. Budget uses ask × 100 × contracts, excludes fees
-                  and does not predict your fill. Spreads use (ask − bid) /
-                  midpoint. Rows remain ordered by expiration and strike.
+                  substitute. Budget uses ask × 100 × contracts plus assumed
+                  fees and does not predict your fill. Spreads use (ask − bid) /
+                  midpoint. Sorting is a numeric ordering, not a recommendation.
                 </p>
                 <p className="mt-2 text-xs text-fg-subtle">
                   Use the option-type field below to switch between calls and
                   puts. Spreads describe quoted liquidity, not your likely fill.
                 </p>
+                <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
+                  <label>
+                    <span className="field-label">Sort discovery results</span>
+                    <select
+                      className="input"
+                      value={sort}
+                      onChange={(e) => setSort(e.target.value as ContractSort)}
+                    >
+                      {Object.entries(CONTRACT_SORTS).map(([key, label]) => (
+                        <option key={key} value={key}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <p role="status" className="text-xs text-fg-subtle">
+                    {selectedSymbols.length}/3 selected · unavailable sort
+                    values appear last
+                  </p>
+                </div>
                 <div className="mt-3 max-h-80 overflow-auto">
                   <table className="w-full min-w-[560px] text-left text-sm">
                     <caption className="sr-only">
@@ -361,6 +413,7 @@ export default function LeapsClient({
                     </caption>
                     <thead>
                       <tr>
+                        <th scope="col">Compare</th>
                         <th>Expiration</th>
                         <th>Strike</th>
                         <th>Delta</th>
@@ -374,6 +427,19 @@ export default function LeapsClient({
                     <tbody>
                       {options.map((o) => (
                         <tr key={o.symbol} className="border-t border-ink-700">
+                          <td className="py-2 pr-3">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 accent-emerald-500"
+                              aria-label={`Compare ${o.symbol}`}
+                              checked={selectedSymbols.includes(o.symbol)}
+                              disabled={
+                                !selectedSymbols.includes(o.symbol) &&
+                                selectedSymbols.length >= 3
+                              }
+                              onChange={() => toggleComparison(o.symbol)}
+                            />
+                          </td>
                           <td className="py-2">
                             {o.expiration} · {o.days}d
                           </td>
@@ -383,9 +449,19 @@ export default function LeapsClient({
                             {o.bid ?? "—"} / {o.ask ?? "—"}
                           </td>
                           <td>
-                            {o.ask != null && o.bid != null
-                              ? money(o.ask - o.bid)
-                              : "Unavailable"}
+                            {contractMetrics(
+                              o,
+                              Number(filters.contracts),
+                              Number(filters.fees),
+                            ).spread == null
+                              ? "Unavailable"
+                              : money(
+                                  contractMetrics(
+                                    o,
+                                    Number(filters.contracts),
+                                    Number(filters.fees),
+                                  ).spread!,
+                                )}
                           </td>
                           <td>{o.iv?.toFixed(1) ?? "—"}%</td>
                           <td>
@@ -393,7 +469,7 @@ export default function LeapsClient({
                           </td>
                           <td>
                             <button
-                              onClick={() => useOption(o)}
+                              onClick={() => modelContract(o)}
                               className="text-emerald-400 underline"
                             >
                               Use inputs
@@ -410,12 +486,21 @@ export default function LeapsClient({
                     </p>
                   )}
                 </div>
+                <ContractComparison
+                  options={selectedOptions}
+                  contracts={Number(filters.contracts)}
+                  fees={Number(filters.fees)}
+                  visibleSymbols={new Set(options.map((o) => o.symbol))}
+                  onRemove={toggleComparison}
+                  onClear={() => setSelectedSymbols([])}
+                  onUse={modelContract}
+                />
               </>
             )}
           </>
         )}
       </section>
-      <section className="card p-5">
+      <section id="scenario-assumptions" className="card scroll-mt-6 p-5">
         <h2 className="mb-3 font-semibold">Scenario assumptions</h2>
         <p className="mb-4 text-xs text-fg-subtle">
           Defaults are illustrative, not market observations. Enter your own
