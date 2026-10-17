@@ -1,0 +1,25 @@
+# Run from the repository root with docker-compose.yml as the FIRST file.
+services:
+  web:
+    environment:
+      SWEEP_DATA_DIR: /data/sweep
+    volumes:
+      - sweep-data:/data/sweep:ro
+  sweep-worker:
+    profiles: ["sweeps"]
+    build:
+      context: .
+      target: sweep-worker
+    environment:
+      SWEEP_DATA_DIR: /data/sweep
+      SWEEP_UNIVERSE_PATH: /data/sweep/universe/scan_universe.json
+    volumes:
+      - sweep-data:/data/sweep
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 6m
+    restart: unless-stopped
+volumes:
+  sweep-data:

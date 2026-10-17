@@ -2,6 +2,15 @@
 
 Source: Luqman's fixed build brief, 2026-10-16. Strategy version: luqman-2026-10-16.
 
+## Follow-up: historical capture and scheduled worker
+
+All six actual Yahoo tapes are now committed with checksums. See
+[historical evidence and source conflicts](historical-evidence.md),
+[method decisions](method-decisions.md), and
+[opt-in worker deployment](../../deploy/sweep-scanner/README.md).
+The worker schedule is implemented but has not been deployed or activated.
+A complete GICS catalog and approved method definitions are still required.
+
 ## Release state
 
 **Capture and replay foundation only. Not a production detector, not deployed,
@@ -19,18 +28,20 @@ Node 22 and the existing npm dependencies are sufficient.
     npm ci
     npm test
     npm run sweep-scanner -- --help
+    npm run sweep-scanner -- --history .sweep-data/historical
+    npm run sweep-worker -- --once
     SWEEP_DATA_DIR=/persistent/sweep npm run sweep-scanner -- --capture
     SWEEP_DATA_DIR=/persistent/sweep npm run sweep-scanner -- --replay /path/to/tapes
     SWEEP_DATA_DIR=/persistent/sweep npm run sweep-scanner -- --score 2026-10-16
 
 --capture refuses an empty, malformed or out-of-quarter universe. Calls are
-sequential and Yahoo-only, with ten-second HTTP timeouts and a 240-second
+sequential and Yahoo-only, with one query2 retry for query1 429/5xx responses, ten-second HTTP timeouts and a 240-second
 between-ticker pass budget. A ticker already started may finish after that
 budget; remaining tickers are explicitly NOT_SCANNED. Each ticker failure is
 isolated. Proxy variables are removed only in the dedicated capture process,
-never the web process. Complete session timestamps come from Yahoo metadata;
-missing periods, missing opening bars, invalid OHLC and incomplete historical
-sessions fail closed. Today's unfinished candles are excluded.
+never the web process. Session timestamps are checked against the published NYSE 2026/2027 calendar;
+missing Yahoo historical periods use that calendar. Conflicting metadata, unknown
+years, missing opening bars, invalid OHLC and incomplete sessions fail closed. Today's unfinished candles are excluded.
 
 Daily context (prior daily OHLC and five complete prior 15m sessions) is cached
 once successfully per date/ticker. Failed fetches may retry on a later pass.
@@ -76,8 +87,10 @@ Both GOOG and GOOGL are retained (seven companies, eight securities); total
 count may exceed 110. Catalog completeness, actual exchange session dates and
 source freshness must be verified by the operator. This tool validates the
 supplied observations, not the truth/completeness of an external catalog.
-A sector membership/data acquisition adapter is still required for unattended
-quarterly rebuilds.
+The new sweep-acquire-universe command downloads and caches the thirty daily
+sessions for every member of a supplied complete GICS catalog. It publishes no
+new ranking if any member fails. Obtaining a complete, current catalog remains
+a prerequisite; a subset is not silently substituted.
 
 ## Persistence and app connection
 
@@ -130,14 +143,14 @@ intentionally not supplied with invented definitions.
 ## Required follow-up for go-live
 
 - Resolve the method definitions with written approval.
-- Obtain actual six historical 1m tapes plus daily/15m level evidence; verify
-  ticker/date/price scale and split handling.
+- Reconcile the acquired historical tapes with the supplied levels/extremes;
+  verify source/price-scale differences and identify intended historical levels.
 - Implement the approved target/level policies and end-to-end detector.
 - Materialize the real ranked universe and prove pass-time/data freshness.
 - Add durable per-day ticker/level/direction detection state, complete audit
   evidence, notification outbox and delivery retry handling.
-- Deploy the worker with an exchange calendar and DST-aware America/Chicago
-  scheduling: five-minute passes 08:30–15:00; scorecard at 15:05, including
+- Deploy the provided worker with its checked exchange calendar and DST-aware
+  America/Chicago scheduling: five-minute passes 08:30–15:00; scorecard at 15:05, including
   visible zero days. Holidays/early closes must have explicit handling.
 - Capture final session bars and score only data after each trigger, with
   deterministic approved tie resolution and missing-data reporting.
