@@ -63,3 +63,15 @@ COPY lib/signals.ts lib/signal-delivery.ts ./lib/
 COPY scripts/signal-bot.ts ./scripts/signal-bot.ts
 USER node
 CMD ["node_modules/.bin/tsx", "scripts/signal-bot.ts"]
+
+# ---- sweep-worker: deterministic capture/score scheduler ----
+FROM base AS sweep-worker
+ENV NODE_ENV=production SWEEP_DATA_DIR=/data/sweep
+COPY --from=deps /app/node_modules/dotenv ./node_modules/dotenv
+COPY package.json ./
+COPY lib/sweep ./lib/sweep
+COPY config/sweep ./config/sweep
+COPY scripts/sweep-*.mjs ./scripts/
+RUN mkdir -p /data/sweep && chown node:node /data/sweep
+USER node
+CMD ["node", "scripts/sweep-worker.mjs"]

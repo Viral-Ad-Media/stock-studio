@@ -4,6 +4,8 @@ import { resolve, join } from "node:path";
 import { BLOCKERS, RULES, inspectSweep, resample, scoreAlert, scorecard, validateBars } from "../lib/sweep/core.mjs";
 import { exchangeDate, fetchChart, fetchDailyContext, sanitizeProxyEnvironment } from "../lib/sweep/yahoo.mjs";
 import { atomicJSON, readJSON, appendJSONL, readJSONL, withLock } from "../lib/sweep/storage.mjs";
+import { sessionFor } from "../lib/sweep/calendar.mjs";
+import { acquireHistory, historicalEvidence } from "../lib/sweep/history.mjs";
 
 const dataDir = resolve(process.env.SWEEP_DATA_DIR ?? ".sweep-data");
 const mode = process.argv[2] ?? "--help";
@@ -13,6 +15,9 @@ const manifest = await readJSON(new URL("../config/sweep/acceptance-cases.json",
 async function capture() {
   sanitizeProxyEnvironment(process.env);
   const startedAt = now(), date = exchangeDate(startedAt);
+  const expectedSession = sessionFor(date);
+  if (!expectedSession) return { status: "MARKET_CLOSED", date, mode: "CAPTURE_ONLY", alertsEnabled: false };
+  if (startedAt < expectedSession.start + 60) return { status: "WAITING_FOR_FIRST_CLOSE", date, mode: "CAPTURE_ONLY", alertsEnabled: false };
   const universe = await readJSON(process.env.SWEEP_UNIVERSE_PATH ??
     new URL("../config/sweep/scan_universe.json", import.meta.url));
   if (universe.status !== "READY" || !Array.isArray(universe.tickers) || !universe.tickers.length) {
@@ -66,6 +71,7 @@ async function capture() {
   }
   const report = {
     mode: "CAPTURE_ONLY", status: "BLOCKED_METHOD", startedAt, finishedAt: now(), date,
+    captureStatus: results.every(r => r.status === "CAPTURED") ? "COMPLETE" : "INCOMPLETE",
     blockers: BLOCKERS, results, alertsEnabled: false,
   };
   await atomicJSON(join(dataDir, "latest-pass.json"), report);
@@ -80,6 +86,11 @@ async function replay(directory) {
       const fixture = await readJSON(join(resolve(directory), item.id + ".json"));
       if (fixture.ticker !== item.ticker || exchangeDate(fixture.session.start) !== item.date ||
           fixture.direction !== item.direction) throw new Error("FIXTURE_IDENTITY_MISMATCH");
+      if (fixture.source === "Yahoo Finance") {
+        results.push({ ...item, verification: "BLOCKED_METHOD", evidence: historicalEvidence(fixture, item),
+          reason: "Historical tape acquired; approved level/target/timing semantics are still required" });
+        continue;
+      }
       const result = inspectSweep(fixture);
       // No historical case can PASS until the complete approved detector exists.
       results.push({ ...item, verification: "BLOCKED_METHOD", diagnostic: result,
@@ -119,14 +130,22 @@ async function score(date) {
     message: scorecard(date, results), measurementNotice: "Live detection is not enabled; these counts do not establish a completed shadow session.",
   };
   await atomicJSON(join(dataDir, date + "-scorecard.json"), report);
+  await atomicJSON(join(dataDir, "latest-scorecard.json"), report);
   return report;
 }
 try {
   if (mode === "--help") {
-    console.log("Sweep foundation: --capture | --replay <fixtures> | --score [YYYY-MM-DD]\nCapture only; live alerts and schedules remain disabled until method approval and acceptance replay.");
+    console.log("Sweep foundation: --capture | --history <directory> | --replay <fixtures> | --score [YYYY-MM-DD]\nCapture only; live alerts remain disabled until method approval and acceptance replay.");
   } else {
     const result = await withLock(dataDir, async () => {
       if (mode === "--capture") return capture();
+      if (mode === "--history") {
+        if (!process.argv[3]) throw new Error("HISTORY_DIRECTORY_REQUIRED");
+        sanitizeProxyEnvironment(process.env);
+        const report = await acquireHistory(manifest, resolve(process.argv[3]));
+        if (report.results.some(r => r.status === "UNAVAILABLE")) process.exitCode = 2;
+        return report;
+      }
       if (mode === "--replay") return replay(process.argv[3]);
       if (mode === "--score") return score(process.argv[3] ?? exchangeDate(now()));
       throw new Error("UNKNOWN_MODE");
