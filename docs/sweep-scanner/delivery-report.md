@@ -1,5 +1,9 @@
 # Initial delivery report — 2026-10-16
 
+> This records the initial October 16 delivery. The October 17 follow-up acquired
+> all six tapes and added the worker; see [historical evidence](historical-evidence.md)
+> and [deployment](../../deploy/sweep-scanner/README.md) for current status.
+
 ## Implemented
 
 - Deterministic numerical rule primitives and an explicitly hypothetical replay

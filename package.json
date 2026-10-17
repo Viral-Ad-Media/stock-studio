@@ -14,7 +14,9 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "sweep-scanner": "node scripts/sweep-scanner.mjs",
-    "sweep-universe": "node scripts/sweep-universe.mjs"
+    "sweep-universe": "node scripts/sweep-universe.mjs",
+    "sweep-worker": "node scripts/sweep-worker.mjs",
+    "sweep-acquire-universe": "node scripts/sweep-acquire-universe.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { Radar, FlaskConical, Clock3, ArrowUpRight } from "lucide-react";
 import { currentUser } from "@/lib/workspace";
 import { isSuperAdmin } from "@/lib/admin";
-import { readSweepCapture } from "@/lib/sweep/dashboard";
+import { readSweepCapture, readSweepWorker } from "@/lib/sweep/dashboard";
+import evidence from "@/config/sweep/historical-evidence.json";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Sweep Scanner", description: "Liquidity sweeps, reclaim evidence and shadow testing." };
@@ -13,6 +14,7 @@ export default async function SweepsPage() {
   if (!user) redirect("/login");
   const admin = await isSuperAdmin(user.id);
   const capture = admin ? await readSweepCapture() : null;
+  const worker = admin ? await readSweepWorker() : null;
   const report = capture?.report;
   const captured = report?.results.filter(r => r.status === "CAPTURED").length ?? 0;
   const failed = report?.results.filter(r => r.status === "FETCH_FAILED").length ?? 0;
@@ -42,12 +44,19 @@ export default async function SweepsPage() {
       </div>
       {admin && <section className="card p-6" aria-labelledby="capture-heading">
         <h2 id="capture-heading" className="flex items-center gap-2 text-lg font-semibold text-slate-100"><Clock3 className="h-5 w-5" aria-hidden />Capture health · admin preview</h2>
+        {worker && <p className={`mt-2 text-sm ${worker.status === "FAILED" ? "text-amber-300" : "text-fg-subtle"}`}>Last scheduled command: {worker.mode === "--score" ? "Scorecard" : "Capture"} · {worker.status.toLowerCase()} · {new Date(worker.startedAt * 1000).toLocaleString("en-US", { timeZone: "America/Chicago" })} CT. Command status does not indicate a completed live scan.</p>}
         {report ? <>
           <p className="mt-2 text-sm text-fg-subtle">Last pass: {timestamp}. Capture results are not sweep detections.</p>
           {Date.now() / 1000 - report.finishedAt > 600 && <p className="mt-2 text-sm text-amber-300">No capture in the last ten minutes. Check the runner during market hours.</p>}
           <dl className="my-5 grid grid-cols-3 gap-3">{[["Captured", captured], ["Fetch failures", failed], ["Not scanned", skipped]].map(([label, n]) => <div key={label} className="rounded-xl bg-ink-800 p-4"><dt className="text-xs text-fg-subtle">{label}</dt><dd className="mt-1 text-2xl font-semibold text-slate-100">{n}</dd></div>)}</dl>
           <div className="overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Latest ticker capture status</caption><thead className="text-fg-subtle"><tr><th className="py-2">Ticker</th><th>Status</th><th>Detail</th><th>Research</th></tr></thead><tbody>{report.results.map(r => <tr key={r.ticker} className="border-t border-ink-700"><th className="py-3 font-mono text-slate-100">{r.ticker}</th><td className="text-slate-300">{r.status.replaceAll("_", " ")}</td><td className="text-fg-subtle">{r.reason ?? "Tape saved"}</td><td><Link href={"/new?ticker=" + encodeURIComponent(r.ticker)} className="inline-flex items-center gap-1 text-emerald-400">Study<ArrowUpRight className="h-3 w-3" aria-hidden /></Link></td></tr>)}</tbody></table></div>
         </> : <p className="mt-3 text-sm text-fg-subtle">{capture?.state === "unavailable" ? "The capture report could not be read. This is a data error, not a zero-alert pass." : capture?.state === "waiting" ? "No capture has completed yet." : "The capture worker is not connected to this deployment."}</p>}
+      </section>}
+      {admin && <section className="card p-6" aria-labelledby="historical-evidence">
+        <h2 id="historical-evidence" className="text-lg font-semibold text-slate-100">Historical evidence · six acceptance cases</h2>
+        <p className="mt-2 text-sm text-fg-subtle">Captured from Yahoo Finance on October 17, 2026. Each tape has 390 minute bars and prior-session context. These are source checks, not passing strategy tests.</p>
+        <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><caption className="sr-only">Historical source discrepancies</caption><thead className="text-fg-subtle"><tr><th className="py-2">Case</th><th>Observed open</th><th>Previous low</th><th>Source check</th></tr></thead><tbody>{evidence.results.map(r => <tr key={r.id} className="border-t border-ink-700"><th className="py-3 font-mono text-slate-100">{r.id}</th><td className="pr-3 text-slate-300">{r.evidence.open.toFixed(2)}</td><td className="pr-3 text-slate-300">{r.evidence.priorLow.toFixed(2)}</td><td className="text-fg-subtle">{r.evidence.briefExtremeObserved === false ? "Stated extreme not found" : r.evidence.openingGapThroughPriorLow ? "Opened below previous session low" : "Tape captured; level definition pending"}</td></tr>)}</tbody></table></div>
+        <p className="mt-3 text-xs text-amber-300">META requires source reconciliation. MU and WDC cannot use the previous session low without triggering the opening-gap exclusion; another intended level needs to be identified.</p>
       </section>}
       <p className="text-xs text-fg-subtle">Scanner levels refer to the stock price. Options premiums and actual fills are recorded separately.</p>
     </div>
