@@ -1,0 +1,126 @@
+{
+  "generatedAt": "2026-10-17T09:04:00.000Z",
+  "status": "EVIDENCE_ONLY",
+  "results": [
+    {
+      "id": "META-2026-10-16",
+      "status": "CAPTURED",
+      "evidence": {
+        "barCount": 390,
+        "open": 736.6950073242188,
+        "sessionLow": 702.7100830078125,
+        "sessionHigh": 738.489990234375,
+        "priorLow": 715.5800170898438,
+        "priorHigh": 743.969970703125,
+        "priorSessionDate": "2026-10-15",
+        "briefExtreme": 733.89,
+        "briefExtremeObserved": false,
+        "briefLevel": 734.29,
+        "openingGapThroughPriorLow": false,
+        "openingGapThroughBriefLevel": false,
+        "note": "Stated extreme not found in the downloaded minute-bar lows/highs within $0.011; investigate source/price-scale mismatch. Do not alter the brief or tape.",
+        "sha256": "647ae985b85544783db9407950a4d5d7949bd5446327a0d542ef40ea601007e3"
+      }
+    },
+    {
+      "id": "MU-2026-10-15",
+      "status": "CAPTURED",
+      "evidence": {
+        "barCount": 390,
+        "open": 871.5800170898438,
+        "sessionLow": 858,
+        "sessionHigh": 931.6500244140625,
+        "priorLow": 913.5599975585938,
+        "priorHigh": 949.4199829101562,
+        "priorSessionDate": "2026-10-14",
+        "briefExtreme": 858,
+        "briefExtremeObserved": true,
+        "briefLevel": null,
+        "openingGapThroughPriorLow": true,
+        "openingGapThroughBriefLevel": null,
+        "note": "Price evidence only; not a detector acceptance result.",
+        "sha256": "1ff4b5fa4be461ee3916afde2ee1d1f9b5356d990684298901691d6ae3c3bdab"
+      }
+    },
+    {
+      "id": "WDC-2026-10-15",
+      "status": "CAPTURED",
+      "evidence": {
+        "barCount": 390,
+        "open": 345.3299865722656,
+        "sessionLow": 336,
+        "sessionHigh": 356.8299865722656,
+        "priorLow": 362.5,
+        "priorHigh": 382.3399963378906,
+        "priorSessionDate": "2026-10-14",
+        "briefExtreme": 336,
+        "briefExtremeObserved": true,
+        "briefLevel": null,
+        "openingGapThroughPriorLow": true,
+        "openingGapThroughBriefLevel": null,
+        "note": "Price evidence only; not a detector acceptance result.",
+        "sha256": "c503cd04db688b9181bed221b9e8999668e0634970f80161ac1f44d058c235c3"
+      }
+    },
+    {
+      "id": "MU-2026-10-12",
+      "status": "CAPTURED",
+      "evidence": {
+        "barCount": 390,
+        "open": 1002.4099731445312,
+        "sessionLow": 978.5,
+        "sessionHigh": 1002.4099731445312,
+        "priorLow": 1017,
+        "priorHigh": 1054.1700439453125,
+        "priorSessionDate": "2026-10-09",
+        "briefExtreme": null,
+        "briefExtremeObserved": null,
+        "briefLevel": 1017,
+        "openingGapThroughPriorLow": true,
+        "openingGapThroughBriefLevel": true,
+        "note": "Price evidence only; not a detector acceptance result.",
+        "sha256": "18004b377787c337b8be050dea2fa803b6bcd3f5a728a3df67794fa06f0df639"
+      }
+    },
+    {
+      "id": "TSLA-2026-10-14",
+      "status": "CAPTURED",
+      "evidence": {
+        "barCount": 390,
+        "open": 371.1499938964844,
+        "sessionLow": 363.82000732421875,
+        "sessionHigh": 371.3900146484375,
+        "priorLow": 371.29998779296875,
+        "priorHigh": 377.04998779296875,
+        "priorSessionDate": "2026-10-13",
+        "briefExtreme": null,
+        "briefExtremeObserved": null,
+        "briefLevel": 368.03,
+        "openingGapThroughPriorLow": true,
+        "openingGapThroughBriefLevel": false,
+        "note": "Price evidence only; not a detector acceptance result.",
+        "sha256": "a9dfecdf1cb8c2f106b7b5fbfc1e81a51e810855e30d38bd7eb7454579292473"
+      }
+    },
+    {
+      "id": "BAC-2026-10-14",
+      "status": "CAPTURED",
+      "evidence": {
+        "barCount": 390,
+        "open": 49.83000183105469,
+        "sessionLow": 49.255001068115234,
+        "sessionHigh": 51.52000045776367,
+        "priorLow": 53.63999938964844,
+        "priorHigh": 54.849998474121094,
+        "priorSessionDate": "2026-10-13",
+        "briefExtreme": null,
+        "briefExtremeObserved": null,
+        "briefLevel": null,
+        "openingGapThroughPriorLow": true,
+        "openingGapThroughBriefLevel": null,
+        "note": "Price evidence only; not a detector acceptance result.",
+        "sha256": "d8650a84d4ce6d9d2eb5db3ce70842de830bfc68819b10da191e0f1b6483cb37"
+      }
+    }
+  ]
+}

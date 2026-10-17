@@ -7,8 +7,8 @@
     "expected": "ALERT",
     "level": 734.29,
     "extreme": 733.89,
-    "verification": "NOT_VERIFIED",
-    "source": "User brief; no historical tape supplied"
+    "verification": "EVIDENCE_CAPTURED_METHOD_PENDING",
+    "source": "User brief; Yahoo Finance tape acquired 2026-10-17; see tests/fixtures/sweep/historical"
   },
   {
     "id": "MU-2026-10-15",
@@ -17,8 +17,8 @@
     "direction": "CALL",
     "expected": "ALERT",
     "extreme": 858,
-    "verification": "NOT_VERIFIED",
-    "source": "User brief; no historical tape supplied"
+    "verification": "EVIDENCE_CAPTURED_METHOD_PENDING",
+    "source": "User brief; Yahoo Finance tape acquired 2026-10-17; see tests/fixtures/sweep/historical"
   },
   {
     "id": "WDC-2026-10-15",
@@ -27,8 +27,8 @@
     "direction": "CALL",
     "expected": "ALERT",
     "extreme": 336,
-    "verification": "NOT_VERIFIED",
-    "source": "User brief; no historical tape supplied"
+    "verification": "EVIDENCE_CAPTURED_METHOD_PENDING",
+    "source": "User brief; Yahoo Finance tape acquired 2026-10-17; see tests/fixtures/sweep/historical"
   },
   {
     "id": "MU-2026-10-12",
@@ -38,8 +38,8 @@
     "expected": "NO_ALERT",
     "level": 1017,
     "trap": "GAP_THROUGH",
-    "verification": "NOT_VERIFIED",
-    "source": "User brief; no historical tape supplied"
+    "verification": "EVIDENCE_CAPTURED_METHOD_PENDING",
+    "source": "User brief; Yahoo Finance tape acquired 2026-10-17; see tests/fixtures/sweep/historical"
   },
   {
     "id": "TSLA-2026-10-14",
@@ -49,8 +49,8 @@
     "expected": "NO_ALERT",
     "level": 368.03,
     "trap": "NO_RECLAIM",
-    "verification": "NOT_VERIFIED",
-    "source": "User brief; no historical tape supplied"
+    "verification": "EVIDENCE_CAPTURED_METHOD_PENDING",
+    "source": "User brief; Yahoo Finance tape acquired 2026-10-17; see tests/fixtures/sweep/historical"
   },
   {
     "id": "BAC-2026-10-14",
@@ -59,7 +59,7 @@
     "direction": "CALL",
     "expected": "NO_ALERT",
     "trap": "GAP_THROUGH",
-    "verification": "NOT_VERIFIED",
-    "source": "User brief; no historical tape supplied"
+    "verification": "EVIDENCE_CAPTURED_METHOD_PENDING",
+    "source": "User brief; Yahoo Finance tape acquired 2026-10-17; see tests/fixtures/sweep/historical"
   }
 ]
