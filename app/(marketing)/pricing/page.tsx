@@ -243,7 +243,6 @@ export default function PricingPage() {
       </section>
 
       <section className="mb-12" aria-labelledby="workspace-preview-heading">
-        <p className="desk-eyebrow">Beyond the research</p>
         <h2
           id="workspace-preview-heading"
           className="text-2xl font-semibold tracking-tight text-slate-100"

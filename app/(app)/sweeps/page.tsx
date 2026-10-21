@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Radar, FlaskConical, Clock3, ArrowUpRight } from "lucide-react";
+import { FlaskConical, Clock3, ArrowUpRight } from "lucide-react";
 import { currentUser } from "@/lib/workspace";
 import { isSuperAdmin } from "@/lib/admin";
 import { readSweepCapture, readSweepWorker } from "@/lib/sweep/dashboard";
 import evidence from "@/config/sweep/historical-evidence.json";
+import PageHeader from "@/components/ui/PageHeader";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Sweep Scanner", description: "Liquidity sweeps, reclaim evidence and shadow testing." };
@@ -22,14 +23,12 @@ export default async function SweepsPage() {
   const timestamp = report ? new Date(report.finishedAt * 1000).toLocaleString("en-US", { timeZone: "America/Chicago" }) + " CT" : null;
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-emerald-400">Market intelligence</p>
-          <h1 className="flex items-center gap-3 text-3xl font-bold text-slate-100"><Radar className="h-7 w-7 text-emerald-400" aria-hidden />Sweep Scanner</h1>
-          <p className="mt-3 max-w-2xl text-sm text-fg-subtle">Track rapid sweeps through known price levels and the reclaim or rejection that follows.</p>
-        </div>
-        <span className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300"><FlaskConical className="h-4 w-4" aria-hidden />In development</span>
-      </header>
+      <PageHeader
+        className="mb-0"
+        title="Sweep Scanner"
+        description="Track rapid sweeps through known price levels and the reclaim or rejection that follows."
+        actions={<span className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300"><FlaskConical className="h-4 w-4" aria-hidden />In development</span>}
+      />
       <section className="card border-amber-500/30 p-6" aria-labelledby="sweep-state">
         <h2 id="sweep-state" className="text-lg font-semibold text-slate-100">Preparing for shadow testing</h2>
         <p className="mt-2 max-w-3xl text-sm text-slate-300">Live alerts are not active. The scanner must reproduce the agreed method and pass historical replay before a measured shadow session begins.</p>

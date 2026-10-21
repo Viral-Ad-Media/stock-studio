@@ -43,7 +43,6 @@ const GUARANTEES = [
 const FEATURES = [
   {
     id: "studies",
-    eyebrow: "Case studies",
     title: "A verdict you can check, card by card",
     body: "Every study answers four questions: is the business growing, is it profitable, what are you paying for it, and how durable is its advantage. Each card ends in a clear verdict, and a research grade sums up how the business scores on the verified facts.",
     bullets: [
@@ -55,7 +54,6 @@ const FEATURES = [
   },
   {
     id: "dashboard",
-    eyebrow: "Dashboard",
     title: "Every study and every earnings date in one place",
     body: "Each study card carries its grade and a one-line summary of what the numbers mean. Upcoming and just-reported earnings for the companies you follow sit on top, with a link to update the study after a report.",
     bullets: [
@@ -67,7 +65,6 @@ const FEATURES = [
   },
   {
     id: "watchlist",
-    eyebrow: "Thesis tracker",
     title: "Know when a thesis starts to crack",
     body: "Each watchlist refresh re-checks the previous thesis against what has happened since and marks it intact, weakening or broken, citing the specific development. Every version is kept as a timeline.",
     bullets: [
@@ -79,7 +76,6 @@ const FEATURES = [
   },
   {
     id: "market",
-    eyebrow: "Market context",
     title: "Where the market is, in plain numbers",
     body: "Sector performance against the S&P 500, how many large caps are participating, and today's biggest movers, with a plain-English reading of what the numbers say. Context for your studies, not a signal.",
     bullets: [
@@ -91,7 +87,6 @@ const FEATURES = [
   },
   {
     id: "setups",
-    eyebrow: "Setup bots",
     title: "Pattern scanners that keep score on themselves",
     body: "Five rule-based bots scan about 100 large caps after every close for well-known chart patterns, from 52-week breakouts to post-earnings gaps. Every match is tracked afterwards, so each bot shows how its pattern has really behaved.",
     bullets: [
@@ -103,7 +98,6 @@ const FEATURES = [
   },
   {
     id: "gamma",
-    eyebrow: "Gamma exposure",
     title: "See how options positioning shapes the tape",
     body: "A dealer-gamma model for SPY, SPX, QQQ, IWM or any optionable stock, built from CBOE's delayed options data: net gamma per 1% move, the zero-gamma level and the largest strikes, with the model's assumptions spelled out.",
     bullets: [
@@ -116,7 +110,6 @@ const FEATURES = [
 
   {
     id: "journal",
-    eyebrow: "Trading journal",
     title: "Close the loop on your decisions",
     body: "Record actual entries and exits, connect the trade to your research, and review realized results after fees. Import mapped CSV lots after reviewing a preview.",
     bullets: [
@@ -128,7 +121,6 @@ const FEATURES = [
   },
   {
     id: "leaps",
-    eyebrow: "LEAPS workspace",
     title: "See what changes when your assumptions do",
     body: "Compare long-dated options using delayed chains or manual assumptions. Explore price, time and volatility scenarios before recording an actual trade separately.",
     bullets: [
@@ -272,23 +264,6 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <MarketMotion />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(800px 420px at 80% 0%, rgba(16,185,129,0.16), transparent 70%)",
-          }}
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-[0.06] [mask-image:linear-gradient(to_bottom,black,transparent_85%)]"
-          style={{
-            backgroundImage:
-              "linear-gradient(#94a3b8 1px, transparent 1px), linear-gradient(90deg, #94a3b8 1px, transparent 1px)",
-            backgroundSize: "48px 48px",
-          }}
-        />
         <div className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-6 pb-16 pt-16 lg:grid-cols-[1fr_1.15fr] lg:pb-24 lg:pt-24">
           <div>
             <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
@@ -394,10 +369,7 @@ export default function LandingPage() {
               className="grid scroll-mt-24 grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16"
             >
               <div className={i % 2 ? "lg:order-2" : ""}>
-                <p className="text-xs font-semibold uppercase tracking-widest text-emerald-400">
-                  {f.eyebrow}
-                </p>
-                <h3 className="mt-3 text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">
+                <h3 className="text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl">
                   {f.title}
                 </h3>
                 <p className="mt-4 text-slate-300">{f.body}</p>
@@ -428,7 +400,6 @@ export default function LandingPage() {
       >
         <div className="card flex flex-wrap items-center justify-between gap-6 p-6 sm:p-8">
           <div className="max-w-2xl">
-            <p className="desk-eyebrow">From illustration to evidence</p>
             <h2 id="evidence-heading" className="text-2xl font-semibold">
               Check a source. Try the decision workflow.
             </h2>
@@ -491,15 +462,17 @@ export default function LandingPage() {
             </Link>
             .
           </p>
-          <ul className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <ul className="mt-10 grid grid-cols-1 gap-x-10 md:grid-cols-2 lg:grid-cols-3">
             {FORMATS.map(({ icon: Icon, name, desc }) => (
               <li
                 key={name}
-                className="rounded-xl border border-ink-700 bg-ink-900 p-5"
+                className="flex gap-3 border-t border-ink-700 py-5"
               >
-                <Icon className="h-5 w-5 text-emerald-400" aria-hidden />
-                <h3 className="mt-3 font-semibold">{name}</h3>
-                <p className="mt-1 text-sm text-fg-subtle">{desc}</p>
+                <Icon className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
+                <div>
+                  <h3 className="font-semibold text-slate-100">{name}</h3>
+                  <p className="mt-1 text-sm text-fg-subtle">{desc}</p>
+                </div>
               </li>
             ))}
           </ul>
@@ -538,25 +511,17 @@ export default function LandingPage() {
 
       {/* Final CTA */}
       <section className="mx-auto max-w-6xl px-6 pb-24">
-        <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-ink-900 p-10 text-center sm:p-14">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(600px 240px at 50% 0%, rgba(16,185,129,0.18), transparent 70%)",
-            }}
-          />
-          <h2 className="relative text-2xl font-bold text-slate-100 sm:text-3xl">
+        <div className="rounded-2xl border border-emerald-500/30 bg-ink-900 p-10 text-center sm:p-14">
+          <h2 className="text-2xl font-bold text-slate-100 sm:text-3xl">
             Try it on a ticker you already know
           </h2>
-          <p className="relative mx-auto mt-3 max-w-xl text-slate-300">
+          <p className="mx-auto mt-3 max-w-xl text-slate-300">
             The fastest way to trust it is to check its work against a company
             you understand.
           </p>
           <Link
             href="/signup"
-            className="btn-primary relative mt-8 w-full whitespace-nowrap px-6 py-3 sm:w-auto"
+            className="btn-primary mt-8 w-full whitespace-nowrap px-6 py-3 sm:w-auto"
           >
             Start your free trial <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>

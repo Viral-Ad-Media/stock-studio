@@ -14,6 +14,7 @@ import { VARIANTS } from "@/lib/shared";
 import { parseStoredGrade } from "@/lib/grades";
 import GradeBadge from "@/components/insights/GradeBadge";
 import EarningsPanel from "@/components/insights/EarningsPanel";
+import PageHeader from "@/components/ui/PageHeader";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Today", description: "Your daily research, thesis, earnings and market overview." };
@@ -27,14 +28,13 @@ export default async function TodayPage() {
   if (!ws) return <p role="alert">Your workspace is unavailable. Please sign in again.</p>;
   return (
     <div className="space-y-6">
-      <header className="workspace-heading flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-emerald-400">{marketDay(marketDateET())} · New York market date</p>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-100">Today</h1>
-          <p className="mt-2 max-w-[65ch] text-sm text-fg-subtle">Research the company. Track the thesis. Review the latest market context. Data below may describe an earlier session; each section shows its own date.</p>
-        </div>
-        <Link href="/new" className="btn-primary px-4 py-2 text-sm">New study</Link>
-      </header>
+      <PageHeader
+        className="mb-0"
+        title="Today"
+        meta={`${marketDay(marketDateET())} · New York market date`}
+        description="Research the company. Track the thesis. Review the latest market context. Data below may describe an earlier session; each section shows its own date."
+        actions={<Link href="/new" className="btn-primary px-4 py-2 text-sm">New study</Link>}
+      />
 
       <Suspense fallback={<Loading title="Market context" />}><MarketOverview /></Suspense>
       <div className="grid gap-4 lg:grid-cols-2">

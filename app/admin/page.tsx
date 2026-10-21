@@ -80,7 +80,6 @@ export default async function AdminOverview() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Superadmin"
         title="Overview"
         description={
           <> Across every workspace. Figures are live from the database. </>

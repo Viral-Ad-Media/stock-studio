@@ -25,7 +25,7 @@ export default async function AdminLayout({
         className="mx-auto w-full min-w-0 max-w-6xl flex-1 p-4 sm:p-6 md:p-8"
       >
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3 border-b border-ink-700 pb-4">
-          <p className="desk-eyebrow">Stock Studio · Operations</p>
+          <p className="text-sm font-medium text-slate-300">Stock Studio · Operations</p>
           <RefreshButton />
         </div>
         {children}

@@ -21,7 +21,6 @@ export default function SensitivityExplorer({ input }: { input: LeapsInput }) {
     <section className="chart-panel border-sky-400/25">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="desk-eyebrow text-sky-400">Options learning lab</p>
           <h2 className="font-semibold text-slate-100">
             Price, time and volatility in 3D
           </h2>

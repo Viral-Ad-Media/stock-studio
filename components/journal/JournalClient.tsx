@@ -226,7 +226,6 @@ export default function JournalClient({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Your trading desk / Journal"
         title="Trading journal"
         description="Record a complete lot, its thesis and what happened. Stocks and purchased standard equity options only. For partial exits, split the entry into separate lots and allocate fees to each."
         actions={

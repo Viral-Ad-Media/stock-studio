@@ -110,7 +110,7 @@ function NavLinks({ pathname, credits }: { pathname: string; credits: number | n
         // Study pages belong to the dashboard section.
         const active = pathname.startsWith(href) || (href === "/dashboard" && pathname.startsWith("/study"));
         return (
-          <div key={href}>{["/today", "/market", "/journal", "/billing"].includes(href) && <p className="px-3 pb-2 pt-4 text-[10px] font-semibold uppercase tracking-[.16em] text-fg-subtle">{({"/today":"Research", "/market":"Market intelligence", "/journal":"Your trading desk", "/billing":"Account"} as Record<string,string>)[href]}</p>}<Link
+          <div key={href}>{["/today", "/market", "/journal", "/billing"].includes(href) && <p className="px-3 pb-2 pt-4 text-[11px] font-semibold uppercase tracking-[.14em] text-fg-subtle">{({"/today":"Research", "/market":"Market intelligence", "/journal":"Your trading desk", "/billing":"Account"} as Record<string,string>)[href]}</p>}<Link
             href={href}
             aria-current={active ? "page" : undefined}
             data-tour={tour}

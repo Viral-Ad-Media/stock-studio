@@ -82,23 +82,20 @@ export default async function Dashboard() {
     <div>
       {inFlight && <AutoRefresh />}
       <Onboarding show={studies.length === 0 && pendingJobs.length === 0} />
-      <div className="mb-6">
-        <PageHeader
-          eyebrow="Research library"
-          title="Dashboard"
-          description="Fact-checked stock case studies, built by the research engine."
-          actions={
-            <>
-              <Link href="/today" className="btn-secondary text-sm px-4 py-2">
-                Today&apos;s overview
-              </Link>
-              <Link href="/new" className="btn-primary text-sm px-4 py-2">
-                New study
-              </Link>
-            </>
-          }
-        />
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Fact-checked stock case studies, built by the research engine."
+        actions={
+          <>
+            <Link href="/today" className="btn-secondary text-sm px-4 py-2">
+              Today&apos;s overview
+            </Link>
+            <Link href="/new" className="btn-primary text-sm px-4 py-2">
+              New study
+            </Link>
+          </>
+        }
+      />
 
       <QueuePanel jobs={pendingJobs} />
 
