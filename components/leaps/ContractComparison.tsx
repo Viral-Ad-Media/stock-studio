@@ -100,13 +100,15 @@ export default function ContractComparison({
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="desk-eyebrow">Your shortlist · {options.length}/3</p>
           <h3
             id="contract-comparison-heading"
             className="font-semibold text-slate-100"
           >
             Compare selected contracts
           </h3>
+          <p className="mt-0.5 text-xs text-fg-subtle">
+            {options.length} of 3 shortlisted
+          </p>
         </div>
         <button
           type="button"

@@ -258,7 +258,6 @@ export default function LeapsClient({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Your trading desk / Options lab"
         title="LEAPS workspace"
         description="Explore long-dated purchased calls and puts, then compare a shorter holding period with the time remaining on the contract. Educational scenarios, not recommended contracts or trade calls."
       />

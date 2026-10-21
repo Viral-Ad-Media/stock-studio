@@ -7,6 +7,7 @@ import { isSuperAdmin } from "@/lib/admin";
 import { canReadSignals } from "@/lib/today";
 import EmptyState from "@/components/guide/EmptyState";
 import { ACTION_STYLE, SIGNAL_ACTIONS, formatPrice, type SignalAction } from "@/lib/signals";
+import PageHeader from "@/components/ui/PageHeader";
 
 export const metadata = { title: "Signals", description: "The program trader's calls, with the full track record." };
 
@@ -56,10 +57,8 @@ export default async function SignalsPage() {
   if (!canReadSignals(billing.accessGranted, admin)) {
     return (
       <div>
-        <h1 className="mb-1 flex items-center gap-2 text-2xl font-bold text-slate-100">
-          <Megaphone className="h-6 w-6 text-emerald-400" aria-hidden /> Signals
-        </h1>
-        <div className="card mt-4 max-w-xl p-6">
+        <PageHeader title="Signals" />
+        <div className="card max-w-xl p-6">
           <p className="flex items-center gap-2 font-medium text-slate-100">
             <Lock className="h-4 w-4 text-amber-400" aria-hidden /> Signals are for members with full access
           </p>
@@ -91,13 +90,11 @@ export default async function SignalsPage() {
 
   return (
     <div>
-      <h1 className="mb-1 flex items-center gap-2 text-2xl font-bold text-slate-100">
-        <Megaphone className="h-6 w-6 text-emerald-400" aria-hidden /> Signals
-      </h1>
-      <p className="mb-4 max-w-[72ch] text-sm text-fg-subtle">
-        Calls posted by the program&apos;s trader, newest first, the moment they go out on Discord. Every call is kept
-        permanently in the track record below: signals can&apos;t be edited, deleted or backdated.
-      </p>
+      <PageHeader
+        className="mb-4"
+        title="Signals"
+        description="Calls posted by the program's trader, newest first, the moment they go out on Discord. Every call is kept permanently in the track record below: signals can't be edited, deleted or backdated."
+      />
       <p className="mb-6 max-w-[72ch] rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-slate-300">
         These are the trader&apos;s own calls, not personalized advice for your situation. Trading involves risk of
         loss, including options losing their full value, and past calls don&apos;t guarantee future results.

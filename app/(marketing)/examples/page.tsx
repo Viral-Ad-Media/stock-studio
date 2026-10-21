@@ -12,20 +12,16 @@ export default function ExamplesPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-6 py-12">
       <PageHeader
-        eyebrow="Evidence before assumptions"
         title="See the research. Try the workflow."
         description="A public editorial research excerpt and an interactive product demonstration. Reported company facts and hypothetical trading assumptions are labeled separately."
       />
       <article className="card space-y-5 p-5 sm:p-8">
         <div>
-          <p className="desk-eyebrow">
-            Dated public research example · {example.ticker}
-          </p>
           <h2 className="text-2xl font-semibold">
             Apple: evidence, then open questions
           </h2>
           <p className="mt-2 text-sm text-fg-subtle">
-            {example.period} · information as of {example.asOf} · sources
+            Dated public research example · {example.ticker} · {example.period} · information as of {example.asOf} · sources
             checked {example.reviewedOn}
           </p>
           <p className="mt-2 text-xs text-amber-300">

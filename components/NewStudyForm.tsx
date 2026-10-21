@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { VARIANTS, HIDDEN_FORM_VARIANTS, MAX_NOTES, creditCost, apiError } from "@/lib/shared";
+import PageHeader from "@/components/ui/PageHeader";
 
 export type ExistingStudy = { id: number; status: string };
 
@@ -56,12 +57,10 @@ export default function NewStudyForm({
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-bold text-slate-100 mb-1">
-        {initialTicker ? `New study for ${initialTicker}` : "New case study"}
-      </h1>
-      <p className="text-sm text-fg-subtle mb-6">
-        Queues a report for the research engine. Credits are refunded automatically if the build fails.
-      </p>
+      <PageHeader
+        title={initialTicker ? `New study for ${initialTicker}` : "New case study"}
+        description="Queues a report for the research engine. Credits are refunded automatically if the build fails."
+      />
 
       <form onSubmit={submit} className="card p-4 sm:p-6 space-y-5" aria-describedby={error ? "new-error" : undefined}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

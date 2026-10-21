@@ -90,7 +90,7 @@ export default async function StudyPage({
           </h1>
           <p className="text-sm text-fg-subtle">
             {study.company ?? "Company TBD"} · {variantLabel}
-            {study.as_of_date && <> · as of {study.as_of_date}</>}
+            {study.as_of_date && <> <span className="whitespace-nowrap">· as of {study.as_of_date}</span></>}
           </p>
         </div>
         <StudyActions

@@ -2,6 +2,7 @@ import { Radar, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { sql, formatDate } from "@/lib/db";
 import EmptyState from "@/components/guide/EmptyState";
 import { BOTS, botRecord, type Direction, type Level } from "@/lib/setups";
+import PageHeader from "@/components/ui/PageHeader";
 
 export const metadata = { title: "Setup bots", description: "Rule-based pattern scans with a paper-tracked record." };
 
@@ -34,14 +35,10 @@ export default async function SetupsPage() {
 
   return (
     <div>
-      <h1 className="mb-1 flex items-center gap-2 text-2xl font-bold text-slate-100">
-        <Radar className="h-6 w-6 text-emerald-400" aria-hidden /> Setup bots
-      </h1>
-      <p className="mb-2 max-w-[72ch] text-sm text-fg-subtle">
-        Five rule-based scanners check about 100 large caps after every close for well-known chart patterns. A match
-        means a stock&apos;s last session fits a pattern&apos;s published definition. It is not a prediction or a
-        suggestion to trade. Every match is tracked afterwards, so you can see how each pattern has really behaved.
-      </p>
+      <PageHeader
+        title="Setup bots"
+        description="Five rule-based scanners check about 100 large caps after every close for well-known chart patterns. A match means a stock's last session fits a pattern's published definition. It is not a prediction or a suggestion to trade. Every match is tracked afterwards, so you can see how each pattern has really behaved."
+      />
       {scan ? (
         <p className="mb-6 text-sm font-medium text-slate-300">
           As of the {day(scan.session_date)} close · {scan.universe_size} stocks scanned · {matches.length}{" "}

@@ -48,7 +48,6 @@ export default function WorkflowDemo() {
       aria-labelledby="workflow-demo"
     >
       <div>
-        <p className="desk-eyebrow">Interactive demonstration</p>
         <h2 id="workflow-demo" className="text-2xl font-semibold">
           Walk through a decision
         </h2>

@@ -57,7 +57,6 @@ export default async function AdminJobs({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Superadmin"
         title="Jobs"
         description={
           <>
