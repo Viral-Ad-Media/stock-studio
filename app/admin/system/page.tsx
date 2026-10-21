@@ -47,7 +47,6 @@ export default async function AdminSystem() {
     <div className="space-y-6">
       <div>
         <PageHeader
-          eyebrow="Superadmin"
           title="System"
           description={
             <>

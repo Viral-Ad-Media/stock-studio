@@ -65,7 +65,7 @@ function Panel({
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-ink-700 bg-ink-950/60 p-2.5">
-      <p className="text-[9px] text-fg-subtle">{label}</p>
+      <p className="text-[10px] text-fg-subtle">{label}</p>
       <p className="mt-1 text-sm font-semibold tabular-nums text-slate-100">
         {value}
       </p>
@@ -122,7 +122,7 @@ function Bars({ gamma = false }: { gamma?: boolean }) {
       {values.map((value, n) => (
         <div
           key={n}
-          className="grid grid-cols-[2rem_1fr_3rem] items-center gap-2 text-[9px]"
+          className="grid grid-cols-[2rem_1fr_3rem] items-center gap-2 text-[10px]"
         >
           <span className="font-mono text-fg-subtle">
             {gamma ? 85 + n * 5 : ["XLK", "XLI", "XLV", "XLY", "XLF", "XLE"][n]}
@@ -164,11 +164,11 @@ function ResearchRows() {
           </span>
           <div>
             <p className="text-[11px] font-semibold text-slate-100">{ticker}</p>
-            <p className="text-[9px] text-fg-subtle">
+            <p className="text-[10px] text-fg-subtle">
               {name} · fictional company
             </p>
           </div>
-          <span className="ml-auto text-[9px] text-emerald-400">Ready</span>
+          <span className="ml-auto text-[10px] text-emerald-400">Ready</span>
         </div>
       ))}
     </div>
@@ -207,7 +207,7 @@ function Content({ kind }: { kind: MockupKind }) {
               Revenue is growing. The next question is whether cash generation
               can keep pace with investment.
             </p>
-            <div className="mt-3 flex flex-wrap gap-2 text-[9px] text-fg-subtle">
+            <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-fg-subtle">
               <span>↗ Earnings release</span>
               <span>↗ Annual filing</span>
               <span>↗ Source table</span>
@@ -249,14 +249,14 @@ function Content({ kind }: { kind: MockupKind }) {
           ].map(([ticker, status, text], n) => (
             <Panel key={ticker} title={`${ticker} · fictional company`}>
               <span
-                className={`rounded-full border px-2 py-1 text-[9px] ${n ? "border-amber-400/30 text-amber-300" : "border-emerald-400/30 text-emerald-400"}`}
+                className={`rounded-full border px-2 py-1 text-[10px] ${n ? "border-amber-400/30 text-amber-300" : "border-emerald-400/30 text-emerald-400"}`}
               >
                 {status}
               </span>
               <p className="mt-3 text-[11px] leading-5 text-slate-300">
                 {text}
               </p>
-              <p className="mt-3 border-t border-ink-700 pt-2 text-[9px] text-fg-subtle">
+              <p className="mt-3 border-t border-ink-700 pt-2 text-[10px] text-fg-subtle">
                 Saved thesis → Source update → Review
               </p>
             </Panel>
@@ -296,7 +296,7 @@ function Content({ kind }: { kind: MockupKind }) {
           ].map(([ticker, text]) => (
             <Panel key={ticker} title={`${ticker} · fictional company`}>
               <p className="text-[11px] text-slate-300">{text}</p>
-              <p className="mt-2 text-[9px] text-fg-subtle">
+              <p className="mt-2 text-[10px] text-fg-subtle">
                 Rule checklist · sample scan · no trade call
               </p>
             </Panel>
@@ -349,7 +349,7 @@ function Content({ kind }: { kind: MockupKind }) {
           <Panel title="Early exit vs. expiration · hypothetical">
             <Curve comparison />
           </Panel>
-          <div className="flex flex-wrap gap-3 text-[9px]">
+          <div className="flex flex-wrap gap-3 text-[10px]">
             <span className="text-emerald-400">● Modeled exit</span>
             <span className="text-sky-400">● At expiration</span>
           </div>
@@ -394,7 +394,7 @@ export default function ProductMockup({
         <span className="min-w-0 truncate font-mono text-[10px] text-fg-subtle">
           Stock Studio / {kind === "dashboard" ? "today" : kind}
         </span>
-        <span className="ml-auto shrink-0 rounded border border-ink-500 px-1.5 py-0.5 text-[8px] uppercase tracking-wider text-fg-subtle">
+        <span className="ml-auto shrink-0 rounded border border-ink-500 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-fg-subtle">
           Illustrative
         </span>
       </div>
@@ -415,7 +415,7 @@ export default function ProductMockup({
               return (
                 <div
                   key={String(label)}
-                  className="flex items-center gap-1.5 text-[9px] text-fg-subtle"
+                  className="flex items-center gap-1.5 text-[10px] text-fg-subtle"
                 >
                   <Item className="h-3 w-3" />
                   {String(label)}
@@ -426,17 +426,14 @@ export default function ProductMockup({
         )}
         <div className="min-w-0 flex-1 space-y-3 bg-ink-950/25 p-4 sm:p-5">
           <div>
-            <p className="text-[9px] uppercase tracking-[.14em] text-emerald-400">
-              Research & trading workspace
-            </p>
-            <p className="mt-1 text-sm font-semibold tracking-tight text-slate-100 sm:text-base">
+            <p className="text-sm font-semibold tracking-tight text-slate-100 sm:text-base">
               {TITLES[kind]}
             </p>
           </div>
           <Content kind={kind} />
         </div>
       </div>
-      <figcaption className="border-t border-ink-700 bg-ink-900 px-4 py-2 text-[9px] leading-4 text-fg-subtle">
+      <figcaption className="border-t border-ink-700 bg-ink-900 px-4 py-2 text-[11px] leading-4 text-fg-subtle">
         Product illustration · fictional companies / sample data · not a live
         account or verified performance
       </figcaption>

@@ -4,6 +4,7 @@ import { currentWorkspaceId } from "@/lib/workspace";
 import AutoRefresh from "@/components/AutoRefresh";
 import WatchlistClient, { type ThesisHistoryEntry } from "@/components/WatchlistClient";
 import EarningsPanel, { EarningsPanelSkeleton } from "@/components/insights/EarningsPanel";
+import PageHeader from "@/components/ui/PageHeader";
 
 export const metadata = { title: "Watchlist", description: "Tracked tickers with thesis status, triggers and a thesis timeline." };
 
@@ -35,11 +36,10 @@ export default async function WatchlistPage() {
   return (
     <div>
       {rows.some((r) => !r.thesis) && <AutoRefresh />}
-      <h1 className="text-2xl font-bold text-slate-100 mb-1">Watchlist</h1>
-      <p className="text-sm text-fg-subtle mb-6">
-        Compact tracker entries: thesis, triggers to watch, and a status tag. Each refresh re-checks whether the thesis
-        still holds and keeps the previous versions as a timeline.
-      </p>
+      <PageHeader
+        title="Watchlist"
+        description="Compact tracker entries: thesis, triggers to watch, and a status tag. Each refresh re-checks whether the thesis still holds and keeps the previous versions as a timeline."
+      />
       {rows.length > 0 && (
         <Suspense fallback={<EarningsPanelSkeleton />}>
           <EarningsPanel tickers={rows.map((r) => r.ticker)} studyByTicker={studyByTicker} />

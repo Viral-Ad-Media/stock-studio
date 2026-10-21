@@ -1,10 +1,10 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Sigma } from "lucide-react";
 import { getGexSnapshot, bucketStrikes, formatGexDollars, GEX_PRESETS } from "@/lib/gex";
 import { parseTicker, isInvalid } from "@/lib/validate";
 import DataStamp from "@/components/insights/DataStamp";
 import GexChart from "@/components/gamma/GexChart";
+import PageHeader from "@/components/ui/PageHeader";
 
 export const metadata = { title: "Gamma exposure", description: "A dealer-gamma model built from delayed options data." };
 
@@ -18,14 +18,10 @@ export default async function GammaPage({ searchParams }: { searchParams: Promis
 
   return (
     <div>
-      <h1 className="mb-1 flex items-center gap-2 text-2xl font-bold text-slate-100">
-        <Sigma className="h-6 w-6 text-emerald-400" aria-hidden /> Gamma exposure
-      </h1>
-      <p className="mb-5 max-w-[72ch] text-sm text-fg-subtle">
-        A model of how options dealers might need to hedge as the price moves, built from open interest on every listed
-        strike. Useful for understanding why some price areas attract or repel trading. It is an estimate resting on
-        assumptions (below), not a forecast.
-      </p>
+      <PageHeader
+        title="Gamma exposure"
+        description="A model of how options dealers might need to hedge as the price moves, built from open interest on every listed strike. Useful for understanding why some price areas attract or repel trading. It is an estimate resting on assumptions (below), not a forecast."
+      />
 
       <form method="get" className="mb-2 flex flex-wrap items-end gap-2">
         <div>

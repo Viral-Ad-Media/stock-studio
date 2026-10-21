@@ -9,7 +9,7 @@ export default function ResearchContextCard({
     return null;
   return (
     <section className="card p-5">
-      <p className="desk-eyebrow">Research behind this decision</p>
+      <h2 className="mb-3 text-sm font-semibold text-slate-100">Research behind this decision</h2>
       <div className="flex flex-wrap gap-4 text-sm">
         {context.studyId && (
           <Link

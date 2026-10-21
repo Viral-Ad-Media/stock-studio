@@ -4,6 +4,7 @@ import { currentUser, currentWorkspaceId } from "@/lib/workspace";
 import { getBillingState, CREDITS_PER_PACK } from "@/lib/billing";
 import BillingActions from "@/components/BillingActions";
 import AutoRefresh from "@/components/AutoRefresh";
+import PageHeader from "@/components/ui/PageHeader";
 
 export const metadata = { title: "Billing", description: "Your trial, access and credit balance." };
 
@@ -47,12 +48,16 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
     <div className="max-w-2xl">
       {/* Webhook fulfilment lands a few seconds after the redirect back. */}
       {checkout === "success" && <AutoRefresh maxMs={60_000} />}
-      <h1 className="text-2xl font-bold text-slate-100 mb-1">Billing</h1>
-      <p className="text-sm text-fg-subtle mb-6">
-        Every report costs credits when you queue it — see{" "}
-        <a href="/pricing" className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300">pricing</a> for the per-format
-        schedule. Failed or removed reports are refunded automatically.
-      </p>
+      <PageHeader
+        title="Billing"
+        description={
+          <>
+            Every report costs credits when you queue it — see{" "}
+            <a href="/pricing" className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300">pricing</a> for the per-format
+            schedule. Failed or removed reports are refunded automatically.
+          </>
+        }
+      />
 
       {checkout === "success" && (
         <div className="card p-4 mb-4 text-sm text-emerald-400">
