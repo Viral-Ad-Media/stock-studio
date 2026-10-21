@@ -130,7 +130,7 @@ export default function StudyActions({ study }: Props) {
             New study for {study.ticker}
           </Link>
         )}
-        <button onClick={remove} disabled={busy !== null} className={`${btn} hover:border-red-500/50 hover:text-red-400`}>
+        <button onClick={remove} disabled={busy !== null} className="btn-secondary border-red-500/40 px-3 py-2 text-sm text-red-400 hover:border-red-400 hover:bg-red-500/10">
           <Trash2 className="h-4 w-4" aria-hidden /> {busy === "delete" ? "Deleting…" : "Delete"}
         </button>
       </div>

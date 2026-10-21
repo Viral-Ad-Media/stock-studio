@@ -58,7 +58,6 @@ export default async function AdminAudit({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Superadmin"
         title="Audit log"
         description={
           <>
