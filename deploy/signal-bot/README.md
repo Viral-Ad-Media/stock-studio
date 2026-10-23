@@ -1,5 +1,7 @@
 # Signal bot — deploy (for the tech team)
 
+For Vercel Daemons, use the [Vercel deployment guide](VERCEL.md).
+
 The bot reposts approved traders' one-line calls from a private Discord channel to the member
 signals channel, and writes every signal to Stock Studio's append-only track record
 (`stocks.signals`). Members see the feed and the record at `/signals` in the app. Code:
