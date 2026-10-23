@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "echo 'Dependencies are installed inside the daemon image'",
+  "buildCommand": "",
+  "outputDirectory": "deploy/signal-bot/site",
+  "daemons": {
+    "signal-bot": {
+      "root": ".",
+      "entrypoint": "Dockerfile.signal-bot",
+      "instances": { "iad1": 0 },
+      "resources": { "requests": { "memory": "1Gi" } },
+      "terminationGracePeriodSeconds": 30
+    }
+  }
+}
