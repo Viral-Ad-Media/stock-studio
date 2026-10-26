@@ -3,6 +3,9 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { JournalTrade } from "@/lib/journal";
 import { calendarDays, decisionAnalysis } from "@/lib/journal-analysis";
+import { compactMoney } from "@/lib/chart-data";
+import { variantLabel } from "@/lib/shared";
+import DivergingBars from "@/components/charts/DivergingBars";
 const money = (v: number | null) =>
   v == null
     ? "—"
@@ -69,33 +72,19 @@ export default function DecisionAnalysis({
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
           <h3 className="mb-3 font-medium">Results by holding period</h3>
-          <div className="overflow-auto">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">
-                Calendar days between actual entry and exit
-              </caption>
-              <thead>
-                <tr>
-                  <th>Held</th>
-                  <th>Lots</th>
-                  <th>Net P&amp;L</th>
-                  <th>Per lot</th>
-                </tr>
-              </thead>
-              <tbody>
-                {analysis.holding.map((b) => (
-                  <tr key={b.name} className="border-t border-ink-700">
-                    <th scope="row" className="py-2 font-normal">
-                      {b.name}
-                    </th>
-                    <td>{b.count}</td>
-                    <td>{money(b.pnl)}</td>
-                    <td>{money(b.expectancy)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DivergingBars
+            rows={analysis.holding.map((b) => ({
+              name: b.name,
+              value: b.pnl,
+              detail: b.count
+                ? `${b.count} ${b.count === 1 ? "lot" : "lots"} · ${money(b.expectancy)} per lot`
+                : "no lots",
+            }))}
+            empty="Close a recorded trade to compare holding periods."
+          />
+          <p className="mt-3 text-xs text-fg-subtle">
+            Calendar days between actual entry and exit.
+          </p>
         </div>
         <div>
           <h3 className="mb-3 font-medium">
@@ -121,18 +110,23 @@ export default function DecisionAnalysis({
                           href={`/study/${t.id}`}
                         >
                           {study
-                            ? `${study.ticker} · ${study.variant}`
+                            ? `${study.ticker} · ${variantLabel(study.variant)}`
                             : `Research #${t.id}`}
                         </Link>
                       ) : (
                         "No linked research"
                       )}
                       <span className="block text-xs text-fg-subtle">
-                        {t.count} lots · {t.reviewed} reviews ·{" "}
+                        {t.count} {t.count === 1 ? "lot" : "lots"} ·{" "}
+                        {t.reviewed} {t.reviewed === 1 ? "review" : "reviews"} ·{" "}
                         {money(t.pnl / t.count)} per lot
                       </span>
                     </span>
-                    <span>{money(t.pnl)}</span>
+                    <span
+                      className={`font-mono tabular-nums ${t.pnl < 0 ? "text-red-400" : "text-emerald-400"}`}
+                    >
+                      {money(t.pnl)}
+                    </span>
                   </li>
                 );
               })}
@@ -141,12 +135,12 @@ export default function DecisionAnalysis({
         </div>
       </div>
       <div>
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-medium">Realized results calendar</h3>
-          <label>
-            <span className="field-label">Review month</span>
+          <label className="flex items-center gap-2">
+            <span className="text-sm text-slate-300">Month</span>
             <select
-              className="input"
+              className="input w-auto"
               value={month}
               onChange={(e) => {
                 setMonth(e.target.value);
@@ -173,17 +167,20 @@ export default function DecisionAnalysis({
                 type="button"
                 aria-pressed={selected === date}
                 aria-label={`${date}: ${d ? `${d.count} closed lots, ${money(d.pnl)}` : "no closed lots"}`}
-                className={`min-h-20 rounded-lg border p-1 text-left sm:p-2 ${selected === date ? "border-emerald-400" : "border-ink-700"} ${d ? (d.pnl < 0 ? "bg-red-500/10" : "bg-emerald-500/10") : "bg-ink-950/30"}`}
+                className={`flex min-h-14 flex-col rounded-lg border p-1 text-left sm:min-h-20 sm:p-2 ${selected === date ? "border-emerald-400" : "border-ink-700"} ${d ? (d.pnl < 0 ? "bg-red-500/10" : "bg-emerald-500/10") : "bg-ink-950/30"}`}
                 onClick={() => setSelected(date)}
               >
                 <span>{Number(date.slice(-2))}</span>
                 {d && (
                   <>
-                    <span className="mt-2 block break-all font-medium">
-                      {money(d.pnl)}
+                    <span
+                      className={`mt-auto block font-mono text-[10px] font-medium leading-tight tabular-nums sm:text-xs ${d.pnl < 0 ? "text-red-400" : "text-emerald-400"}`}
+                    >
+                      <span className="lg:hidden">{compactMoney(d.pnl)}</span>
+                      <span className="hidden lg:inline">{money(d.pnl)}</span>
                     </span>
                     <span className="hidden text-fg-subtle sm:block">
-                      {d.count} lots
+                      {d.count} {d.count === 1 ? "lot" : "lots"}
                     </span>
                   </>
                 )}

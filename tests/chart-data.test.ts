@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { journalPlot, leapsPlots, plotDomain } from "../lib/chart-data";
+import { axisTicks, compactMoney, journalPlot, leapsPlots, niceTicks, plotDomain } from "../lib/chart-data";
 import { DEFAULT_LEAPS, leapsAnalysis, optionModel } from "../lib/leaps";
 
 test("journal preserves actual dates and finite plot domains for empty, flat and single-point records", () => {
@@ -41,4 +41,22 @@ test("expiry exit curves coincide and extreme valid scenarios remain finite and 
     assert.ok(payoff.every(p=>p.values[0]===p.values[1]));
     assert.equal(decay.length,2);
   }
+});
+
+test("journal drawdown series measures distance below the running realized peak", () => {
+  const points = journalPlot([{date:"2026-01-01",pnl:-50},{date:"2026-01-02",pnl:200},{date:"2026-01-03",pnl:120},{date:"2026-01-04",pnl:260}]);
+  assert.deepEqual(points.map(p=>p.values[1]),[-50,0,-80,0]);
+  assert.ok(points.every(p=>p.values[1]<=0));
+});
+
+test("compact money and axis ticks stay short, signed and round", () => {
+  assert.deepEqual([257.19,-1771.09,4.51,0,1234567,-99.6,12.5].map(compactMoney),["$257","-$1.8K","$4.51","$0","$1.2M","-$99.60","$12.50"]);
+  assert.deepEqual(niceTicks(-6600,3900,4),[-5000,-2500,0,2500]);
+  assert.deepEqual(niceTicks(0.01,0.02,4),[0.01,0.0125,0.015,0.0175,0.02]);
+  assert.deepEqual(niceTicks(-1,1,4),[-1,-0.5,0,0.5,1]);
+  for (const [lo,hi] of [[-7.3,41.9],[-5000,13000],[0.01,0.02]]) {
+    const ticks=niceTicks(lo,hi,4);
+    assert.ok(ticks.length>=2 && ticks.every(t=>t>=lo-1e-9&&t<=hi+1e-9));
+  }
+  assert.deepEqual(axisTicks(0,10,2),[0,5,10]);
 });
