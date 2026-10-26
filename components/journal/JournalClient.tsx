@@ -9,6 +9,7 @@ import { journalStats, realizedPnl, type JournalTrade } from "@/lib/journal";
 import JournalCharts from "@/components/charts/JournalCharts";
 import PageHeader from "@/components/ui/PageHeader";
 import { CSV_TEMPLATE } from "@/lib/journal-csv";
+import { variantLabel } from "@/lib/shared";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", {
@@ -21,14 +22,14 @@ const LABELS: Record<string, string> = {
   asset: "Asset",
   side: "Side",
   quantity: "Shares / contracts",
-  entry_price: "Entry price per share ($)",
+  entry_price: "Entry price / share ($)",
   opened_on: "Entry date",
-  exit_price: "Exit price per share ($)",
+  exit_price: "Exit price / share ($)",
   closed_on: "Exit date",
   strike: "Strike ($)",
   expiration: "Expiration",
-  fees: "Total entry + exit fees ($)",
-  initial_risk: "Initial risk for whole lot ($, optional)",
+  fees: "Total fees ($)",
+  initial_risk: "Initial risk ($, optional)",
   strategy: "Strategy",
   thesis: "Entry thesis",
   review: "Exit review",
@@ -55,6 +56,32 @@ const BLANK = {
   source_ref: "",
 };
 type Form = typeof BLANK;
+const FIELD_GROUPS: { title: string; hint?: string; keys: (keyof Form)[] }[] = [
+  {
+    title: "Position",
+    keys: ["ticker", "asset", "side", "quantity", "strike", "expiration"],
+  },
+  {
+    title: "Entry",
+    keys: ["opened_on", "entry_price", "fees", "initial_risk"],
+  },
+  {
+    title: "Exit",
+    hint: "Leave blank while the lot is open",
+    keys: ["closed_on", "exit_price"],
+  },
+  {
+    title: "Notes and research",
+    keys: ["strategy", "case_study_id", "source_ref", "thesis", "review"],
+  },
+];
+// Long labels or free text that need a full row on phones.
+const WIDE: (keyof Form)[] = [
+  "ticker",
+  "strategy",
+  "case_study_id",
+  "source_ref",
+];
 export default function JournalClient({
   rows,
   studies,
@@ -223,6 +250,90 @@ export default function JournalClient({
     "fees",
     "initial_risk",
   ];
+  const field = (key: keyof Form) => (
+    <label
+      key={key}
+      className={
+        key === "thesis" || key === "review"
+          ? "col-span-2 lg:col-span-3"
+          : WIDE.includes(key)
+            ? "col-span-2 sm:col-span-1"
+            : ""
+      }
+    >
+      <span className="field-label">{LABELS[key]}</span>
+      {key === "asset" ? (
+        <select
+          className="input w-full"
+          value={form.asset}
+          onChange={(e) => change(key, e.target.value)}
+        >
+          <option value="stock">Stock</option>
+          <option value="call">Purchased call</option>
+          <option value="put">Purchased put</option>
+        </select>
+      ) : key === "side" ? (
+        <select
+          className="input w-full"
+          value={form.side}
+          onChange={(e) => change(key, e.target.value)}
+        >
+          <option value="long">Long</option>
+          {form.asset === "stock" && <option value="short">Short</option>}
+        </select>
+      ) : key === "case_study_id" ? (
+        <select
+          className="input w-full"
+          value={form[key]}
+          onChange={(e) => change(key, e.target.value)}
+        >
+          <option value="">No linked study</option>
+          {studies.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.ticker} · {variantLabel(s.variant)} · #{s.id}
+            </option>
+          ))}
+        </select>
+      ) : key === "thesis" || key === "review" ? (
+        <textarea
+          className="input min-h-24 w-full"
+          maxLength={4000}
+          value={form[key]}
+          onChange={(e) => change(key, e.target.value)}
+        />
+      ) : (
+        <input
+          className="input w-full"
+          type={
+            key.endsWith("_on") || key === "expiration"
+              ? "date"
+              : numberFields.includes(key)
+                ? "number"
+                : "text"
+          }
+          step={key === "quantity" && form.asset !== "stock" ? "1" : "0.000001"}
+          min={numberFields.includes(key) ? "0" : undefined}
+          max={numberFields.includes(key) ? "1000000" : undefined}
+          maxLength={key === "ticker" ? 12 : key === "strategy" ? 100 : 200}
+          required={[
+            "ticker",
+            "quantity",
+            "entry_price",
+            "opened_on",
+            "strike",
+            "expiration",
+          ].includes(key)}
+          value={form[key]}
+          onChange={(e) =>
+            change(
+              key,
+              key === "ticker" ? e.target.value.toUpperCase() : e.target.value,
+            )
+          }
+        />
+      )}
+    </label>
+  );
   return (
     <div className="space-y-6">
       <PageHeader
@@ -264,26 +375,45 @@ export default function JournalClient({
         </h2>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[
-            ["Realized P&L after fees", money(stats.net)],
-            ["Closed / open lots", `${stats.closed} / ${stats.open}`],
-            [
-              "Win rate",
-              stats.winRate == null
-                ? "No closed lots"
-                : `${stats.winRate.toFixed(1)}% · n=${stats.closed}`,
-            ],
-            [
-              "Profit factor",
-              stats.profitFactor == null
-                ? "Unavailable"
-                : stats.profitFactor.toFixed(2),
-            ],
-          ].map(([label, value]) => (
+            {
+              label: "Realized P&L after fees",
+              value: money(stats.net),
+              tone:
+                stats.net < 0
+                  ? "text-red-400"
+                  : stats.net > 0
+                    ? "text-emerald-400"
+                    : "",
+            },
+            {
+              label: "Closed / open lots",
+              value: `${stats.closed} / ${stats.open}`,
+            },
+            {
+              label: "Win rate",
+              value:
+                stats.winRate == null ? "—" : `${stats.winRate.toFixed(1)}%`,
+              sub:
+                stats.winRate == null ? "No closed lots" : `n=${stats.closed}`,
+            },
+            {
+              label: "Profit factor",
+              value:
+                stats.profitFactor == null
+                  ? "—"
+                  : stats.profitFactor.toFixed(2),
+              sub:
+                stats.profitFactor == null ? "Needs 30 closed lots" : undefined,
+            },
+          ].map(({ label, value, sub, tone }) => (
             <div key={label} className="metric-tile">
               <p className="text-xs text-fg-subtle">{label}</p>
-              <p className="mt-1 text-lg font-semibold tabular-nums text-slate-100">
+              <p
+                className={`mt-1 text-lg font-semibold tabular-nums ${tone || "text-slate-100"}`}
+              >
                 {value}
               </p>
+              {sub && <p className="mt-0.5 text-xs text-fg-subtle">{sub}</p>}
             </div>
           ))}
         </div>
@@ -300,31 +430,6 @@ export default function JournalClient({
             ` Average R: ${stats.averageR.toFixed(2)} across ${stats.riskCount} lots with user-entered initial risk.`}
         </p>
         <JournalCharts stats={stats} />
-        {stats.strategies.length > 0 && (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-sm">
-              <caption className="text-left text-xs text-fg-subtle">
-                Realized results by strategy
-              </caption>
-              <thead>
-                <tr className="text-left">
-                  <th className="py-2">Strategy</th>
-                  <th>Closed lots</th>
-                  <th>Net P&amp;L</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.strategies.map((s) => (
-                  <tr key={s.name} className="border-t border-ink-700">
-                    <td className="py-2">{s.name}</td>
-                    <td>{s.count}</td>
-                    <td>{money(s.pnl)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </section>
       {!archived && (
         <DecisionAnalysis
@@ -354,112 +459,37 @@ export default function JournalClient({
           </p>
           <form
             onSubmit={save}
-            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+            className="grid grid-cols-2 gap-3 lg:grid-cols-3"
           >
-            {(Object.keys(BLANK) as (keyof Form)[])
-              .filter(
-                (k) =>
-                  form.asset !== "stock" ||
-                  !(k === "strike" || k === "expiration"),
-              )
-              .map((key) => (
-                <label
-                  key={key}
-                  className={
-                    key === "thesis" || key === "review"
-                      ? "sm:col-span-2 lg:col-span-3"
-                      : ""
-                  }
-                >
-                  <span className="field-label">{LABELS[key]}</span>
-                  {key === "asset" ? (
-                    <select
-                      className="input w-full"
-                      value={form.asset}
-                      onChange={(e) => change(key, e.target.value)}
-                    >
-                      <option value="stock">Stock</option>
-                      <option value="call">Purchased call</option>
-                      <option value="put">Purchased put</option>
-                    </select>
-                  ) : key === "side" ? (
-                    <select
-                      className="input w-full"
-                      value={form.side}
-                      onChange={(e) => change(key, e.target.value)}
-                    >
-                      <option value="long">Long</option>
-                      {form.asset === "stock" && (
-                        <option value="short">Short</option>
-                      )}
-                    </select>
-                  ) : key === "case_study_id" ? (
-                    <select
-                      className="input w-full"
-                      value={form[key]}
-                      onChange={(e) => change(key, e.target.value)}
-                    >
-                      <option value="">No linked study</option>
-                      {studies.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.ticker} · {s.variant} · #{s.id}
-                        </option>
-                      ))}
-                    </select>
-                  ) : key === "thesis" || key === "review" ? (
-                    <textarea
-                      className="input min-h-24 w-full"
-                      maxLength={4000}
-                      value={form[key]}
-                      onChange={(e) => change(key, e.target.value)}
-                    />
-                  ) : (
-                    <input
-                      className="input w-full"
-                      type={
-                        key.endsWith("_on") || key === "expiration"
-                          ? "date"
-                          : numberFields.includes(key)
-                            ? "number"
-                            : "text"
-                      }
-                      step={
-                        key === "quantity" && form.asset !== "stock"
-                          ? "1"
-                          : "0.000001"
-                      }
-                      min={numberFields.includes(key) ? "0" : undefined}
-                      max={numberFields.includes(key) ? "1000000" : undefined}
-                      maxLength={
-                        key === "ticker" ? 12 : key === "strategy" ? 100 : 200
-                      }
-                      required={[
-                        "ticker",
-                        "quantity",
-                        "entry_price",
-                        "opened_on",
-                        "strike",
-                        "expiration",
-                      ].includes(key)}
-                      value={form[key]}
-                      onChange={(e) =>
-                        change(
-                          key,
-                          key === "ticker"
-                            ? e.target.value.toUpperCase()
-                            : e.target.value,
-                        )
-                      }
-                    />
+            {FIELD_GROUPS.map((group) => (
+              <fieldset
+                key={group.title}
+                className="col-span-2 grid grid-cols-2 gap-3 border-t border-ink-700 pt-4 first:border-t-0 first:pt-0 lg:col-span-3 lg:grid-cols-3"
+              >
+                <legend className="col-span-2 float-left mb-1 w-full text-xs font-semibold uppercase tracking-wide text-fg-subtle lg:col-span-3">
+                  {group.title}
+                  {group.hint && (
+                    <span className="ml-2 font-normal normal-case tracking-normal">
+                      {group.hint}
+                    </span>
                   )}
-                </label>
-              ))}
-            <p className="sm:col-span-2 lg:col-span-3 text-xs text-fg-subtle">
+                </legend>
+                {group.keys
+                  .filter(
+                    (k) =>
+                      form.asset !== "stock" ||
+                      !(k === "strike" || k === "expiration"),
+                  )
+                  .map((key) => field(key))}
+              </fieldset>
+            ))}
+            <p className="col-span-2 text-xs text-fg-subtle lg:col-span-3">
               Option prices are quoted per share, multiplied by 100 per standard
               contract. Adjusted contracts, spreads and short options are not
               supported. Leave both exit fields blank for an open trade; a zero
               exit price is allowed for a closed worthless option. Fees are the
-              total for this lot, including the exit.
+              total for this lot, including the exit. Initial risk is the dollar
+              amount you planned to risk on the whole lot, used for average R.
             </p>
             <div className="flex gap-2">
               <button disabled={busy} className="btn-primary px-4 py-2 text-sm">
@@ -493,10 +523,10 @@ export default function JournalClient({
             >
               Download template
             </button>
-            <label className="text-sm">
-              Review CSV{" "}
+            <label className="text-sm text-slate-300">
+              <span className="sr-only">Choose a CSV to review</span>
               <input
-                className="ml-2 max-w-full"
+                className="max-w-full text-sm text-fg-subtle file:mr-3 file:cursor-pointer file:rounded-lg file:border file:border-ink-500 file:bg-ink-800 file:px-3 file:py-2 file:text-sm file:text-slate-100 hover:file:bg-ink-700"
                 type="file"
                 accept=".csv,text/csv"
                 disabled={busy}
@@ -565,8 +595,8 @@ export default function JournalClient({
         <h2 className="mb-3 font-semibold">
           {archived ? "Archived entries" : "Trade entries"}
         </h2>
-        <div className="mb-3 flex flex-wrap gap-2">
-          <label>
+        <div className="mb-3 grid grid-cols-[1fr_auto] gap-2 sm:flex">
+          <label className="min-w-0">
             <span className="sr-only">Filter ticker or strategy</span>
             <input
               className="input"
@@ -594,39 +624,54 @@ export default function JournalClient({
           <ul className="divide-y divide-ink-700">
             {visible.map((r) => (
               <li key={r.id} id={`trade-${r.id}`} className="scroll-mt-6 py-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-mono font-semibold text-slate-100">
-                      {r.ticker} · {r.side} {r.asset}
-                      {r.asset !== "stock" &&
-                        ` · ${r.strike} · ${r.expiration}`}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-100">
+                      <span className="font-mono">{r.ticker}</span>{" "}
+                      <span className="text-sm font-normal text-slate-300">
+                        {r.side} {r.asset}
+                        {r.asset !== "stock" &&
+                          ` · ${money(r.strike ?? 0)} strike · exp ${r.expiration}`}
+                      </span>
                     </p>
                     <p className="mt-1 text-xs text-fg-subtle">
                       {r.quantity}{" "}
-                      {r.asset === "stock" ? "shares" : "contracts"} · entered{" "}
-                      {r.opened_on} @ {r.entry_price}
+                      {r.asset === "stock"
+                        ? "shares"
+                        : r.quantity === 1
+                          ? "contract"
+                          : "contracts"}{" "}
+                      · in {r.opened_on} @ {money(r.entry_price)}
                       {r.closed_on
-                        ? ` · closed ${r.closed_on} @ ${r.exit_price}`
-                        : " · Open"}
+                        ? ` · out ${r.closed_on} @ ${money(r.exit_price ?? 0)}`
+                        : ""}
                     </p>
                   </div>
-                  <p className="font-semibold tabular-nums">
-                    {realizedPnl(r) == null
-                      ? "Unrealized not tracked"
-                      : money(realizedPnl(r)!)}
-                  </p>
+                  {realizedPnl(r) == null ? (
+                    <span className="shrink-0 rounded-full border border-sky-400/40 px-2 py-0.5 text-xs text-sky-400">
+                      Open
+                    </span>
+                  ) : (
+                    <p
+                      className={`shrink-0 font-mono font-semibold tabular-nums ${realizedPnl(r)! < 0 ? "text-red-400" : realizedPnl(r)! > 0 ? "text-emerald-400" : "text-slate-300"}`}
+                    >
+                      {money(realizedPnl(r)!)}
+                    </p>
+                  )}
                 </div>
                 {r.strategy && (
                   <p className="mt-2 text-xs text-emerald-400">{r.strategy}</p>
                 )}
                 {r.thesis && (
-                  <p className="mt-2 whitespace-pre-wrap text-sm">
-                    Thesis: {r.thesis}
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-slate-300">
+                    <span className="text-fg-subtle">Thesis: </span>
+                    {r.thesis}
                   </p>
                 )}
                 {r.review && (
-                  <p className="mt-2 whitespace-pre-wrap text-sm">
-                    Review: {r.review}
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-slate-300">
+                    <span className="text-fg-subtle">Review: </span>
+                    {r.review}
                   </p>
                 )}
                 <div className="mt-3 flex flex-wrap gap-3 text-xs">

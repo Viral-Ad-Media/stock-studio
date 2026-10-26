@@ -13,8 +13,36 @@ export function plotDomain(points: PlotPoint[]) {
 }
 
 export function journalPlot(curve: { date: string; pnl: number }[]) {
-  // Do not invent a prior date or an unrecorded account balance.
-  return curve.map(p => ({ x: Date.parse(p.date), label: p.date, values: [p.pnl] }));
+  // Do not invent a prior date or an unrecorded account balance. The second
+  // series is the distance below the running realized peak (0 or negative).
+  let peak = 0;
+  return curve.map(p => {
+    peak = Math.max(peak, p.pnl);
+    return { x: Date.parse(p.date), label: p.date, values: [p.pnl, p.pnl - peak] };
+  });
+}
+
+// Short labels for tight spaces (calendar cells, axis ticks): $257, -$1.8K.
+export function compactMoney(value: number) {
+  const abs = Math.abs(value), sign = value < 0 ? "-" : "";
+  if (abs < 1000) return `${sign}$${abs.toFixed(abs >= 100 || Number.isInteger(abs) ? 0 : 2)}`;
+  const [n, unit] = abs < 1e6 ? [abs / 1e3, "K"] : [abs / 1e6, "M"];
+  return `${sign}$${n.toFixed(n < 100 ? 1 : 0).replace(/\.0$/, "")}${unit}`;
+}
+
+// Round-number value ticks (1, 2, 2.5 or 5 × 10^k) covering [min, max].
+export function niceTicks(min: number, max: number, count: number) {
+  const raw = (max - min) / Math.max(1, count), mag = 10 ** Math.floor(Math.log10(raw || 1));
+  const step = [1, 2, 2.5, 5, 10].reduce((best, m) => Math.abs(m * mag - raw) < Math.abs(best - raw) ? m * mag : best, mag);
+  const ticks: number[] = [];
+  for (let k = Math.ceil(min / step - 1e-9); k * step <= max + step * 1e-9; k++) ticks.push(Number((k * step).toPrecision(12)) || 0);
+  return ticks;
+}
+
+// Evenly spaced axis ticks that include both ends of the domain.
+export function axisTicks(min: number, max: number, count: number) {
+  const n = Math.max(1, Math.round(count));
+  return Array.from({ length: n + 1 }, (_, k) => min + (max - min) * k / n);
 }
 
 export function leapsPlots(i: LeapsInput) {

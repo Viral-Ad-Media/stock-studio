@@ -37,6 +37,25 @@ const money = (v: number) =>
     currency: "USD",
     maximumFractionDigits: 2,
   }).format(v);
+const ASSUMPTION_GROUPS: { title: string; keys: (keyof LeapsInput)[] }[] = [
+  {
+    title: "Contract",
+    keys: [
+      "ticker",
+      "type",
+      "strike",
+      "expiration",
+      "premium",
+      "contracts",
+      "fees",
+    ],
+  },
+  { title: "Market today", keys: ["spot", "as_of", "iv", "rate", "dividend"] },
+  {
+    title: "Exit scenario",
+    keys: ["exit_days", "scenario_move", "scenario_iv"],
+  },
+];
 type Plan = {
   id: string;
   name: string;
@@ -50,15 +69,15 @@ const LABELS: Record<keyof LeapsInput, string> = {
   strike: "Strike ($)",
   expiration: "Expiration date",
   as_of: "Valuation date",
-  premium: "Entry premium per share ($)",
-  contracts: "Standard contracts (100 shares each)",
+  premium: "Premium / share ($)",
+  contracts: "Contracts (100 shares each)",
   iv: "Current IV (%)",
-  rate: "Annual risk-free rate assumption (%)",
-  dividend: "Annual dividend yield assumption (%)",
+  rate: "Risk-free rate (%/yr)",
+  dividend: "Dividend yield (%/yr)",
   exit_days: "Days until modeled exit",
   scenario_move: "Underlying move at exit (%)",
   scenario_iv: "IV at modeled exit (%)",
-  fees: "Total entry + exit fees ($)",
+  fees: "Total fees, entry + exit ($)",
 };
 export default function LeapsClient({
   today,
@@ -337,7 +356,7 @@ export default function LeapsClient({
                     )}
                   </select>
                 </label>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
                   {(
                     Object.keys(FILTER_LABELS) as (keyof DiscoveryFilters)[]
                   ).map((k) => (
@@ -405,8 +424,83 @@ export default function LeapsClient({
                     values appear last
                   </p>
                 </div>
-                <div className="mt-3 max-h-80 overflow-auto">
-                  <table className="w-full min-w-[560px] text-left text-sm">
+                <div className="mt-3 max-h-[28rem] overflow-auto sm:max-h-80">
+                  <ul className="space-y-2 sm:hidden">
+                    {options.map((o) => {
+                      const spread = contractMetrics(
+                        o,
+                        Number(filters.contracts),
+                        Number(filters.fees),
+                      ).spread;
+                      return (
+                        <li
+                          key={o.symbol}
+                          className="rounded-lg border border-ink-700 bg-ink-950/40 p-3 text-sm"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                className="h-5 w-5 accent-emerald-500"
+                                aria-label={`Compare ${o.symbol}`}
+                                checked={selectedSymbols.includes(o.symbol)}
+                                disabled={
+                                  !selectedSymbols.includes(o.symbol) &&
+                                  selectedSymbols.length >= 3
+                                }
+                                onChange={() => toggleComparison(o.symbol)}
+                              />
+                              <span className="font-medium text-slate-100">
+                                {money(o.strike)} {o.type}
+                              </span>
+                            </label>
+                            <span className="text-xs text-fg-subtle">
+                              {o.expiration} · {o.days}d
+                            </span>
+                          </div>
+                          <dl className="mt-2 grid grid-cols-[1.5fr_1fr_1fr] gap-2 text-xs">
+                            <div>
+                              <dt className="text-fg-subtle">Bid / ask</dt>
+                              <dd className="font-mono">
+                                {o.bid ?? "—"} / {o.ask ?? "—"}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-fg-subtle">Delta</dt>
+                              <dd className="font-mono">
+                                {o.delta?.toFixed(3) ?? "—"}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-fg-subtle">IV</dt>
+                              <dd className="font-mono">
+                                {o.iv == null ? "—" : `${o.iv.toFixed(1)}%`}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-fg-subtle">Spread</dt>
+                              <dd className="font-mono">
+                                {spread == null ? "—" : money(spread)}
+                              </dd>
+                            </div>
+                            <div className="col-span-2">
+                              <dt className="text-fg-subtle">Volume / OI</dt>
+                              <dd className="font-mono">
+                                {o.volume ?? "—"} / {o.openInterest ?? "—"}
+                              </dd>
+                            </div>
+                          </dl>
+                          <button
+                            onClick={() => modelContract(o)}
+                            className="mt-2 text-xs text-emerald-400 underline"
+                          >
+                            Use inputs in scenario
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <table className="hidden w-full min-w-[560px] text-left text-sm sm:table">
                     <caption className="sr-only">
                       Delayed long-dated options for selected expiry and type
                     </caption>
@@ -462,7 +556,7 @@ export default function LeapsClient({
                                   ).spread!,
                                 )}
                           </td>
-                          <td>{o.iv?.toFixed(1) ?? "—"}%</td>
+                          <td>{o.iv == null ? "—" : `${o.iv.toFixed(1)}%`}</td>
                           <td>
                             {o.volume ?? "—"} / {o.openInterest ?? "—"}
                           </td>
@@ -506,43 +600,62 @@ export default function LeapsClient({
           values or copy a delayed contract. Rates, dividend yield and future
           volatility remain your assumptions.
         </p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {(Object.keys(LABELS) as (keyof LeapsInput)[]).map((k) => (
-            <label key={k}>
-              <span className="field-label">{LABELS[k]}</span>
-              {k === "type" ? (
-                <select
-                  className="input w-full"
-                  value={form[k]}
-                  onChange={(e) => update(k, e.target.value)}
+        <div className="space-y-5">
+          {ASSUMPTION_GROUPS.map((group) => (
+            <fieldset
+              key={group.title}
+              className="grid grid-cols-2 gap-3 border-t border-ink-700 pt-4 first:border-t-0 first:pt-0 lg:grid-cols-3"
+            >
+              <legend className="float-left col-span-2 mb-1 w-full text-xs font-semibold uppercase tracking-wide text-fg-subtle lg:col-span-3">
+                {group.title}
+              </legend>
+              {group.keys.map((k) => (
+                <label
+                  key={k}
+                  className={
+                    k === "ticker" || k === "fees"
+                      ? "col-span-2 sm:col-span-1"
+                      : ""
+                  }
                 >
-                  <option value="call">Purchased call</option>
-                  <option value="put">Purchased put</option>
-                </select>
-              ) : (
-                <input
-                  className="input w-full"
-                  type={
-                    k === "ticker"
-                      ? "text"
-                      : k === "as_of" || k === "expiration"
-                        ? "date"
-                        : "number"
-                  }
-                  step={k === "contracts" || k === "exit_days" ? "1" : "any"}
-                  value={form[k]}
-                  maxLength={k === "ticker" ? 12 : undefined}
-                  onChange={(e) =>
-                    update(
-                      k,
-                      k === "ticker"
-                        ? e.target.value.toUpperCase()
-                        : e.target.value,
-                    )
-                  }
-                />
-              )}
-            </label>
+                  <span className="field-label">{LABELS[k]}</span>
+                  {k === "type" ? (
+                    <select
+                      className="input w-full"
+                      value={form[k]}
+                      onChange={(e) => update(k, e.target.value)}
+                    >
+                      <option value="call">Purchased call</option>
+                      <option value="put">Purchased put</option>
+                    </select>
+                  ) : (
+                    <input
+                      className="input w-full"
+                      type={
+                        k === "ticker"
+                          ? "text"
+                          : k === "as_of" || k === "expiration"
+                            ? "date"
+                            : "number"
+                      }
+                      step={
+                        k === "contracts" || k === "exit_days" ? "1" : "any"
+                      }
+                      value={form[k]}
+                      maxLength={k === "ticker" ? 12 : undefined}
+                      onChange={(e) =>
+                        update(
+                          k,
+                          k === "ticker"
+                            ? e.target.value.toUpperCase()
+                            : e.target.value,
+                        )
+                      }
+                    />
+                  )}
+                </label>
+              ))}
+            </fieldset>
           ))}
         </div>
         {computed.error && (
@@ -564,14 +677,20 @@ export default function LeapsClient({
             </p>
             <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
               {[
-                ["Premium + fees at risk", money(result.cost)],
-                ["Theoretical price now", money(result.current.price)],
-                ["Theoretical price at exit", money(result.scenario.price)],
-                ["Modeled net P&L at exit", money(result.scenarioPnl)],
-              ].map(([label, value]) => (
+                ["Premium + fees at risk", money(result.cost), ""],
+                ["Theoretical price now", money(result.current.price), ""],
+                ["Theoretical price at exit", money(result.scenario.price), ""],
+                [
+                  "Modeled net P&L at exit",
+                  money(result.scenarioPnl),
+                  result.scenarioPnl < 0 ? "text-red-400" : "text-emerald-400",
+                ],
+              ].map(([label, value, tone]) => (
                 <div key={label} className="metric-tile">
                   <p className="text-xs text-fg-subtle">{label}</p>
-                  <p className="mt-1 text-lg font-semibold tabular-nums">
+                  <p
+                    className={`mt-1 text-lg font-semibold tabular-nums ${tone}`}
+                  >
                     {value}
                   </p>
                 </div>
@@ -604,61 +723,44 @@ export default function LeapsClient({
           </section>
           <LeapsCharts input={computed.input!} />
           <SensitivityExplorer input={computed.input!} />
-          <section className="card p-5">
-            <h2 className="mb-3 font-semibold">
-              Price scenarios at the modeled exit
-            </h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <caption className="mb-2 text-left text-xs text-fg-subtle">
-                  Same exit day and exit IV; only the underlying price changes.
-                  Returns are hypothetical.
-                </caption>
-                <thead>
-                  <tr>
-                    <th>Underlying move</th>
-                    <th>Underlying price</th>
-                    <th>Option model price</th>
-                    <th>Net P&amp;L</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.grid.map((r) => (
-                    <tr key={r.move} className="border-t border-ink-700">
-                      <td className="py-2">
-                        {r.move > 0 ? "+" : ""}
-                        {r.move}%
-                      </td>
-                      <td>{money(Number(form.spot) * (1 + r.move / 100))}</td>
-                      <td>{money(r.price)}</td>
-                      <td>{money(r.pnl)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
           <div className="grid gap-4 lg:grid-cols-2">
             <section className="card p-5">
               <h2 className="mb-3 font-semibold">
-                Time decay with unchanged price and IV
+                Price scenarios at the modeled exit
               </h2>
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr>
-                    <th>Days elapsed</th>
-                    <th>Model price</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.time.map((r) => (
-                    <tr key={r.elapsed} className="border-t border-ink-700">
-                      <td className="py-2">{r.elapsed}</td>
-                      <td>{money(r.price)}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <caption className="mb-2 text-left text-xs text-fg-subtle">
+                    Same exit day and exit IV; only the underlying price
+                    changes. Returns are hypothetical.
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th className="py-2">Move</th>
+                      <th>Underlying</th>
+                      <th>Model price</th>
+                      <th>Net P&amp;L</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {result.grid.map((r) => (
+                      <tr key={r.move} className="border-t border-ink-700">
+                        <td className="py-2">
+                          {r.move > 0 ? "+" : ""}
+                          {r.move}%
+                        </td>
+                        <td>{money(Number(form.spot) * (1 + r.move / 100))}</td>
+                        <td>{money(r.price)}</td>
+                        <td
+                          className={`font-mono ${r.pnl < 0 ? "text-red-400" : "text-emerald-400"}`}
+                        >
+                          {money(r.pnl)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </section>
             <section className="card p-5">
               <h2 className="mb-3 font-semibold">Compare time to expiration</h2>
@@ -750,12 +852,25 @@ export default function LeapsClient({
             {plans.map((p) => (
               <li
                 key={p.id}
-                className="flex flex-wrap justify-between gap-3 py-3"
+                className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 py-3"
               >
-                <span>
-                  {p.name} · {p.ticker}
-                </span>
-                <div className="flex gap-3 text-xs">
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-100">
+                    {p.name}
+                    {loadedPlanId === p.id && (
+                      <span className="ml-2 rounded-full border border-emerald-400/40 px-2 py-0.5 text-xs font-normal text-emerald-400">
+                        Loaded
+                      </span>
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-xs text-fg-subtle">
+                    <span className="font-mono">{p.ticker}</span>{" "}
+                    {p.inputs.type} · {money(Number(p.inputs.strike))} strike ·
+                    exp {p.inputs.expiration} ·{" "}
+                    {money(Number(p.inputs.premium))} premium
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3 text-xs">
                   <button
                     className="text-emerald-400 underline"
                     onClick={() => {
@@ -772,6 +887,12 @@ export default function LeapsClient({
                       setNotice(
                         "Saved assumptions loaded; dates and premiums have not been refreshed.",
                       );
+                      document
+                        .getElementById("scenario-assumptions")
+                        ?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        });
                     }}
                   >
                     Load assumptions
