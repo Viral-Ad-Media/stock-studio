@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import RetryStudyButton from "@/components/RetryStudyButton";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -9,8 +8,9 @@ import AutoRefresh from "@/components/AutoRefresh";
 import StudyActions from "@/components/StudyActions";
 import StatusBadge from "@/components/StatusBadge";
 import GradeBreakdown from "@/components/insights/GradeBreakdown";
-import TrackRecord from "@/components/insights/TrackRecord";
-import { parseStoredGrade, GRADED_VARIANTS } from "@/lib/grades";
+import LivePanel from "@/components/insights/LivePanel";
+import { isLiveTicker, parseSnapshot } from "@/lib/live-data";
+import { parseStoredGrade } from "@/lib/grades";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -65,11 +65,11 @@ export default async function StudyPage({
     VARIANTS.find((v) => v.value === study.variant)?.label ?? study.variant;
   const grade =
     study.status === "ready" ? parseStoredGrade(study.grade_json) : null;
-  // Price since the as-of date only means something for a single-company study.
-  const showTrack =
+  // Live market data only means something for a single-company study.
+  const showLive =
     study.status === "ready" &&
-    !!study.as_of_date &&
-    GRADED_VARIANTS.has(study.variant);
+    study.variant !== "movers_digest" &&
+    isLiveTicker(study.ticker);
 
   return (
     <div>
@@ -101,6 +101,8 @@ export default async function StudyPage({
             status: study.status,
             variant: study.variant,
             content_md: study.content_md,
+            notes: study.notes,
+            parent_id: study.parent_id,
           }}
         />
       </div>
@@ -180,10 +182,13 @@ export default async function StudyPage({
         )
       )}
 
-      {showTrack && (
-        <Suspense fallback={null}>
-          <TrackRecord ticker={study.ticker} asOfDate={study.as_of_date!} />
-        </Suspense>
+      {showLive && (
+        <LivePanel
+          studyId={study.id}
+          asOfDate={study.as_of_date}
+          snapshot={parseSnapshot(study.live_json)}
+          refreshedAt={study.live_refreshed_at}
+        />
       )}
 
       {study.content_md && (

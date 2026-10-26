@@ -282,6 +282,9 @@ export type DailyBars = {
   closes: number[];
   adjCloses: number[];
   volumes: number[];
+  // When the vendor stamped the latest price (ISO), and who served it.
+  marketTime?: string | null;
+  source?: "yahoo" | "alpaca";
 };
 
 export async function fetchDailyBars(ticker: string, range = "1y", revalidateSec = 1800, deadline?: number): Promise<DailyBars> {
@@ -291,7 +294,9 @@ export async function fetchDailyBars(ticker: string, range = "1y", revalidateSec
   const ts: number[] = result.timestamp ?? [];
   const q = result.indicators?.quote?.[0] ?? {};
   const adj: (number | null)[] = result.indicators?.adjclose?.[0]?.adjclose ?? q.close ?? [];
-  const bars: DailyBars = { symbol: ticker, dates: [], opens: [], highs: [], lows: [], closes: [], adjCloses: [], volumes: [] };
+  const marketTime = typeof result.meta?.regularMarketTime === "number" ? new Date(result.meta.regularMarketTime * 1000).toISOString() : null;
+  const source = result.meta?.dataSource === "alpaca-iex" ? "alpaca" : "yahoo";
+  const bars: DailyBars = { symbol: ticker, dates: [], opens: [], highs: [], lows: [], closes: [], adjCloses: [], volumes: [], marketTime, source };
   const ok = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
   for (let i = 0; i < ts.length; i++) {
     const [o, h, l, c, a] = [q.open?.[i], q.high?.[i], q.low?.[i], q.close?.[i], adj[i]];
