@@ -15,6 +15,9 @@ import { FilePlus2 } from "lucide-react";
 import Onboarding from "@/components/guide/Onboarding";
 import EmptyState from "@/components/guide/EmptyState";
 import PageHeader from "@/components/ui/PageHeader";
+import LiveQuote from "@/components/LiveQuote";
+import LiveRefreshButton from "@/components/LiveRefreshButton";
+import { anyStale, isLiveTicker, parseSnapshot } from "@/lib/live-data";
 
 export const metadata = {
   title: "Dashboard",
@@ -44,7 +47,8 @@ export default async function Dashboard() {
     : [];
   const studies = ws
     ? ((await sql`
-        SELECT id, ticker, company, variant, status, as_of_date, created_at, grade_json, summary_line
+        SELECT id, ticker, company, variant, status, as_of_date, created_at, grade_json, summary_line,
+               live_json, live_refreshed_at
         FROM case_studies WHERE workspace_id = ${ws} ORDER BY id DESC LIMIT 50
       `) as unknown as CaseStudy[])
     : [];
@@ -73,6 +77,11 @@ export default async function Dashboard() {
     ...Object.keys(studyByTicker),
   ].filter((t) => t !== "MARKET");
 
+  // Finished single-company studies carry live market data.
+  const liveStudies = studies.filter(
+    (s) => s.status === "ready" && s.variant !== "movers_digest" && isLiveTicker(s.ticker),
+  );
+
   // Only poll while something can still change.
   const inFlight =
     pendingJobs.length > 0 ||
@@ -87,6 +96,9 @@ export default async function Dashboard() {
         description="Fact-checked stock case studies, built by the research engine."
         actions={
           <>
+            {liveStudies.length > 0 && (
+              <LiveRefreshButton scope="all" label="Refresh live data" auto={anyStale(liveStudies)} />
+            )}
             <Link href="/today" className="btn-secondary text-sm px-4 py-2">
               Today&apos;s overview
             </Link>
@@ -147,6 +159,11 @@ export default async function Dashboard() {
                     <p className="mt-2 text-sm text-slate-300 line-clamp-2">
                       {s.summary_line}
                     </p>
+                  )}
+                  {s.live_json != null && (
+                    <div className="mt-2">
+                      <LiveQuote snapshot={parseSnapshot(s.live_json)} refreshedAt={s.live_refreshed_at} />
+                    </div>
                   )}
                   <div className="text-xs text-fg-subtle mt-2">
                     {s.as_of_date

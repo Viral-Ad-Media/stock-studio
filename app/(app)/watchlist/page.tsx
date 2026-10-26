@@ -5,6 +5,8 @@ import AutoRefresh from "@/components/AutoRefresh";
 import WatchlistClient, { type ThesisHistoryEntry } from "@/components/WatchlistClient";
 import EarningsPanel, { EarningsPanelSkeleton } from "@/components/insights/EarningsPanel";
 import PageHeader from "@/components/ui/PageHeader";
+import LiveRefreshButton from "@/components/LiveRefreshButton";
+import { anyStale, isLiveTicker } from "@/lib/live-data";
 
 export const metadata = { title: "Watchlist", description: "Tracked tickers with thesis status, triggers and a thesis timeline." };
 
@@ -38,7 +40,12 @@ export default async function WatchlistPage() {
       {rows.some((r) => !r.thesis) && <AutoRefresh />}
       <PageHeader
         title="Watchlist"
-        description="Compact tracker entries: thesis, triggers to watch, and a status tag. Each refresh re-checks whether the thesis still holds and keeps the previous versions as a timeline."
+        description="Compact tracker entries: thesis, triggers to watch, and a status tag. Live prices refresh for free; a research refresh re-checks whether the thesis still holds and keeps the previous versions as a timeline."
+        actions={
+          rows.length > 0 ? (
+            <LiveRefreshButton scope="all" label="Refresh live data" auto={anyStale(rows.filter((r) => isLiveTicker(r.ticker)))} />
+          ) : undefined
+        }
       />
       {rows.length > 0 && (
         <Suspense fallback={<EarningsPanelSkeleton />}>
