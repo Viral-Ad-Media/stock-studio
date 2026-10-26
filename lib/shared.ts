@@ -62,6 +62,10 @@ export const VARIANTS: { value: string; label: string; hint: string }[] = [
   { value: "movers_digest", label: "Market movers digest", hint: "Today's top gainers & losers with a short story on each" },
 ];
 
+export function variantLabel(variant: string): string {
+  return VARIANTS.find((v) => v.value === variant)?.label ?? variant.replace(/_/g, " ");
+}
+
 // Variants that aren't per-ticker studies and shouldn't appear in the New-study form.
 export const HIDDEN_FORM_VARIANTS = ["earnings_update", "movers_digest"];
 
