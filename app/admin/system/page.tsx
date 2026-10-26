@@ -42,6 +42,15 @@ export default async function AdminSystem() {
     await sql`SELECT session_date, status, universe_size, error, finished_at FROM setup_scans ORDER BY session_date DESC LIMIT 5`;
   const [matches] =
     await sql`SELECT count(*)::int AS open FROM setup_matches WHERE resolved_at IS NULL`;
+  // Null until the ops_alerts migration is applied.
+  const alerts = await sql`
+    SELECT key, severity, summary, opened_at, resolved_at FROM ops_alerts
+    WHERE resolved_at IS NULL OR resolved_at > now() - interval '7 days'
+    ORDER BY resolved_at IS NOT NULL, opened_at DESC LIMIT 20
+  `.catch(() => null);
+  const beats = alerts
+    ? await sql`SELECT component, beat_at FROM ops_heartbeats ORDER BY component`.catch(() => [])
+    : [];
 
   return (
     <div className="space-y-6">
@@ -128,6 +137,66 @@ export default async function AdminSystem() {
           If automated claims show &ldquo;Never&rdquo;, check that the Supabase
           Vault secret engine_webhook_url points at /api/engine/run on this
           host.
+        </p>
+      </section>
+
+      <section aria-labelledby="alerts-heading" className="card p-4">
+        <h2
+          id="alerts-heading"
+          className="mb-3 text-sm font-semibold text-slate-100"
+        >
+          Alerts
+        </h2>
+        {alerts === null ? (
+          <p className="text-sm text-fg-subtle">
+            Alerts aren&rsquo;t set up yet. Apply the ops_alerts migration,
+            then run supabase/ops-alerts.sql.
+          </p>
+        ) : (
+          <>
+            {beats.length > 0 && (
+              <p className="mb-3 text-xs text-fg-subtle">
+                Last check-in:{" "}
+                {beats
+                  .map((b) => `${b.component} ${formatDate(b.beat_at)}`)
+                  .join(" · ")}
+              </p>
+            )}
+            {alerts.length === 0 ? (
+              <p className="text-sm text-fg-subtle">
+                No alerts in the last 7 days.
+              </p>
+            ) : (
+              <ul className="divide-y divide-ink-800 text-sm">
+                {alerts.map((a) => (
+                  <li key={a.key} className="py-2">
+                    <span
+                      className={
+                        a.resolved_at
+                          ? "text-emerald-400"
+                          : a.severity === "critical"
+                            ? "text-red-400"
+                            : "text-amber-400"
+                      }
+                    >
+                      {a.resolved_at ? "Resolved" : a.severity === "critical" ? "Critical" : "Warning"}
+                    </span>{" "}
+                    <span className="font-mono text-xs text-slate-100">{a.key}</span>
+                    <span className="block text-slate-300">{a.summary}</span>
+                    <span className="block text-xs text-fg-subtle">
+                      Opened {formatDate(a.opened_at)}
+                      {a.resolved_at ? ` · resolved ${formatDate(a.resolved_at)}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+        <p className="mt-3 text-xs text-fg-subtle">
+          Checked by the database every 5 minutes and posted to the Discord
+          webhook in the Vault secret ops_alert_webhook_url, so alerts still
+          go out when this host is down.
         </p>
       </section>
 
