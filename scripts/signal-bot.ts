@@ -105,6 +105,14 @@ const client = new Client({
 });
 
 let deliveryTimer: ReturnType<typeof setInterval> | undefined;
+let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+// Lets the database alert when the bot stops or loses Discord for more than a
+// few minutes (stocks.ops_health_issues). No beat while disconnected.
+function heartbeat() {
+  if (!client.isReady()) return;
+  sql`SELECT stocks.signal_bot_heartbeat()`
+    .catch((error) => console.error("signal-bot: heartbeat failed", error.message));
+}
 let draining: Promise<void> | undefined;
 function drain(): Promise<void> {
   if (draining) return draining;
@@ -129,6 +137,8 @@ function scheduleDrain() {
 client.once(Events.ClientReady, (c) => {
   scheduleDrain();
   deliveryTimer = setInterval(scheduleDrain, 5000);
+  heartbeat();
+  heartbeatTimer = setInterval(heartbeat, 60_000);
   console.log(`signal-bot: logged in as ${c.user.tag}; ${INPUT_CHANNEL_ID} -> ${SIGNALS_CHANNEL_ID}; ${POSTERS.size} approved poster(s)`);
 });
 
@@ -178,6 +188,7 @@ client.on(Events.MessageUpdate, async (_old, updated: Message | PartialMessage) 
 async function shutdown(signal: string) {
   console.log(`signal-bot: ${signal} received, shutting down`);
   if (deliveryTimer) clearInterval(deliveryTimer);
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
   if (draining) await draining.catch(() => {});
   await client.destroy();
   await sql.end({ timeout: 5 });

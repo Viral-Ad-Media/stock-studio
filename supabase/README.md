@@ -32,6 +32,8 @@ insert trigger returns without sending a request; queue jobs are still usable th
 For hosted automation, enable pg_net/pg_cron, configure the two worker Vault secrets, then run
 `worker-automation.sql` as the database owner to configure the minute backstop. The URL must
 point to `/api/engine/run`, and the secret must equal `ENGINE_WEBHOOK_SECRET`.
+For failure alerts, store a Discord webhook URL in Vault as `ops_alert_webhook_url` and run
+`ops-alerts.sql` as the owner; it schedules `stocks.send_ops_alerts()` every 5 minutes.
 
 ## Existing database rollout
 

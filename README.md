@@ -376,6 +376,27 @@ from fetched candles. The general research variants rely on Anthropic's hosted `
 tool, whose output hasn't yet been validated against the manually researched bar. Until
 `ENGINE_WEB_RESEARCH=1` is set, those jobs stay `pending` for the manual path.
 
+### Failure alerts
+
+The database checks the worker, the queue and signal delivery every 5 minutes and posts to a
+Discord webhook, so an alert still goes out when the web host is down, asleep or misconfigured.
+
+| Alert | Fires when |
+|---|---|
+| `engine_down` | The worker hasn't run for 10 minutes (host down, wrong Vault URL/secret, cron stopped). The worker records a heartbeat on every invocation. |
+| `engine_unavailable` | Jobs are on hold with "waiting for the engine: …" (Anthropic credit, key or model problem). |
+| `jobs_delayed` | A job the worker takes is still unbuilt 20 minutes after it was queued. Web-research jobs count only when `ENGINE_WEB_RESEARCH=1`. |
+| `jobs_failing` | 3 or more reports failed in the last hour. |
+| `signal_delivery_delayed` | A signal is still undelivered to Discord 5 minutes after it was posted. |
+| `signal_bot_down` | The signal bot hasn't checked in for 5 minutes. Quiet until the bot has run once; retire it with `DELETE FROM stocks.ops_heartbeats WHERE component = 'signal-bot'`. |
+
+Each alert is posted once when it opens, reminded every 3 hours while it stays open, and posted
+again when it resolves. The admin **System** page lists open and recent alerts. Setup: store the
+webhook URL in Vault as `ops_alert_webhook_url`, then run
+[`supabase/ops-alerts.sql`](supabase/ops-alerts.sql). `SELECT * FROM stocks.ops_health_issues()`
+shows what is wrong right now. These checks can't see a paused Supabase project; add an external
+uptime check on `/api/health` for that.
+
 ### Manual fallback (engine CLI)
 
 On any machine with `DATABASE_URL` in `.env.local`, jobs the worker doesn't take can be built by
@@ -503,6 +524,7 @@ the `public` schema is intentionally empty.
 | `payments` | Stripe audit trail. Unique `stripe_session_id`. |
 | `payment_refunds` | Durable full-refund tombstones, including refunds received before checkout fulfillment. |
 | `signal_outbox` | Leased delivery attempts, errors and acknowledgement state. |
+| `ops_heartbeats`, `ops_alerts` | Worker and signal-bot check-ins, and the open/resolved failure alerts (see [Failure alerts](#failure-alerts)). |
 
 **Migrations** now have a reproducible fresh-install baseline and forward fixes. See
 [`supabase/README.md`](supabase/README.md) for reset and existing-database rollout instructions.
@@ -618,6 +640,8 @@ supabase/migrations/    SQL for recent migrations
    `https://<host>/api/engine/run`, and make `engine_webhook_secret` equal
    `ENGINE_WEBHOOK_SECRET`. Until then the trigger and cron POST to a placeholder and nothing is
    automated.
+   Then set up [failure alerts](#failure-alerts): store a Discord webhook URL in Vault as
+   `ops_alert_webhook_url` and run `supabase/ops-alerts.sql`.
 3. **Stripe**:
    - Create two one-time prices (access fee and credit pack) and set their ids.
    - Add a webhook endpoint at `https://<host>/api/billing/webhook` for

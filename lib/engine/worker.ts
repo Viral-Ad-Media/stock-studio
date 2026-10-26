@@ -351,8 +351,19 @@ async function retryLater(job: Job, err: unknown) {
   });
 }
 
+// Tells the database's alert checks (stocks.ops_health_issues) the worker is
+// alive and which jobs it takes. Must never stop the worker, so only logged.
+async function heartbeat() {
+  try {
+    await sql`SELECT engine_heartbeat(${sql.json({ web_research: INCLUDE_WEB_RESEARCH })})`;
+  } catch (err) {
+    console.error("engine: heartbeat failed", err);
+  }
+}
+
 export async function runWorkerLoop() {
   const deadline = Date.now() + INVOCATION_BUDGET_MS;
+  await heartbeat();
   const processed: { job_id: number; status: "done" | "error" | "retrying" | "held" }[] = [];
   let engineUnavailable = false;
 
