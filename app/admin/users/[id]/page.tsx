@@ -5,6 +5,8 @@ import { ArrowLeft } from "lucide-react";
 import { sql, formatDate, adminWritesConfigured, VARIANTS } from "@/lib/db";
 import { requireSuperAdminPage, userDirectory, UUID_RE } from "@/lib/admin";
 import UserActions from "@/components/admin/UserActions";
+import AccountActions from "@/components/admin/AccountActions";
+import { accountPlan } from "@/lib/plans";
 import StatusBadge from "@/components/StatusBadge";
 
 export const metadata = { title: "User" };
@@ -31,7 +33,9 @@ export default async function AdminUser({
   if (!u) notFound();
 
   const [p] =
-    await sql`SELECT active_workspace_id, trial_ends_at, access_granted FROM profiles WHERE id = ${id}`;
+    await sql`SELECT p.active_workspace_id, p.trial_ends_at, p.access_granted, p.disabled_at, p.disabled_reason,
+      s.plan AS sub_plan, s.status AS sub_status
+      FROM profiles p LEFT JOIN subscriptions s ON s.user_id = p.id WHERE p.id = ${id}`;
   const ws = p.active_workspace_id as string;
   const [bal] =
     await sql`SELECT coalesce(sum(delta), 0)::int AS balance FROM credits_ledger WHERE workspace_id = ${ws}`;
@@ -53,7 +57,12 @@ export default async function AdminUser({
     await sql`SELECT action, detail, created_at FROM admin_audit WHERE target_id IN (${id}, ${ws}) ORDER BY id DESC LIMIT 20`;
 
   const trialEnds = p.trial_ends_at ? new Date(p.trial_ends_at) : null;
-  const trialActive = trialEnds ? trialEnds.getTime() > Date.now() : false;
+  const plan = accountPlan({
+    access_granted: Boolean(p.access_granted),
+    trial_ends_at: p.trial_ends_at,
+    sub_plan: p.sub_plan,
+    sub_status: p.sub_status,
+  });
 
   return (
     <div className="space-y-6">
@@ -79,11 +88,22 @@ export default async function AdminUser({
         </p>
       </div>
 
+      {p.disabled_at && (
+        <p
+          role="status"
+          className="rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-sm text-red-200"
+        >
+          Disabled {formatDate(p.disabled_at)}
+          {p.disabled_reason ? `: ${p.disabled_reason}` : ""}. They can&apos;t
+          use the app until the account is enabled again.
+        </p>
+      )}
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="card p-4">
-          <div className="text-xs text-fg-subtle">Access</div>
+          <div className="text-xs text-fg-subtle">Plan</div>
           <div className="mt-1 text-lg font-semibold text-slate-100">
-            {p.access_granted ? "Paid" : trialActive ? "Trial" : "Expired"}
+            {plan.label}
           </div>
         </div>
         <div className="card p-4">
@@ -135,6 +155,15 @@ export default async function AdminUser({
       <UserActions
         userId={id}
         accessGranted={Boolean(p.access_granted)}
+        writesEnabled={adminWritesConfigured()}
+      />
+      <AccountActions
+        userId={id}
+        email={u.email ?? ""}
+        disabled={Boolean(p.disabled_at)}
+        isAdmin={Boolean(isAdmin)}
+        isSelf={id === admin.id}
+        hasPayments={payments.length > 0}
         writesEnabled={adminWritesConfigured()}
       />
 
