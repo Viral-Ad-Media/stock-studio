@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { requireAppAccess, insufficientCreditsResponse } from "@/lib/access";
+import { requireAppAccess, insufficientCreditsResponse, planRequiredResponse } from "@/lib/access";
 import { queueLimitResponse } from "@/lib/limits";
 import { creditCost, chargeJobCredits, isInsufficientCredits, isDuplicateOpenJob } from "@/lib/billing";
-import { jobTypeForVariant } from "@/lib/shared";
+import { jobTypeForVariant, variantLabel } from "@/lib/shared";
+import { canQueueVariant, FEATURE_PLAN } from "@/lib/plans";
 import { parseTicker, parseVariant, parseOptionalText, isInvalid, MAX_NOTES, MAX_COMPANY } from "@/lib/validate";
 
 export async function POST(req: Request) {
   const gate = await requireAppAccess();
   if (!gate.ok) return gate.response;
-  const { ws } = gate;
-  const limited = await queueLimitResponse(ws);
+  const { ws, membership } = gate;
+  const limited = await queueLimitResponse(ws, membership.ent.maxOpenJobs);
   if (limited) return limited;
 
   const body = await req.json().catch(() => ({}));
@@ -22,6 +23,9 @@ export async function POST(req: Request) {
   if (isInvalid(variant)) return NextResponse.json({ error: variant.error }, { status: 400 });
   if (isInvalid(company)) return NextResponse.json({ error: company.error }, { status: 400 });
   if (isInvalid(notes)) return NextResponse.json({ error: notes.error }, { status: 400 });
+  if (!canQueueVariant(membership.ent, variant)) {
+    return planRequiredResponse(`${variantLabel(variant)} isn't included in your plan.`, FEATURE_PLAN.allVariants);
+  }
   const jobType = jobTypeForVariant(variant);
 
   // parent_id feeds the parent study's content into the engine prompt — it

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { currentWorkspaceId } from "@/lib/workspace";
-import { requireAppAccess, insufficientCreditsResponse } from "@/lib/access";
+import { requireAppAccess, insufficientCreditsResponse, planRequiredResponse } from "@/lib/access";
 import { queueLimitResponse } from "@/lib/limits";
 import { creditCost, chargeJobCredits, isInsufficientCredits, isDuplicateOpenJob, refundJobCredits } from "@/lib/billing";
 import { parseTicker, parseOptionalText, isInvalid, MAX_COMPANY, STATUS_TAGS } from "@/lib/validate";
@@ -11,8 +11,8 @@ const WATCHLIST_COST = creditCost("watchlist_entry");
 export async function POST(req: Request) {
   const gate = await requireAppAccess();
   if (!gate.ok) return gate.response;
-  const { ws } = gate;
-  const limited = await queueLimitResponse(ws);
+  const { ws, membership } = gate;
+  const limited = await queueLimitResponse(ws, membership.ent.maxOpenJobs);
   if (limited) return limited;
 
   const body = await req.json().catch(() => ({}));
@@ -20,6 +20,17 @@ export async function POST(req: Request) {
   if (isInvalid(ticker)) return NextResponse.json({ error: ticker.error }, { status: 400 });
   const company = parseOptionalText(body.company, MAX_COMPANY, "Company");
   if (isInvalid(company)) return NextResponse.json({ error: company.error }, { status: 400 });
+
+  // Plan watchlist size. Re-adding a ticker that's already tracked is a refresh, not a new slot.
+  const max = membership.ent.watchlistMax;
+  if (max != null) {
+    const [r] = await sql`
+      SELECT count(*)::int AS n, bool_or(ticker = ${ticker}) AS tracked FROM watchlist WHERE workspace_id = ${ws}
+    `;
+    if (!r.tracked && r.n >= max) {
+      return planRequiredResponse(`Your plan tracks up to ${max} tickers and your watchlist is full.`, max < 50 ? "gold" : "diamond");
+    }
+  }
 
   // Only link a study from this workspace.
   let caseStudyId: number | null = null;
@@ -78,7 +89,7 @@ export async function PATCH(req: Request) {
     // A refresh is a new paid job — same gate as POST.
     const gate = await requireAppAccess();
     if (!gate.ok) return gate.response;
-    const limited = await queueLimitResponse(ws);
+    const limited = await queueLimitResponse(ws, gate.membership.ent.maxOpenJobs);
     if (limited) return limited;
 
     const [row] = await sql`SELECT id FROM watchlist WHERE id = ${id} AND workspace_id = ${ws}`;

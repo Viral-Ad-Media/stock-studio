@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { requireAppAccess, insufficientCreditsResponse } from "@/lib/access";
+import { requireAppAccess, insufficientCreditsResponse, planRequiredResponse } from "@/lib/access";
 import { queueLimitResponse } from "@/lib/limits";
 import { creditCost, chargeJobCredits, isInsufficientCredits, isDuplicateOpenJob } from "@/lib/billing";
-import { jobTypeForVariant } from "@/lib/shared";
+import { jobTypeForVariant, variantLabel } from "@/lib/shared";
+import { canQueueVariant, FEATURE_PLAN } from "@/lib/plans";
 
 // Re-queue a failed study. Its failed job was refunded, so the retry is a new
 // job charged like a fresh one — the same study row (notes, company, parent)
@@ -12,11 +13,16 @@ import { jobTypeForVariant } from "@/lib/shared";
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireAppAccess();
   if (!gate.ok) return gate.response;
-  const { ws } = gate;
+  const { ws, membership } = gate;
   const id = Number((await params).id);
   if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ error: "study not found" }, { status: 404 });
-  const limited = await queueLimitResponse(ws);
+  const limited = await queueLimitResponse(ws, membership.ent.maxOpenJobs);
   if (limited) return limited;
+  // A study queued on a higher plan can't be re-run after a downgrade.
+  const [current] = await sql`SELECT variant FROM case_studies WHERE id = ${id} AND workspace_id = ${ws}`;
+  if (current && !canQueueVariant(membership.ent, current.variant)) {
+    return planRequiredResponse(`${variantLabel(current.variant)} isn't included in your plan.`, FEATURE_PLAN.allVariants);
+  }
 
   try {
     const outcome = await sql.begin(async (tx) => {
