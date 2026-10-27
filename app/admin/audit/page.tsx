@@ -14,6 +14,14 @@ const LABELS: Record<string, string> = {
   revoke_access: "Removed access",
   extend_trial: "Extended trial",
   fail_job: "Failed a job",
+  invite_user: "Invited a user",
+  invite_claimed: "Invite used",
+  revoke_invite: "Cancelled an invite",
+  disable_user: "Disabled an account",
+  enable_user: "Enabled an account",
+  grant_admin: "Made super admin",
+  revoke_admin: "Removed super admin",
+  remove_user: "Removed an account",
 };
 
 export default async function AdminAudit({
@@ -147,7 +155,9 @@ export default async function AdminAudit({
                     ? `+${d.days} days, now ends ${formatDate(d.trial_after)}`
                     : r.action === "fail_job"
                       ? `${d.refunded_credits ?? 0} credits refunded`
-                      : "";
+                      : d.email
+                        ? String(d.email)
+                        : "";
               return (
                 <tr
                   key={r.id}
