@@ -22,8 +22,10 @@ test("worker outage alerts open once, remind, and resolve", async () => {
  try {
   assert.deepEqual(await issues(db), {});
   assert.deepEqual(await sweep(db), []);
-  await db.exec("SELECT stocks.engine_heartbeat('{\"web_research\":false}'); UPDATE stocks.ops_heartbeats SET beat_at=now()-interval '25 minutes'");
-  assert.match((await issues(db)).engine_down.summary, /hasn't run since .* \(25 min ago\)/);
+  await db.exec("SELECT stocks.engine_heartbeat('{\"web_research\":false}'); UPDATE stocks.ops_heartbeats SET beat_at=now()-interval '35 minutes'");
+  assert.equal((await issues(db)).engine_down, undefined, "the ~30-minute cron wake-up gap is normal");
+  await db.exec("UPDATE stocks.ops_heartbeats SET beat_at=now()-interval '50 minutes'");
+  assert.match((await issues(db)).engine_down.summary, /hasn't run since .* \(50 min ago\)/);
   assert.deepEqual(await sweep(db), ["opened:engine_down"]);
   assert.deepEqual(await sweep(db), [], "an open alert is announced once");
   await db.exec("UPDATE stocks.ops_alerts SET notified_at=now()-interval '4 hours'");
@@ -50,7 +52,7 @@ test("alerts are posted to the Discord webhook from Vault", async () => {
    CREATE SCHEMA net; CREATE TABLE net.sent(url text, body jsonb);
    CREATE FUNCTION net.http_post(url text, body jsonb, params jsonb DEFAULT '{}', headers jsonb DEFAULT '{}', timeout_milliseconds integer DEFAULT 5000)
    RETURNS bigint LANGUAGE sql AS $$ INSERT INTO net.sent VALUES(url, body) RETURNING 1::bigint $$;`);
-  await db.exec("SELECT stocks.engine_heartbeat('{}'); UPDATE stocks.ops_heartbeats SET beat_at=now()-interval '15 minutes'");
+  await db.exec("SELECT stocks.engine_heartbeat('{}'); UPDATE stocks.ops_heartbeats SET beat_at=now()-interval '60 minutes'");
   assert.equal((await db.query<{n:number}>("SELECT stocks.send_ops_alerts() AS n")).rows[0].n, 1);
   assert.equal((await db.query<{n:number}>("SELECT stocks.send_ops_alerts() AS n")).rows[0].n, 0);
   await db.exec("SELECT stocks.engine_heartbeat('{}')");

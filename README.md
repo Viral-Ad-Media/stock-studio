@@ -383,7 +383,7 @@ Discord webhook, so an alert still goes out when the web host is down, asleep or
 
 | Alert | Fires when |
 |---|---|
-| `engine_down` | The worker hasn't run for 10 minutes (host down, wrong Vault URL/secret, cron stopped). The worker records a heartbeat on every invocation. |
+| `engine_down` | The worker hasn't run for 45 minutes (host down, wrong Vault URL/secret, cron stopped). The worker records a heartbeat on every invocation. |
 | `engine_unavailable` | Jobs are on hold with "waiting for the engine: …" (Anthropic credit, key or model problem). |
 | `jobs_delayed` | A job the worker takes is still unbuilt 20 minutes after it was queued. Web-research jobs count only when `ENGINE_WEB_RESEARCH=1`. |
 | `jobs_failing` | 3 or more reports failed in the last hour. |
