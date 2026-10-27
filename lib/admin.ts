@@ -4,11 +4,15 @@ import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { currentUser, type SessionUser } from "@/lib/workspace";
 
-// Super-admin checks. Admins are rows in stocks.platform_admins, managed in
-// SQL only. Non-admins get a plain 404 so the console's existence isn't
+// Super-admin checks. Admins are rows in stocks.platform_admins (granted from
+// the console through stocks.admin_set_platform_admin); a disabled account
+// isn't an admin. Non-admins get a plain 404 so the console's existence isn't
 // advertised.
 export const isSuperAdmin = cache(async (userId: string): Promise<boolean> => {
-  const [row] = await sql`SELECT 1 AS ok FROM platform_admins WHERE user_id = ${userId}`;
+  const [row] = await sql`
+    SELECT 1 AS ok FROM platform_admins a LEFT JOIN profiles p ON p.id = a.user_id
+    WHERE a.user_id = ${userId} AND p.disabled_at IS NULL
+  `;
   return Boolean(row);
 });
 
@@ -40,6 +44,16 @@ export function adminErrorResponse(err: unknown): NextResponse {
       {
         error:
           "The admin database connection was rejected. Set a password on the stocks_admin role (ALTER ROLE stocks_admin WITH PASSWORD ...) and put that exact password in ADMIN_DATABASE_URL, with the user stocks_admin.<project ref>.",
+      },
+      { status: 503 }
+    );
+  }
+  // Logged in, but as a role without EXECUTE on the admin functions.
+  if (e?.code === "42501") {
+    return NextResponse.json(
+      {
+        error:
+          "The admin database user can't run admin changes. ADMIN_DATABASE_URL must log in as stocks_admin.<project ref>, and the latest migrations must be applied.",
       },
       { status: 503 }
     );
