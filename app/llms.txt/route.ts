@@ -1,4 +1,5 @@
 import { SITE, absoluteUrl } from "@/lib/site";
+import { PLANS } from "@/lib/plans";
 import { CREDIT_COSTS } from "@/lib/shared";
 
 // llms.txt (https://llmstxt.org): a plain-text summary of the public site for
@@ -10,12 +11,12 @@ export function GET() {
 
 > ${SITE.description}
 
-${SITE.name} is operated by ${SITE.operator}. It produces educational business analysis, never personalized investment advice. Members with full access also receive the program trader's general trade signals. Every study opens with a visible "As of" date, cites its sources, and never invents a metric.
+${SITE.name} is operated by ${SITE.operator}. It produces educational business analysis, never personalized investment advice. Members on a paid plan also receive the program trader's general trade signals. Every study opens with a visible "As of" date, cites its sources, and never invents a metric.
 
 ## Pages
 
 - [Home](${absoluteUrl("/")}): what Stock Studio does, its features, how it works, and FAQ
-- [Pricing](${absoluteUrl("/pricing")}): ${SITE.trialDays}-day free trial with ${SITE.trialCredits} credits, then a one-time $${SITE.accessPriceUsd} unlock and credit packs ($${SITE.creditPackPriceUsd} for ${SITE.creditPackSize} credits)
+- [Pricing](${absoluteUrl("/pricing")}): ${SITE.trialDays}-day free trial with ${SITE.trialCredits} credits, then Silver ($${PLANS.silver.monthlyUsd}/month), Gold ($${PLANS.gold.monthlyUsd}/month) or Diamond ($${PLANS.diamond.monthlyUsd}/month) plans with monthly credits, plus credit packs ($${SITE.creditPackPriceUsd} for ${SITE.creditPackSize} credits)
 - [Start a free trial](${absoluteUrl("/signup")})
 - [Terms of Service](${absoluteUrl("/terms")})
 - [Privacy Policy](${absoluteUrl("/privacy")})

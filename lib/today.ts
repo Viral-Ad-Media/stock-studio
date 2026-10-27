@@ -30,6 +30,4 @@ export const TODAY_SETUP_SQL = `
     (SELECT count(*)::int FROM setup_matches m WHERE m.scan_id = s.id) AS matches
   FROM setup_scans s WHERE s.status = 'done' ORDER BY s.session_date DESC LIMIT 1`;
 
-export function canReadSignals(accessGranted: boolean, admin: boolean): boolean {
-  return accessGranted || admin;
-}
+export { canReadSignals } from "./signal-feed";

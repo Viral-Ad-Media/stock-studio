@@ -2,7 +2,9 @@ import { Radar, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { sql, formatDate } from "@/lib/db";
 import EmptyState from "@/components/guide/EmptyState";
 import { BOTS, botRecord, type Direction, type Level } from "@/lib/setups";
+import Link from "next/link";
 import PageHeader from "@/components/ui/PageHeader";
+import { currentMembership } from "@/lib/membership";
 
 export const metadata = { title: "Setup bots", description: "Rule-based pattern scans with a paper-tracked record." };
 
@@ -17,11 +19,13 @@ function day(d: string) {
 
 export default async function SetupsPage() {
   // Market-wide data — the same for every workspace, so no workspace filter.
+  // Silver sees each bot's track record; today's matches and desk notes are Gold and Diamond.
+  const live = (await currentMembership())?.ent.setupsLive ?? true;
   const [scan] = await sql`
     SELECT id, session_date, universe_size, notes_json FROM setup_scans
     WHERE status = 'done' ORDER BY session_date DESC LIMIT 1
   `;
-  const matches = scan
+  const matches = scan && live
     ? ((await sql`
         SELECT bot, symbol, direction, close, levels_json, detail FROM setup_matches
         WHERE scan_id = ${scan.id} ORDER BY bot, symbol
@@ -31,7 +35,7 @@ export default async function SetupsPage() {
     SELECT bot, direction, fwd_return::float8 AS fwd_return, spy_return::float8 AS spy_return, invalidated
     FROM setup_matches WHERE resolved_at IS NOT NULL
   `) as unknown as RecordRow[];
-  const notes: Record<string, string> = scan?.notes_json ?? {};
+  const notes: Record<string, string> = (live && scan?.notes_json) || {};
 
   return (
     <div>
@@ -41,8 +45,8 @@ export default async function SetupsPage() {
       />
       {scan ? (
         <p className="mb-6 text-sm font-medium text-slate-300">
-          As of the {day(scan.session_date)} close · {scan.universe_size} stocks scanned · {matches.length}{" "}
-          {matches.length === 1 ? "match" : "matches"}
+          As of the {day(scan.session_date)} close · {scan.universe_size} stocks scanned
+          {live ? <> · {matches.length} {matches.length === 1 ? "match" : "matches"}</> : null}
         </p>
       ) : (
         <div className="mb-6">
@@ -59,6 +63,12 @@ export default async function SetupsPage() {
         </div>
       )}
 
+      {scan && !live && (
+        <p className="mb-6 card p-4 text-sm text-slate-300">
+          Your plan shows each bot&apos;s track record. Today&apos;s matches and the AI desk notes are part of Gold and Diamond.{" "}
+          <Link href="/billing?plan=gold" className="text-emerald-400 underline-offset-2 hover:underline">See plans</Link>
+        </p>
+      )}
       <div className="space-y-4">
         {BOTS.map((bot) => {
           const rows = matches.filter((m) => m.bot === bot.key);
@@ -69,9 +79,11 @@ export default async function SetupsPage() {
                 <h2 id={`bot-${bot.key}`} className="text-base font-semibold text-slate-100">
                   {bot.name}
                 </h2>
-                <span className="text-xs text-fg-subtle">
-                  {rows.length} {rows.length === 1 ? "match" : "matches"}
-                </span>
+                {live && (
+                  <span className="text-xs text-fg-subtle">
+                    {rows.length} {rows.length === 1 ? "match" : "matches"}
+                  </span>
+                )}
               </div>
               <p className="mt-1 text-sm text-slate-300">{bot.looksFor}</p>
               <p className="mt-1 text-xs text-fg-subtle">Based on: {bot.source}</p>

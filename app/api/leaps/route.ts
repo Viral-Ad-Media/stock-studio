@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
-import { currentWorkspaceId } from "@/lib/workspace";
-import { requireAppAccess } from "@/lib/access";
+import { requireAppAccess, planRequiredResponse } from "@/lib/access";
+import { currentMembership } from "@/lib/membership";
+import { FEATURE_PLAN } from "@/lib/plans";
+
+const LEAPS_LOCKED = "The LEAPS workspace isn't included in your plan.";
 import { sql } from "@/lib/db";
 import { getLeapsChain } from "@/lib/leaps-chain";
 import { parseOcc } from "@/lib/gex";
@@ -9,8 +12,9 @@ import { validateLeaps } from "@/lib/leaps";
 import { InputError, text, UUID_PATTERN, readJsonLimited } from "@/lib/journal";
 
 export async function GET(req: Request) {
-  const ws = await currentWorkspaceId();
-  if (!ws) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const membership = await currentMembership();
+  if (!membership) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!membership.ent.leaps) return planRequiredResponse(LEAPS_LOCKED, FEATURE_PLAN.leaps);
   const symbol = new URL(req.url).searchParams
     .get("symbol")
     ?.trim()
@@ -38,6 +42,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const gate = await requireAppAccess();
   if (!gate.ok) return gate.response;
+  if (!gate.membership.ent.leaps) return planRequiredResponse(LEAPS_LOCKED, FEATURE_PLAN.leaps);
   try {
     const body = (await readJsonLimited(req)) as Record<string, unknown>;
     if (!body || typeof body !== "object")

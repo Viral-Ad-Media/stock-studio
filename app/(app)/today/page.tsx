@@ -4,8 +4,8 @@ import SectorChart from "@/components/charts/SectorChart";
 import { redirect } from "next/navigation";
 import { sql } from "@/lib/db";
 import { currentUser, currentWorkspaceId } from "@/lib/workspace";
-import { getBillingState } from "@/lib/billing";
-import { isSuperAdmin } from "@/lib/admin";
+import { getMembership } from "@/lib/membership";
+import { SIGNAL_FEED_SQL, signalFeedParams } from "@/lib/signal-feed";
 import { getMarketContext } from "@/lib/market-context";
 import { marketDateET } from "@/lib/earnings";
 import { marketDay, timestampET } from "@/lib/data-freshness";
@@ -146,11 +146,11 @@ async function SetupOverview() {
 
 async function SignalOverview({ userId, ws }: { userId: string; ws: string }) {
   try {
-    const [billing, admin] = await Promise.all([getBillingState(userId, ws), isSuperAdmin(userId)]);
+    const { ent } = await getMembership(userId, ws);
     // Check entitlement BEFORE querying the program-wide feed. A trial is
-    // research access, not signal access. Fail closed if either check fails.
-    if (!canReadSignals(billing.accessGranted, admin)) return <Panel title="Member signals" href="/billing"><p className="text-sm text-fg-subtle">Unlock full access to see the program trader&apos;s calls. Signals are not included in trial access.</p></Panel>;
-    const rows = await sql`SELECT id, posted_at, action, ticker, instrument, detail FROM signals ORDER BY id DESC LIMIT 3`;
+    // research access, not signal access. Fail closed if the check fails.
+    if (!canReadSignals(ent.signals)) return <Panel title="Member signals" href="/billing"><p className="text-sm text-fg-subtle">Pick a plan to see the program trader&apos;s calls. Signals are not included in the free trial.</p></Panel>;
+    const rows = await sql.unsafe(SIGNAL_FEED_SQL, signalFeedParams(ent.signals, ent.signalDelayDays, 3));
     return <Panel title="Member signals" href="/signals">
       {rows.length ? <ul className="divide-y divide-ink-800">{rows.map((r) => <li key={r.id} className="py-2 first:pt-0"><p className="font-mono text-sm font-semibold text-slate-100">{r.action} {r.ticker} {r.instrument}</p><p className="mt-1 text-sm text-slate-300">{r.detail}</p><p className="mt-1 text-xs text-fg-subtle">Posted {timestampET(r.posted_at)}</p></li>)}</ul> : <p className="text-sm text-fg-subtle">No trader calls have been posted yet.</p>}
       <p className="mt-3 text-xs text-fg-subtle">Source: program trader. General calls shared with members, not personalized advice. Trading involves loss risk; options can lose their full value. See Signals for the complete record.</p>

@@ -41,10 +41,11 @@ test("CBOE source timestamps survive snapshot caching; unknown timezone stays un
   assert.equal(calls, 1);
 });
 
-test("signals require paid access or admin; trial alone never qualifies", () => {
-  assert.equal(canReadSignals(false, false), false);
-  assert.equal(canReadSignals(true, false), true);
-  assert.equal(canReadSignals(false, true), true);
+test("signals need a plan that includes them; a trial never does", () => {
+  assert.equal(canReadSignals("none"), false);
+  assert.equal(canReadSignals("monthly"), true);
+  assert.equal(canReadSignals("weekly"), true);
+  assert.equal(canReadSignals("all"), true);
 });
 
 test("simultaneous overview requests share one market fetch batch", async (t) => {

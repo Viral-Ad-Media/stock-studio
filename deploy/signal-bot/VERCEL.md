@@ -32,7 +32,9 @@ Do not run a second copy on another host. Preview deployments do not run daemons
 | `DISCORD_TOKEN` | Bot token; enter directly in Vercel as a sensitive variable |
 | `SIGNALS_DATABASE_URL` | TLS Supabase transaction-pooler URL for `stocks_signals`; enter directly as a sensitive variable |
 | `INPUT_CHANNEL_ID` | Private signal input channel ID |
-| `SIGNALS_CHANNEL_ID` | Member trade signals channel ID |
+| `SIGNALS_CHANNEL_ID` | Diamond (every call) signals channel ID |
+| `GOLD_SIGNALS_CHANNEL_ID` | Optional: Gold channel ID (weekly picks and their follow-ups) |
+| `SILVER_SIGNALS_CHANNEL_ID` | Optional: Silver channel ID (monthly pick and its follow-ups) |
 | `SIGNAL_POSTER_IDS` | Comma-separated numeric IDs of approved posters |
 
 Optional: `SIGNAL_FOOTER` and `SIGNAL_DISCLAIMER`. Keep tokens and database

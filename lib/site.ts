@@ -34,8 +34,8 @@ export const SITE = {
   operator: "Viral Ad Media",
   email: "viraladmediacontent@gmail.com",
   // Displayed prices. Charged amounts come from the Stripe prices the
-  // checkout route uses — keep these in step with them.
-  accessPriceUsd: 79,
+  // checkout route uses — keep these in step with them. Plan prices live in
+  // lib/plans.ts.
   creditPackPriceUsd: 10,
   creditPackSize: 10,
   trialDays: 30,

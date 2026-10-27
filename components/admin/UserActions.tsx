@@ -190,7 +190,7 @@ export default function UserActions({
           <p className="text-xs text-fg-subtle">
             {accessGranted
               ? "The account keeps any trial time left, then loses access. Stripe isn't refunded by this."
-              : "Unlocks the app without a payment, as if the one-time fee had been paid."}
+              : "Makes the account a Founding member (every Diamond feature) without a payment."}
           </p>
           <div>
             <label htmlFor="access-note" className="field-label">

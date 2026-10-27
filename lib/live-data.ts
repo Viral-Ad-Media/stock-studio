@@ -135,8 +135,9 @@ export async function refreshTargets(ws: string, targets: Target[], deadline = D
 export async function liveTargets(
   ws: string,
   scope: { kind: "study" | "watchlist"; id: number } | { kind: "all" },
+  minIntervalMs: number = LIVE_MIN_INTERVAL_MS,
 ): Promise<Target[]> {
-  const freshCutoff = new Date(Date.now() - LIVE_MIN_INTERVAL_MS);
+  const freshCutoff = new Date(Date.now() - Math.max(minIntervalMs, LIVE_MIN_INTERVAL_MS));
   const studyId = scope.kind === "study" ? scope.id : null;
   const watchId = scope.kind === "watchlist" ? scope.id : null;
   const studies =
