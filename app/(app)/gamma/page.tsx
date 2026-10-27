@@ -5,12 +5,28 @@ import { parseTicker, isInvalid } from "@/lib/validate";
 import DataStamp from "@/components/insights/DataStamp";
 import GexChart from "@/components/gamma/GexChart";
 import PageHeader from "@/components/ui/PageHeader";
+import UpgradeCard from "@/components/billing/UpgradeCard";
+import { currentMembership } from "@/lib/membership";
+import { FEATURE_PLAN } from "@/lib/plans";
 
 export const metadata = { title: "Gamma exposure", description: "A dealer-gamma model built from delayed options data." };
 
 export const dynamic = "force-dynamic";
 
 export default async function GammaPage({ searchParams }: { searchParams: Promise<{ symbol?: string }> }) {
+  const membership = await currentMembership();
+  if (membership && !membership.ent.gamma) {
+    return (
+      <div>
+        <PageHeader title="Gamma exposure" />
+        <UpgradeCard
+          title="Gamma exposure is part of Gold and Diamond"
+          body="See where options dealers may need to hedge, built from open interest on every listed strike, for any symbol."
+          plan={FEATURE_PLAN.gamma}
+        />
+      </div>
+    );
+  }
   const { symbol: raw } = await searchParams;
   const parsed = parseTicker(raw ?? "SPY");
   const invalid = isInvalid(parsed) || parsed.includes(" VS ");

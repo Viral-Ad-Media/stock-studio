@@ -6,6 +6,9 @@ import { isSuperAdmin } from "@/lib/admin";
 import { readSweepCapture, readSweepWorker } from "@/lib/sweep/dashboard";
 import evidence from "@/config/sweep/historical-evidence.json";
 import PageHeader from "@/components/ui/PageHeader";
+import UpgradeCard from "@/components/billing/UpgradeCard";
+import { currentMembership } from "@/lib/membership";
+import { FEATURE_PLAN } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Sweep Scanner", description: "Liquidity sweeps, reclaim evidence and shadow testing." };
@@ -14,6 +17,19 @@ export default async function SweepsPage() {
   const user = await currentUser();
   if (!user) redirect("/login");
   const admin = await isSuperAdmin(user.id);
+  const membership = await currentMembership();
+  if (membership && !membership.ent.sweeps) {
+    return (
+      <div>
+        <PageHeader title="Sweep Scanner" />
+        <UpgradeCard
+          title="The Sweep Scanner is part of Diamond"
+          body="Track fast sweeps through known price levels and the reclaim or rejection that follows. It's in development now and opens to Diamond members first."
+          plan={FEATURE_PLAN.sweeps}
+        />
+      </div>
+    );
+  }
   const capture = admin ? await readSweepCapture() : null;
   const worker = admin ? await readSweepWorker() : null;
   const report = capture?.report;

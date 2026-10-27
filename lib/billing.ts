@@ -1,6 +1,7 @@
 import { cache } from "react";
 import type { TransactionSql } from "postgres";
 import { sql } from "@/lib/db";
+import { isPlanId, type BillingInterval, type Entitlements, type PlanId } from "@/lib/plans";
 
 // Billing state reads + the two job-lifecycle credit hooks. Every *write* to
 // billing state goes through a SECURITY DEFINER RPC (stocks_billing
@@ -14,12 +15,28 @@ export { creditCost } from "@/lib/shared";
 // metadata by our own server, so the webhook never trusts a client number.
 export const CREDITS_PER_PACK = Number(process.env.STRIPE_CREDITS_PER_PACK ?? 10);
 
+// Credits in one pack for this member (Diamond packs carry 50% more).
+export function packCreditsFor(ent: Entitlements): number {
+  return Math.round(CREDITS_PER_PACK * ent.packMultiplier);
+}
+
+export type Subscription = {
+  plan: PlanId;
+  interval: BillingInterval;
+  status: string;
+  live: boolean; // active, trialing or past_due
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  stripeCustomerId: string;
+};
+
 export type BillingState = {
-  accessGranted: boolean;
+  accessGranted: boolean; // Founding member (old one-time unlock, or granted by an admin)
   trialEndsAt: string | null;
   trialActive: boolean;
   hasAccess: boolean;
   balance: number;
+  subscription: Subscription | null;
 };
 
 export const getBillingState = cache(async (userId: string, workspaceId: string): Promise<BillingState> => {
@@ -30,14 +47,32 @@ export const getBillingState = cache(async (userId: string, workspaceId: string)
   const [{ balance }] = await sql`
     SELECT COALESCE(SUM(delta), 0)::int AS balance FROM credits_ledger WHERE workspace_id = ${workspaceId}
   `;
+  const [sub] = await sql`
+    SELECT plan, billing_interval, status, subscription_is_live(status) AS live,
+      current_period_end, cancel_at_period_end, stripe_customer_id
+    FROM subscriptions WHERE user_id = ${userId}
+  `;
   const accessGranted = Boolean(profile?.access_granted);
   const trialActive = Boolean(profile?.trial_active);
+  const subscription: Subscription | null =
+    sub && isPlanId(sub.plan)
+      ? {
+          plan: sub.plan,
+          interval: sub.billing_interval === "year" ? "year" : "month",
+          status: String(sub.status),
+          live: Boolean(sub.live),
+          currentPeriodEnd: sub.current_period_end ? new Date(sub.current_period_end).toISOString() : null,
+          cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
+          stripeCustomerId: String(sub.stripe_customer_id),
+        }
+      : null;
   return {
     accessGranted,
     trialEndsAt: profile?.trial_ends_at ? new Date(profile.trial_ends_at).toISOString() : null,
     trialActive,
-    hasAccess: accessGranted || trialActive,
+    hasAccess: accessGranted || trialActive || Boolean(subscription?.live),
     balance: Number(balance),
+    subscription,
   };
 });
 

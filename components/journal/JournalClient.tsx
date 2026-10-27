@@ -92,6 +92,7 @@ export default function JournalClient({
   initialDraft = {},
   context = EMPTY_CONTEXT,
   draftError = "",
+  analysis = true,
 }: {
   rows: JournalTrade[];
   studies: { id: number; ticker: string; variant: string }[];
@@ -102,6 +103,8 @@ export default function JournalClient({
   initialDraft?: Partial<Form>;
   context?: ResearchContext;
   draftError?: string;
+  // Decision analysis is a Gold and Diamond feature (lib/plans.ts).
+  analysis?: boolean;
 }) {
   const router = useRouter();
   const [form, setForm] = useState<Form>({
@@ -431,7 +434,13 @@ export default function JournalClient({
         </p>
         <JournalCharts stats={stats} />
       </section>
-      {!archived && (
+      {!archived && !analysis && (
+        <section className="card p-4 text-sm text-slate-300">
+          Decision analysis, which compares each trade against the research and plan behind it, is part of Gold and Diamond.{" "}
+          <Link href="/billing?plan=gold" className="text-emerald-400 underline-offset-2 hover:underline">See plans</Link>
+        </section>
+      )}
+      {!archived && analysis && (
         <DecisionAnalysis
           rows={rows}
           studies={studies}

@@ -4,6 +4,10 @@ import { sql } from "@/lib/db";
 import { currentUser, currentWorkspaceId } from "@/lib/workspace";
 import { marketDateET } from "@/lib/earnings";
 import LeapsClient from "@/components/leaps/LeapsClient";
+import PageHeader from "@/components/ui/PageHeader";
+import UpgradeCard from "@/components/billing/UpgradeCard";
+import { currentMembership } from "@/lib/membership";
+import { FEATURE_PLAN } from "@/lib/plans";
 export const dynamic = "force-dynamic";
 export const metadata = {
   title: "LEAPS workspace",
@@ -22,6 +26,19 @@ export default async function LeapsPage({
   }>;
 }) {
   if (!(await currentUser())) redirect("/login");
+  const membership = await currentMembership();
+  if (membership && !membership.ent.leaps) {
+    return (
+      <div>
+        <PageHeader title="LEAPS workspace" />
+        <UpgradeCard
+          title="The LEAPS workspace is part of Gold and Diamond"
+          body="Compare long-dated option expirations, liquidity and early-exit scenarios, linked to your studies and journal."
+          plan={FEATURE_PLAN.leaps}
+        />
+      </div>
+    );
+  }
   const ws = await currentWorkspaceId();
   if (!ws) return <p role="alert">Your workspace is unavailable.</p>;
   const params = await searchParams,

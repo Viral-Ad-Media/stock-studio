@@ -11,6 +11,7 @@ import { sql } from "@/lib/db";
 import { JournalStore } from "@/lib/journal-store";
 import JournalClient from "@/components/journal/JournalClient";
 import { marketDateET } from "@/lib/earnings";
+import { currentMembership } from "@/lib/membership";
 export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Trading journal",
@@ -38,9 +39,10 @@ export default async function JournalPage({
   const params = await searchParams,
     archived = params.archived === "1";
   try {
-    const [rows, studies] = await Promise.all([
+    const [rows, studies, membership] = await Promise.all([
       new JournalStore((q, p) => sql.unsafe(q, p)).list(ws, archived),
       sql`SELECT id,ticker,variant FROM case_studies WHERE workspace_id=${ws} AND status='ready' ORDER BY id DESC LIMIT 100`,
+      currentMembership(),
     ]);
     let ticker = (params.ticker ?? "").toUpperCase(),
       initialDraft: Record<string, string> = {},
@@ -111,6 +113,7 @@ export default async function JournalPage({
         archived={archived}
         initialTicker={ticker}
         initialStudy={context.studyId ? String(context.studyId) : ""}
+        analysis={membership?.ent.journalAnalysis ?? true}
       />
     );
   } catch (e) {

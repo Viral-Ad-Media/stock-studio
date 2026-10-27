@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PLANS, PLAN_IDS } from "@/lib/plans";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -187,7 +188,7 @@ const STEPS = [
 const FAQ = [
   {
     q: "Is this investment advice?",
-    a: "No. Stock Studio's case studies are educational business analysis, and every study ends with a not-investment-advice line. Members with full access can also follow the program trader's own buy and sell calls in Signals. Those are general calls shared with every member, not advice tailored to you, and trading involves risk of loss.",
+    a: "No. Stock Studio's case studies are educational business analysis, and every study ends with a not-investment-advice line. Members on a paid plan can also follow the program trader's own buy and sell calls in Signals. Those are general calls shared with every member, not advice tailored to you, and trading involves risk of loss.",
   },
   {
     q: "Where do the numbers come from?",
@@ -199,7 +200,7 @@ const FAQ = [
   },
   {
     q: "How does the free trial work?",
-    a: `You get ${SITE.trialDays} days and ${SITE.trialCredits} starter credits, with no card required. After that, a one-time $${SITE.accessPriceUsd} unlock keeps the app open, and you buy credits only for the studies you queue.`,
+    a: `You get ${SITE.trialDays} days and ${SITE.trialCredits} starter credits, with no card required. The trial has Gold features. After that, pick Silver ($${PLANS.silver.monthlyUsd}/month), Gold ($${PLANS.gold.monthlyUsd}/month) or Diamond ($${PLANS.diamond.monthlyUsd}/month); each includes monthly credits, and you can cancel any time.`,
   },
   {
     q: "What do the product previews show?",
@@ -238,13 +239,13 @@ export default function LandingPage() {
             priceCurrency: "USD",
             url: absoluteUrl("/pricing"),
           },
-          {
+          ...PLAN_IDS.map((id) => ({
             "@type": "Offer",
-            name: "One-time access",
-            price: String(SITE.accessPriceUsd),
+            name: `${PLANS[id].name} plan, monthly`,
+            price: String(PLANS[id].monthlyUsd),
             priceCurrency: "USD",
             url: absoluteUrl("/pricing"),
-          },
+          })),
         ],
       },
       {
