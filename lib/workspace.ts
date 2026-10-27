@@ -29,14 +29,17 @@ export const currentUser = cache(async (): Promise<SessionUser | null> => {
 // provisions one (stocks.provision_user — same trial as signup, at most once)
 // for an account that predates the signup trigger: the Supabase project used
 // to be shared with other apps, so an older login can have no Stock Studio profile.
+// A disabled account (super admin console) gets no workspace, so every route
+// that needs one answers "unauthorized".
 // Cached per request — never inline this lookup elsewhere.
 export const currentWorkspaceId = cache(async (): Promise<string | null> => {
   const user = await currentUser();
   if (!user) return null;
 
   const [profile] = await sql`
-    SELECT active_workspace_id FROM profiles WHERE id = ${user.id}
+    SELECT active_workspace_id, disabled_at FROM profiles WHERE id = ${user.id}
   `;
+  if (profile?.disabled_at) return null;
   if (profile?.active_workspace_id) return profile.active_workspace_id as string;
 
   const [membership] = await sql`
@@ -46,4 +49,10 @@ export const currentWorkspaceId = cache(async (): Promise<string | null> => {
 
   const [provisioned] = await sql`SELECT provision_user(${user.id}::uuid) AS workspace_id`;
   return (provisioned?.workspace_id as string) ?? null;
+});
+
+// Whether a super admin has disabled this account (stocks.admin_set_disabled).
+export const accountDisabled = cache(async (userId: string): Promise<boolean> => {
+  const [row] = await sql`SELECT disabled_at FROM profiles WHERE id = ${userId}`;
+  return Boolean(row?.disabled_at);
 });
