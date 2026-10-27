@@ -722,6 +722,8 @@ Trade signals:
 
 The superadmin console includes paginated job and audit history, job/workspace search, action/reason filters, expandable job results, manual data refresh, aggregate journal/LEAPS adoption and workspace-level usage counts. Existing superadmin gates and audited account mutations remain required. Admin credit adjustments are limited to ±10,000 per request in both the form and API.
 
+User management (`/admin/users`, migration `20261027160000_admin_user_management.sql`): add a user by email, disable or enable an account, give or take the super admin role, and remove an account. Every change needs a reason and goes to the audit log. The Supabase Auth users are shared with other apps, so the console never creates or deletes logins: adding someone without a Stock Studio account saves an invite (extra credits, trial length, paid access) that is applied when they sign up with that email, or straight away if the email already has a login. No email is sent; share the signup link. Removing deletes the Stock Studio profile and the workspaces only they belong to, and is refused for accounts with payment records (disable those). A disabled account gets no workspace, so the app and its API refuse it, and a disabled super admin loses the console. Plan labels come from `lib/plans.ts` so membership tiers can extend them in one place.
+
 
 ### Research-led decision workflow
 

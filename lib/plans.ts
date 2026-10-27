@@ -214,3 +214,33 @@ export function planCreditGrant(plan: PlanId, interval: BillingInterval): { cred
 export function isPlanId(v: unknown): v is PlanId {
   return typeof v === "string" && (PLAN_IDS as readonly string[]).includes(v);
 }
+
+// An account's plan as the admin console shows it, from the raw profile and
+// subscription columns. Screens go through accountPlan rather than reading
+// access_granted / trial_ends_at / subscriptions themselves.
+export type PlanKey = PlanId | "founding" | "trial" | "expired";
+
+export type PlanFields = {
+  access_granted: boolean;
+  trial_ends_at: string | Date | null;
+  // The member's subscription, if any (stocks.subscriptions).
+  sub_plan?: string | null;
+  sub_status?: string | null;
+};
+
+export type AccountPlan = { key: PlanKey; label: string; detail: string | null };
+
+const LIVE_STATUSES = ["active", "trialing", "past_due"];
+
+export function accountPlan(p: PlanFields, now = Date.now()): AccountPlan {
+  if (p.access_granted) return { key: "founding", label: "Founding Diamond", detail: null };
+  if (isPlanId(p.sub_plan) && p.sub_status && LIVE_STATUSES.includes(p.sub_status)) {
+    return { key: p.sub_plan, label: PLANS[p.sub_plan].name, detail: p.sub_status === "past_due" ? "payment past due" : null };
+  }
+  const ends = p.trial_ends_at ? new Date(p.trial_ends_at).getTime() : null;
+  const daysLeft = ends === null ? null : Math.ceil((ends - now) / 86_400_000);
+  if (daysLeft !== null && daysLeft > 0) {
+    return { key: "trial", label: "Trial", detail: `${daysLeft} ${daysLeft === 1 ? "day" : "days"} left` };
+  }
+  return { key: "expired", label: "Trial expired", detail: null };
+}

@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Nav from "@/components/Nav";
 import { TourProvider } from "@/components/guide/Tour";
-import { currentUser, currentWorkspaceId } from "@/lib/workspace";
+import { currentUser, currentWorkspaceId, accountDisabled } from "@/lib/workspace";
 import { getBillingState } from "@/lib/billing";
 import { isSuperAdmin } from "@/lib/admin";
+import { SITE } from "@/lib/site";
 
 // Authenticated app chrome (sidebar + main) — everything under the
 // middleware-protected /dashboard, /new, /watchlist, /study/*, /billing routes.
@@ -28,6 +29,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const ws = user ? await currentWorkspaceId().catch(logged("currentWorkspaceId")) : null;
   const billing = user && ws ? await getBillingState(user.id, ws).catch(logged("getBillingState")) : null;
   const admin = user ? await isSuperAdmin(user.id).catch(logged("isSuperAdmin")) : false;
+  const disabled = user ? await accountDisabled(user.id).catch(logged("accountDisabled")) : false;
+  if (disabled) {
+    return (
+      <main id="main" className="mx-auto flex min-h-screen max-w-md flex-col justify-center p-6">
+        <h1 className="text-xl font-semibold text-slate-100">This account is disabled</h1>
+        <p className="mt-2 text-sm text-slate-300">
+          Your Stock Studio account has been turned off. If you think this is a mistake, email{" "}
+          <a className="text-emerald-400 hover:underline" href={`mailto:${SITE.email}`}>{SITE.email}</a>.
+        </p>
+      </main>
+    );
+  }
   return (
     <TourProvider>
       <div className="min-h-screen md:flex">
