@@ -76,7 +76,8 @@ export const config = {
     "/billing/:path*",
     "/admin/:path*",
     "/api/admin/:path*",
-    // Checkout needs a session; /api/billing/webhook stays public (Stripe-signature auth).
+    // Checkout and the portal need a session; /api/billing/webhook stays public (Stripe-signature auth).
     "/api/billing/checkout/:path*",
+    "/api/billing/portal/:path*",
   ],
 };

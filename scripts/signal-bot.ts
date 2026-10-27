@@ -12,7 +12,10 @@
  * Config (environment — never command-line arguments, never committed):
  *   DISCORD_TOKEN          bot token
  *   INPUT_CHANNEL_ID       private channel the trader types in
- *   SIGNALS_CHANNEL_ID     member channel the bot posts to
+ *   SIGNALS_CHANNEL_ID     member channel the bot posts to (Diamond: every call)
+ *   GOLD_SIGNALS_CHANNEL_ID   optional Gold channel: the weekly picks and their follow-ups
+ *   SILVER_SIGNALS_CHANNEL_ID optional Silver channel: the monthly pick and its follow-ups
+ *                          (which calls are picks: stocks.signal_live_tiers())
  *   SIGNAL_POSTER_IDS      comma-separated Discord user IDs allowed to post (required)
  *   SIGNALS_DATABASE_URL   pooler URL for the stocks_signals role (insert/read only)
  *   SIGNAL_FOOTER          optional embed footer (default "I Hate 9-5 Signals")
@@ -53,6 +56,13 @@ function required(name: string): string {
 const TOKEN = required("DISCORD_TOKEN");
 const INPUT_CHANNEL_ID = required("INPUT_CHANNEL_ID");
 const SIGNALS_CHANNEL_ID = required("SIGNALS_CHANNEL_ID");
+const GOLD_CHANNEL_ID = process.env.GOLD_SIGNALS_CHANNEL_ID?.trim() || null;
+const SILVER_CHANNEL_ID = process.env.SILVER_SIGNALS_CHANNEL_ID?.trim() || null;
+const DESTINATIONS = [SIGNALS_CHANNEL_ID, GOLD_CHANNEL_ID, SILVER_CHANNEL_ID].filter((d): d is string => Boolean(d));
+const TIER_LABEL: Record<string, string> = {
+  ...(GOLD_CHANNEL_ID ? { [GOLD_CHANNEL_ID]: "Gold weekly pick" } : {}),
+  ...(SILVER_CHANNEL_ID ? { [SILVER_CHANNEL_ID]: "Silver monthly pick" } : {}),
+};
 const DATABASE_URL = required("SIGNALS_DATABASE_URL");
 const POSTERS = parsePosterIds(process.env.SIGNAL_POSTER_IDS);
 if (POSTERS.size === 0) {
@@ -69,22 +79,30 @@ const sql = postgres(DATABASE_URL, { ssl: "require", prepare: false, max: 2, idl
 type Recorded = { id: number; posted_at: Date | string; hash?: string };
 
 async function record(sig: ParsedSignal, msg: Message): Promise<Recorded | null> {
-  const [row] = await sql<Recorded[]>`
-    SELECT id, posted_at, hash FROM stocks.record_signal(
-      ${sql.json(sig)}, ${msg.author.id}, ${msg.author.username.slice(0, 100)},
-      ${msg.id}, ${SIGNALS_CHANNEL_ID})
-  `;
+  // With tier channels configured, the database also queues each Gold/Silver
+  // pick (and its follow-ups) for those channels in the same transaction.
+  const [row] = GOLD_CHANNEL_ID || SILVER_CHANNEL_ID
+    ? await sql<Recorded[]>`
+        SELECT id, posted_at, hash FROM stocks.record_signal(
+          ${sql.json(sig)}, ${msg.author.id}, ${msg.author.username.slice(0, 100)},
+          ${msg.id}, ${SIGNALS_CHANNEL_ID}, ${GOLD_CHANNEL_ID}, ${SILVER_CHANNEL_ID})
+      `
+    : await sql<Recorded[]>`
+        SELECT id, posted_at, hash FROM stocks.record_signal(
+          ${sql.json(sig)}, ${msg.author.id}, ${msg.author.username.slice(0, 100)},
+          ${msg.id}, ${SIGNALS_CHANNEL_ID})
+      `;
   return row ?? null;
 }
 
-function embedFor(sig: ParsedSignal, rec: Recorded): EmbedBuilder {
+function embedFor(sig: ParsedSignal, rec: Recorded, tier?: string): EmbedBuilder {
   const style = ACTION_STYLE[sig.action];
   const embed = new EmbedBuilder()
     .setTitle(`${sig.action} ${sig.ticker}${sig.instrument ? ` ${sig.instrument}` : ""}`)
     .setDescription(sig.detail || "No details")
     .setColor(style.color)
     .setTimestamp(new Date(rec.posted_at))
-    .setFooter({ text: `Signal #${rec.id} · ${FOOTER}${DISCLAIMER ? ` · ${DISCLAIMER}` : ""}`.slice(0, 2048) });
+    .setFooter({ text: `Signal #${rec.id}${tier ? ` · ${tier}` : ""} · ${FOOTER}${DISCLAIMER ? ` · ${DISCLAIMER}` : ""}`.slice(0, 2048) });
   const levels = [
     ["Entry", formatPrice(sig.entry)],
     ["Target", formatPrice(sig.target)],
@@ -116,19 +134,27 @@ function heartbeat() {
 let draining: Promise<void> | undefined;
 function drain(): Promise<void> {
   if (draining) return draining;
-  draining = drainDeliveries({
-    claim: async () => (await sql<Delivery[]>`SELECT * FROM stocks.claim_signal_delivery(${SIGNALS_CHANNEL_ID})`)[0] ?? null,
+  draining = (async () => {
+    // Each channel keeps its own order; one stuck channel doesn't block the others.
+    for (const destination of DESTINATIONS) {
+      await drainDestination(destination).catch((error) => console.error(`signal-bot: delivery drain for ${destination} failed`, error));
+    }
+  })().finally(() => { draining = undefined; });
+  return draining;
+}
+function drainDestination(destination: string): Promise<void> {
+  return drainDeliveries({
+    claim: async () => (await sql<Delivery[]>`SELECT * FROM stocks.claim_signal_delivery(${destination})`)[0] ?? null,
     finish: async (item, id) => (await sql`SELECT stocks.finish_signal_delivery(${item.signal.id}, ${item.lease_token}::uuid, ${id}) AS done`)[0].done,
     retry: async (item, error) => { console.error(`signal-bot: delivery #${item.signal.id} attempt ${item.attempts} will retry: ${error}`); await sql`SELECT stocks.retry_signal_delivery(${item.signal.id}, ${item.lease_token}::uuid, ${error})`; },
   }, async (item) => {
     const channel = await client.channels.fetch(item.destination);
     if (!channel?.isSendable()) throw new Error("signals channel not found or not sendable");
     // Discord also deduplicates retries during its recent-nonce window.
-    const sent = await channel.send({ embeds: [embedFor(item.signal, item.signal)],
+    const sent = await channel.send({ embeds: [embedFor(item.signal, item.signal, TIER_LABEL[item.destination])],
       nonce: `ss:${item.signal.id}`, enforceNonce: true, allowedMentions: { parse: [] } });
     return sent.id;
-  }).finally(() => { draining = undefined; });
-  return draining;
+  });
 }
 function scheduleDrain() {
   void drain().catch((error) => console.error("signal-bot: delivery drain failed", error));
@@ -139,7 +165,7 @@ client.once(Events.ClientReady, (c) => {
   deliveryTimer = setInterval(scheduleDrain, 5000);
   heartbeat();
   heartbeatTimer = setInterval(heartbeat, 60_000);
-  console.log(`signal-bot: logged in as ${c.user.tag}; ${INPUT_CHANNEL_ID} -> ${SIGNALS_CHANNEL_ID}; ${POSTERS.size} approved poster(s)`);
+  console.log(`signal-bot: logged in as ${c.user.tag}; ${INPUT_CHANNEL_ID} -> ${DESTINATIONS.join(", ")}; ${POSTERS.size} approved poster(s)`);
 });
 
 client.on(Events.MessageCreate, async (msg) => {

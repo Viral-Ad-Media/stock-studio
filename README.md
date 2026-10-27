@@ -35,7 +35,7 @@ opens with an "As of [date]" line and ends with a "Not investment advice" line.
 - **App**: Next.js 16 (App Router, React 19), Tailwind. Runs locally on port 3200 and is deployed on Vercel or Render.
 - **Database**: hosted Postgres on Supabase, in an isolated `stocks` schema.
 - **Auth**: Supabase Auth. Each signup gets its own workspace.
-- **Billing**: Stripe. A 30-day trial, then a one-time access fee, then per-report credits.
+- **Billing**: Stripe. A 30-day trial, then a Silver, Gold or Diamond subscription with monthly credits, plus per-report credit packs.
 - **Research engine**: an automated Anthropic API worker, with a manual CLI fallback.
 - **Market data**: unauthenticated Yahoo Finance endpoints (no API key), with an optional Alpaca fallback for when Yahoo rate-limits the host.
 
@@ -318,10 +318,10 @@ All variables are listed in [`.env.example`](.env.example).
 | `ALPACA_KEY_ID` / `ALPACA_SECRET_KEY` | market data | Optional. Keys from a free Alpaca account (paper keys work). When Yahoo answers 429/5xx, charts, daily bars and movers come from Alpaca's IEX feed instead, and Yahoo is skipped for 10 minutes. Recommended on Render, whose shared IPs Yahoo rate-limits. IEX volumes are partial, and indices (`^GSPC`) aren't covered. |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | billing | |
 | `BILLING_DATABASE_URL` | billing (webhook only) | Pooler URL for the `stocks_billing` role, the only role allowed to grant access or credits. Set its password first in the Supabase SQL editor: `ALTER ROLE stocks_billing WITH PASSWORD '…';`. |
-| `STRIPE_PRICE_ACCESS` | billing | Price id of the one-time access fee. |
+| `STRIPE_PRICE_{SILVER,GOLD,DIAMOND}_{MONTHLY,YEARLY}` | billing | Recurring price ids of the six plan prices (amounts in `lib/plans.ts`). The webhook maps a subscription's price back to its plan with these, so an unknown price grants nothing. |
 | `STRIPE_PRICE_CREDIT_PACK` | billing | Price id of one credit pack. |
-| `STRIPE_CREDITS_PER_PACK` | billing | Credits granted per pack. Default 10. |
-| `DISCORD_TOKEN`, `INPUT_CHANNEL_ID`, `SIGNALS_CHANNEL_ID`, `SIGNAL_POSTER_IDS`, `SIGNALS_DATABASE_URL` | signal bot host only | Never on the web host. See [`deploy/signal-bot/env.example`](deploy/signal-bot/env.example); in production they live in a root-only env file. |
+| `STRIPE_CREDITS_PER_PACK` | billing | Credits granted per pack. Default 10. Diamond packs carry 50% more. |
+| `DISCORD_TOKEN`, `INPUT_CHANNEL_ID`, `SIGNALS_CHANNEL_ID`, `GOLD_SIGNALS_CHANNEL_ID`, `SILVER_SIGNALS_CHANNEL_ID`, `SIGNAL_POSTER_IDS`, `SIGNALS_DATABASE_URL` | signal bot host only | Never on the web host. See [`deploy/signal-bot/env.example`](deploy/signal-bot/env.example); in production they live in a root-only env file. |
 
 ---
 
@@ -422,23 +422,34 @@ other direction, the CLI refuses to claim a job the worker is holding.
 | Stage | How it works |
 |---|---|
 | **Trial** | Every signup gets 30 days plus 5 starter credits. The Postgres trigger `stocks.handle_new_user()` grants them server-side; nothing is read from client metadata. |
-| **Access** | `hasAccess = access_granted OR trial_ends_at > now()`. After the trial, a one-time Stripe payment sets `access_granted`. |
+| **Plans** | Silver, Gold and Diamond subscriptions (monthly or yearly), defined in `lib/plans.ts`: prices, monthly credits, and every feature gate. The member's tier is `founding` if `access_granted` (bought the old one-time unlock, or granted by an admin; keeps every Diamond feature), else the plan of a live subscription (`active`, `trialing`, `past_due`), else `trial` (Gold features, no signals) while the trial runs, else `none`. Pages and API routes read `getMembership()` (`lib/membership.ts`). |
+| **Access** | `hasAccess = access_granted OR a live subscription OR trial_ends_at > now()`. |
+| **Plan credits** | Each paid plan invoice grants the plan's credits once (`grant_plan_credits`, keyed on the invoice id; yearly plans grant 12 months at once). Plan credits count as spent before purchased ones. At renewal, unused plan credits above the plan's carry cap expire (Silver: none carry; Gold and Diamond: up to one period's allowance). Purchased packs never expire. |
+| **Signals** | Diamond and Founding: every call live. Gold: the first 2 BUY calls of each week live, Silver: the first BUY call of each month, both with follow-ups on those tickers; every other call appears after 7 (Gold) or 30 (Silver) days. The rule is `stocks.signal_live_tiers()`, used by `/signals`, Today and the bot's Gold/Silver Discord channels. |
 | **Credits** | Charged **at queue time** in the same transaction as the job INSERT. If the balance is short the charge raises (SQLSTATE `SS402`) and the job never exists; the API returns 402. |
 | **Refunds** | Failed jobs (worker or CLI `fail`) are refunded automatically and idempotently. Jobs can be removed from the queue, and refunded, only while still `pending`. Once running, a job can't be cancelled. |
-| **Limits** | Per workspace, at most 10 reports in progress and 30 queued per hour (`lib/limits.ts`). |
+| **Limits** | Per workspace, at most 3 (Silver), 5 (Gold) or 10 (Diamond) reports in progress and 30 queued per hour (`lib/limits.ts`). |
 | **Sweep jobs** | Refreshes and earnings updates queued by the watchlist sweep (`queue-refresh` / `queue-earnings`) are free, because the customer didn't ask for them. |
-| **Purchases** | `/billing` opens a hosted Stripe Checkout, either the access fee or a credit pack. |
+| **Purchases** | `/billing` opens a hosted Stripe Checkout for a plan (subscription mode) or a credit pack. "Manage plan" opens the Stripe customer portal for plan switches, card updates and cancelling. |
 
 **The Stripe webhook is the only thing that grants access or purchased credits.** It connects as
 its own database account, `stocks_billing` (`BILLING_DATABASE_URL`). That is the only account
 allowed to execute the two grant functions; the app's own account can't.
 
-- `POST /api/billing/webhook` verifies the Stripe signature and handles three events:
+- `POST /api/billing/webhook` verifies the Stripe signature and handles these events:
   - `checkout.session.completed` and `checkout.session.async_payment_succeeded` call
     `fulfill_checkout()`, which is keyed on the Checkout Session id, so a replayed event grants
     nothing.
   - `charge.refunded` (full refunds only) calls `refund_payment()`, which reverses exactly what
-    that payment granted.
+    that payment granted. Plan invoice refunds are left to the operator.
+  - `customer.subscription.created/updated/deleted` re-read the subscription from Stripe and call
+    `upsert_subscription()`, so event order doesn't matter.
+  - `invoice.paid` for a subscription calls `grant_plan_credits()`: a full grant for the first
+    invoice and each renewal, the difference for a prorated upgrade.
+- **Stripe setup**: create the three products with a monthly and a yearly recurring price each,
+  put the six price ids in the `STRIPE_PRICE_*` variables, add the subscription and invoice events
+  above to the webhook endpoint, and turn on the customer portal with plan switching between the
+  six prices (proration "invoice immediately", so upgrade credits arrive straight away).
 - The number of credits in a pack is stamped into the session metadata by our own server, never
   taken from the client.
 
@@ -522,6 +533,7 @@ the `public` schema is intentionally empty.
 | `watchlist` | Tracked tickers: thesis, snapshot, `triggers_json`, `status_tag`. Unique per `(workspace_id, ticker)`. |
 | `credits_ledger` | Append-only; balance = `SUM(delta)`. Unique `(reason, ref)` makes charges, refunds and purchases idempotent. |
 | `payments` | Stripe audit trail. Unique `stripe_session_id`. |
+| `subscriptions` | One row per member: Stripe subscription id, plan, interval, status, period end, and the plan-credit bucket for rollover. Written only by the webhook role. |
 | `payment_refunds` | Durable full-refund tombstones, including refunds received before checkout fulfillment. |
 | `signal_outbox` | Leased delivery attempts, errors and acknowledgement state. |
 | `ops_heartbeats`, `ops_alerts` | Worker and signal-bot check-ins, and the open/resolved failure alerts (see [Failure alerts](#failure-alerts)). |

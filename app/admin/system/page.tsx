@@ -26,7 +26,12 @@ const ENV = [
   { key: "ENGINE_WEBHOOK_SECRET", what: "Worker trigger authentication" },
   { key: "STRIPE_SECRET_KEY", what: "Checkout" },
   { key: "STRIPE_WEBHOOK_SECRET", what: "Payment webhook verification" },
-  { key: "STRIPE_PRICE_ACCESS", what: "One-time access price" },
+  { key: "STRIPE_PRICE_SILVER_MONTHLY", what: "Silver plan, monthly price" },
+  { key: "STRIPE_PRICE_SILVER_YEARLY", what: "Silver plan, yearly price" },
+  { key: "STRIPE_PRICE_GOLD_MONTHLY", what: "Gold plan, monthly price" },
+  { key: "STRIPE_PRICE_GOLD_YEARLY", what: "Gold plan, yearly price" },
+  { key: "STRIPE_PRICE_DIAMOND_MONTHLY", what: "Diamond plan, monthly price" },
+  { key: "STRIPE_PRICE_DIAMOND_YEARLY", what: "Diamond plan, yearly price" },
   { key: "STRIPE_PRICE_CREDIT_PACK", what: "Credit pack price" },
 ];
 

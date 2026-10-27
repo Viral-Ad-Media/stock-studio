@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/terms" },
 };
 
-const UPDATED = "September 28, 2026";
+const UPDATED = "October 27, 2026";
 
 export default function TermsPage() {
   return (
@@ -25,9 +25,10 @@ export default function TermsPage() {
         Stock Studio (the &ldquo;Service&rdquo;) is operated by {SITE.operator} (&ldquo;we&rdquo;, &ldquo;us&rdquo;). It generates
         educational business-analysis case studies about publicly traded companies. Content is
         produced by an automated research process using large language models, real-time web
-        search, and public market data. Members with full access also receive trade signals: the
-        program trader&rsquo;s own buy, sell and exit calls, posted in the app and to a members&rsquo;
-        Discord channel.
+        search, and public market data. Members on a paid plan also receive trade signals: the
+        program trader&rsquo;s own buy, sell and exit calls, posted in the app and to members&rsquo;
+        Discord channels. Which calls are delivered live depends on the plan, as described on our
+        pricing page.
       </p>
 
       <h2>2. Not investment advice</h2>
@@ -39,8 +40,8 @@ export default function TermsPage() {
         despite our fact-checking process — verify anything material before acting on it.
       </p>
       <p>
-        Signals are the program trader&rsquo;s own calls, shared identically with every member who
-        has full access. They are general, not tailored to your finances, goals or risk tolerance.
+        Signals are the program trader&rsquo;s own calls, shared identically with every member whose
+        plan includes them. They are general, not tailored to your finances, goals or risk tolerance.
         Trading, and options trading in particular, can lose some or all of the money you put in,
         and past signals do not guarantee future results. Whether and how you act on any signal is
         your decision alone.
@@ -56,9 +57,13 @@ export default function TermsPage() {
       <h2>4. Trial, billing, and credits</h2>
       <p>
         New accounts receive a free trial period as described on our{" "}
-        <Link href="/pricing">pricing page</Link>. After the trial, continued use requires a one-time
-        unlock fee and sufficient credit balance, both billed through our payment processor. Fees
-        are non-refundable except where required by law or stated otherwise at checkout. We may
+        <Link href="/pricing">pricing page</Link>. After the trial, continued use requires a paid
+        plan (Silver, Gold or Diamond), billed monthly or yearly in advance through our payment
+        processor until you cancel. You can cancel at any time; your plan stays active until the end
+        of the period you have paid for. Each plan includes a credit allowance per period; unused plan
+        credits roll over or expire as described on the pricing page, while purchased credit packs do
+        not expire. Fees are non-refundable except where required by law or stated otherwise at
+        checkout. Members who paid the earlier one-time unlock fee keep the access it granted. We may
         change pricing prospectively with notice.
       </p>
 

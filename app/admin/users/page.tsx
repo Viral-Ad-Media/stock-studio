@@ -19,6 +19,8 @@ type Extra = {
   studies: number;
   is_admin: boolean;
   disabled_at: string | null;
+  sub_plan: string | null;
+  sub_status: string | null;
 };
 
 type Invite = {
@@ -61,8 +63,9 @@ export default async function AdminUsers({
         SELECT p.id, p.trial_ends_at, p.access_granted, p.disabled_at,
           coalesce((SELECT sum(delta) FROM credits_ledger l WHERE l.workspace_id = p.active_workspace_id), 0)::int AS balance,
           (SELECT count(*) FROM case_studies cs WHERE cs.workspace_id = p.active_workspace_id)::int AS studies,
-          EXISTS (SELECT 1 FROM platform_admins a WHERE a.user_id = p.id) AS is_admin
-        FROM profiles p WHERE p.id = ANY(${ids}::uuid[])
+          EXISTS (SELECT 1 FROM platform_admins a WHERE a.user_id = p.id) AS is_admin,
+          s.plan AS sub_plan, s.status AS sub_status
+        FROM profiles p LEFT JOIN subscriptions s ON s.user_id = p.id WHERE p.id = ANY(${ids}::uuid[])
       `) as unknown as Extra[])
     : [];
   const byId = new Map(extras.map((e) => [e.id, e]));
@@ -193,6 +196,8 @@ export default async function AdminUsers({
                 {
                   access_granted: Boolean(e?.access_granted),
                   trial_ends_at: e?.trial_ends_at ?? null,
+                  sub_plan: e?.sub_plan ?? null,
+                  sub_status: e?.sub_status ?? null,
                 },
                 now,
               );

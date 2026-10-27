@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { Megaphone, ArrowUpRight, ArrowDownRight, Bell, CircleSlash, ShieldCheck, ShieldAlert, Lock } from "lucide-react";
+import { Megaphone, ArrowUpRight, ArrowDownRight, Bell, CircleSlash, ShieldCheck, ShieldAlert, Lock, Star } from "lucide-react";
 import { sql, formatDate } from "@/lib/db";
 import { currentUser, currentWorkspaceId } from "@/lib/workspace";
-import { getBillingState } from "@/lib/billing";
-import { isSuperAdmin } from "@/lib/admin";
-import { canReadSignals } from "@/lib/today";
+import { getMembership } from "@/lib/membership";
+import { canReadSignals, SIGNAL_FEED_SQL, SIGNAL_HIDDEN_SQL, signalFeedParams, signalHiddenParams } from "@/lib/signal-feed";
+import UpgradeCard from "@/components/billing/UpgradeCard";
 import EmptyState from "@/components/guide/EmptyState";
 import { ACTION_STYLE, SIGNAL_ACTIONS, formatPrice, type SignalAction } from "@/lib/signals";
 import PageHeader from "@/components/ui/PageHeader";
@@ -23,6 +23,7 @@ type SignalRow = {
   target: string | null;
   stop: string | null;
   detail: string;
+  pick: boolean;
 };
 
 const TONE: Record<string, { cls: string; Icon: typeof ArrowUpRight }> = {
@@ -51,32 +52,27 @@ export default async function SignalsPage() {
   const user = await currentUser();
   const ws = await currentWorkspaceId();
   if (!user || !ws) return null; // proxy.ts already requires a session
-  const [billing, admin] = await Promise.all([getBillingState(user.id, ws), isSuperAdmin(user.id)]);
+  const { ent } = await getMembership(user.id, ws);
 
-  // Paying members (and admins) only — not trial accounts.
-  if (!canReadSignals(billing.accessGranted, admin)) {
+  // Members on a plan (and admins) only — not trial accounts.
+  if (!canReadSignals(ent.signals)) {
     return (
       <div>
         <PageHeader title="Signals" />
-        <div className="card max-w-xl p-6">
-          <p className="flex items-center gap-2 font-medium text-slate-100">
-            <Lock className="h-4 w-4 text-amber-400" aria-hidden /> Signals are for members with full access
-          </p>
-          <p className="mt-2 text-sm text-slate-300">
-            Unlock full access to see the trader&apos;s calls as they&apos;re posted, with the complete track record.
-          </p>
-          <Link href="/billing" className="btn-primary mt-4 inline-flex px-4 py-2 text-sm">Go to billing</Link>
-        </div>
+        <UpgradeCard
+          title="Signals come with every plan"
+          body="Silver gets the trader's pick of the month live, Gold the 2 weekly picks, and Diamond every call the moment it's posted. Each plan also shows the full track record."
+          plan="gold"
+        />
       </div>
     );
   }
 
-  // Program-wide feed, the same for every member — no workspace filter.
-  const [signals, counts, [chain]] = await Promise.all([
-    sql`
-      SELECT id, posted_at, action, ticker, instrument, entry::text, target::text, stop::text, detail
-      FROM signals ORDER BY id DESC LIMIT 100
-    ` as unknown as Promise<SignalRow[]>,
+  // Program-wide feed, the same for every member on a plan — no workspace
+  // filter, only the plan's visibility rule (lib/signal-feed.ts).
+  const [signals, [hidden], counts, [chain]] = await Promise.all([
+    sql.unsafe(SIGNAL_FEED_SQL, signalFeedParams(ent.signals, ent.signalDelayDays, 100)) as unknown as Promise<SignalRow[]>,
+    ent.signals === "all" ? Promise.resolve([{ n: 0 }]) : sql.unsafe(SIGNAL_HIDDEN_SQL, signalHiddenParams(ent.signals, ent.signalDelayDays)),
     sql`
       SELECT action, count(*)::int AS n,
         count(*) FILTER (WHERE posted_at > now() - interval '30 days')::int AS n30
@@ -95,6 +91,21 @@ export default async function SignalsPage() {
         title="Signals"
         description="Calls posted by the program's trader, newest first, the moment they go out on Discord. Every call is kept permanently in the track record below: signals can't be edited, deleted or backdated."
       />
+      {ent.signals !== "all" && (
+        <div className="card mb-6 max-w-[72ch] p-4 text-sm text-slate-300">
+          <p className="flex items-center gap-2 font-medium text-slate-100">
+            <Lock className="h-4 w-4 text-amber-400" aria-hidden />
+            {ent.signals === "weekly"
+              ? "Gold: the trader's first 2 BUY calls each week are live for you, with their follow-ups."
+              : "Silver: the trader's first BUY call each month is live for you, with its follow-ups."}
+          </p>
+          <p className="mt-1">
+            Every other call appears here {ent.signalDelayDays} days after it&apos;s posted.
+            {hidden.n > 0 && ` ${hidden.n} more ${hidden.n === 1 ? "call is" : "calls are"} live for Diamond members right now.`}{" "}
+            <Link href="/billing?plan=diamond" className="text-emerald-400 underline-offset-2 hover:underline">See Diamond</Link>
+          </p>
+        </div>
+      )}
       <p className="mb-6 max-w-[72ch] rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-slate-300">
         These are the trader&apos;s own calls, not personalized advice for your situation. Trading involves risk of
         loss, including options losing their full value, and past calls don&apos;t guarantee future results.
@@ -154,6 +165,11 @@ export default async function SignalsPage() {
                         <ActionBadge action={s.action} />
                         <span className="font-mono font-bold text-slate-100">{s.ticker}</span>
                         {s.instrument && <span className="text-xs font-medium text-slate-300">{s.instrument}</span>}
+                        {s.pick && (
+                          <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">
+                            <Star className="h-3 w-3" aria-hidden /> {ent.signals === "weekly" ? "Weekly pick" : "Monthly pick"}
+                          </span>
+                        )}
                       </div>
                       <span className="text-xs text-fg-subtle">
                         #{s.id} · {formatDate(s.posted_at)} {time(s.posted_at)}

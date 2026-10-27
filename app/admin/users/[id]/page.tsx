@@ -33,7 +33,9 @@ export default async function AdminUser({
   if (!u) notFound();
 
   const [p] =
-    await sql`SELECT active_workspace_id, trial_ends_at, access_granted, disabled_at, disabled_reason FROM profiles WHERE id = ${id}`;
+    await sql`SELECT p.active_workspace_id, p.trial_ends_at, p.access_granted, p.disabled_at, p.disabled_reason,
+      s.plan AS sub_plan, s.status AS sub_status
+      FROM profiles p LEFT JOIN subscriptions s ON s.user_id = p.id WHERE p.id = ${id}`;
   const ws = p.active_workspace_id as string;
   const [bal] =
     await sql`SELECT coalesce(sum(delta), 0)::int AS balance FROM credits_ledger WHERE workspace_id = ${ws}`;
@@ -58,6 +60,8 @@ export default async function AdminUser({
   const plan = accountPlan({
     access_granted: Boolean(p.access_granted),
     trial_ends_at: p.trial_ends_at,
+    sub_plan: p.sub_plan,
+    sub_status: p.sub_status,
   });
 
   return (

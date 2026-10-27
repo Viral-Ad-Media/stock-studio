@@ -42,7 +42,8 @@ export default function LiveRefreshButton({
         return;
       }
       const body = await res.json().catch(() => ({}));
-      if (!quiet && scope === "all") {
+      if (!quiet && body.notice) setNotice(body.notice);
+      else if (!quiet && scope === "all") {
         const failed: string[] = body.failed ?? [];
         setNotice(
           body.upToDate
