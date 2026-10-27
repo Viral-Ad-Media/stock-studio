@@ -22,6 +22,7 @@ import JsonLd, {
   ORGANIZATION_ID,
 } from "@/components/seo/JsonLd";
 import { SITE, absoluteUrl } from "@/lib/site";
+import { PUBLIC_EXAMPLE as example } from "@/lib/public-example";
 
 export const metadata: Metadata = {
   title: {
@@ -404,9 +405,13 @@ export default function LandingPage() {
               Check a source. Try the decision workflow.
             </h2>
             <p className="mt-3 text-sm text-fg-subtle">
-              Inspect a dated Apple earnings excerpt with primary-source links,
+              Inspect Apple’s {example.period} earnings excerpt with primary-source links,
               then explore a hypothetical research-to-review demonstration. No
               account required.
+            </p>
+            <p className="mt-3 text-sm text-slate-300">
+              ${example.revenueBillion} billion revenue · {example.growthPercent}%
+              {" "}year-over-year growth · sources checked {example.reviewedOn}
             </p>
           </div>
           <Link href="/examples" className="btn-primary px-5 py-3">

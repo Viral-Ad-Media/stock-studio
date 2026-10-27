@@ -53,6 +53,10 @@ export default function ExamplesPage() {
           not show whether the shares or a long-dated option offer an attractive
           price.
         </p>
+        <p className="text-sm text-fg-subtle">
+          {example.profitabilityContext} These benefits should not be assumed to
+          recur in future quarters.
+        </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <section>
             <h3 className="font-medium">Research hypothesis to test</h3>
@@ -78,15 +82,15 @@ export default function ExamplesPage() {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Apple earnings release · October 30, 2025
+            Apple earnings release · {example.releaseDate}
           </a>
           <a
             className="text-emerald-400 underline"
-            href={example.filing}
+            href={example.financialStatements}
             target="_blank"
             rel="noopener noreferrer"
           >
-            SEC Form 8-K · October 30, 2025
+            Apple financial statements · {example.releaseDate}
           </a>
         </div>
       </article>
