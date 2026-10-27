@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Copy, Check, RefreshCcw, Trash2, Eye, FilePlus2 } from "lucide-react";
-import { apiError } from "@/lib/shared";
+import { Copy, Check, RefreshCcw, Trash2, Eye, FilePlus2, RotateCcw } from "lucide-react";
+import { apiError, creditCost } from "@/lib/shared";
 
 type Props = {
   study: {
@@ -14,6 +14,8 @@ type Props = {
     status: string;
     variant: string;
     content_md: string | null;
+    notes: string | null;
+    parent_id: number | null;
   };
 };
 
@@ -77,6 +79,42 @@ export default function StudyActions({ study }: Props) {
     }
   }
 
+  // A full re-run is a brand-new study (same ticker, format and notes) built
+  // by the research engine and charged like any new study. This one stays as
+  // it was, so the two can be compared.
+  const rerunCost = creditCost(study.variant);
+  const canRerun = study.variant !== "earnings_update" || study.parent_id != null;
+  async function rerun() {
+    const credits = `${rerunCost} credit${rerunCost === 1 ? "" : "s"}`;
+    if (!confirm(`Re-run the ${study.ticker} study with fresh research? This queues a new study and uses ${credits}. This one stays as it is.`)) return;
+    setBusy("rerun");
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/case-studies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticker: study.ticker,
+          company: study.company,
+          variant: study.variant,
+          notes: study.notes,
+          parent_id: study.variant === "earnings_update" ? study.parent_id : null,
+        }),
+      });
+      if (!res.ok) {
+        setError(await apiError(res, "Couldn't queue the re-run"));
+        return;
+      }
+      const { id } = await res.json();
+      router.push(`/study/${id}`);
+    } catch {
+      setError("Couldn't queue the re-run");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function addToWatchlist() {
     const ok = await act(
       "watch",
@@ -111,6 +149,12 @@ export default function StudyActions({ study }: Props) {
               {copied ? <Check className="h-4 w-4 text-emerald-400" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
               {copied ? "Copied" : "Copy markdown"}
             </button>
+            {canRerun && (
+              <button onClick={rerun} disabled={busy !== null} className={btn} title="Builds a new study with fresh research. This one is kept.">
+                <RotateCcw className="h-4 w-4" aria-hidden />
+                {busy === "rerun" ? "Queuing…" : `Re-run study · ${rerunCost} credit${rerunCost === 1 ? "" : "s"}`}
+              </button>
+            )}
             <button onClick={queueEarningsUpdate} disabled={busy !== null} className={btn}>
               <RefreshCcw className="h-4 w-4" aria-hidden />
               {busy === "earnings" ? "Queuing…" : "Queue earnings update"}

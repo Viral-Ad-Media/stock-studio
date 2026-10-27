@@ -17,6 +17,9 @@ export type CaseStudy = {
   // Research-quality grade (lib/grades.ts StudyGrade) and a one-line summary.
   grade_json: unknown | null;
   summary_line: string | null;
+  // Live market data snapshot (lib/live-data.ts LiveSnapshot), separate from the study text.
+  live_json: unknown | null;
+  live_refreshed_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -44,6 +47,8 @@ export type WatchlistRow = {
   case_study_id: number | null;
   thesis_status: "intact" | "weakening" | "broken" | "unknown";
   thesis_status_note: string | null;
+  live_json: unknown | null;
+  live_refreshed_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -121,4 +126,26 @@ export const STATUS_LABELS: Record<string, string> = {
 export async function apiError(res: Response, fallback: string): Promise<string> {
   const body = await res.json().catch(() => null);
   return (body && typeof body.error === "string" && body.error) || fallback;
+}
+
+// Live market data stored beside a finished study or watchlist row
+// (lib/live-data.ts writes it). Kept apart from the fact-checked study text.
+export type LiveSnapshot = {
+  price: number;
+  prevClose: number | null;
+  dayChangePct: number | null;
+  high52w: number | null;
+  low52w: number | null;
+  // Session date of the latest bar, and the vendor's own price time when given.
+  priceDate: string;
+  marketTime: string | null;
+  source: "yahoo" | "alpaca";
+  // Move since the study's (or thesis's) as-of date, on adjusted closes.
+  since: { from: string; startClose: number; changePct: number; spyChangePct: number | null } | null;
+};
+
+// Parses stored live_json defensively (rows never refreshed have none).
+export function parseSnapshot(value: unknown): LiveSnapshot | null {
+  const v = value as LiveSnapshot | null;
+  return v && typeof v.price === "number" && typeof v.priceDate === "string" ? v : null;
 }

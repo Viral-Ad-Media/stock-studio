@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { RefreshCcw, Trash2, Plus, Eye } from "lucide-react";
 import Tooltip from "@/components/guide/Tooltip";
 import EmptyState from "@/components/guide/EmptyState";
-import { apiError, formatDate, type WatchlistRow } from "@/lib/shared";
+import { apiError, creditCost, formatDate, parseSnapshot, type WatchlistRow } from "@/lib/shared";
+import LiveQuote from "@/components/LiveQuote";
 import ThesisStatusBadge from "@/components/insights/ThesisStatusBadge";
 
 export type ThesisHistoryEntry = {
@@ -223,7 +224,7 @@ export default function WatchlistClient({
                     </select>
                     <Tooltip
                       align="end"
-                      text="Re-research and re-check the thesis (uses credits)"
+                      text={`Re-research and re-check the thesis (uses ${creditCost("watchlist_entry")} credits). Live prices refresh free from the button at the top.`}
                     >
                       <button
                         type="button"
@@ -261,8 +262,16 @@ export default function WatchlistClient({
                     )}
                   </div>
                 )}
+                <div className="mb-1">
+                  <LiveQuote snapshot={parseSnapshot(r.live_json)} refreshedAt={r.live_refreshed_at} sinceLabel="since thesis" />
+                </div>
                 {r.snapshot && (
-                  <p className="mb-1 text-sm text-slate-400">{r.snapshot}</p>
+                  <p className="mb-1 text-sm text-slate-400">
+                    {r.snapshot}
+                    {r.live_json != null && r.as_of_date && (
+                      <span className="text-xs text-fg-subtle"> (as of {r.as_of_date})</span>
+                    )}
+                  </p>
                 )}
                 {r.thesis ? (
                   <p className="text-sm text-slate-300">{r.thesis}</p>
