@@ -42,6 +42,11 @@ export class PermanentJobError extends Error {}
 // failing (and refunding) every queued report until the account is fixed.
 export class EngineUnavailableError extends Error {}
 
+// The extraction call came back but without a usable structured answer
+// (wrong stop_reason, no tool call, a required field missing). Redoing the
+// extraction is cheap; redoing the research behind it is not.
+export class ExtractionError extends Error {}
+
 export function isEngineUnavailable(err: unknown): boolean {
   if (err instanceof EngineUnavailableError) return true;
   if (
@@ -262,15 +267,36 @@ export async function extractStructured<T>(opts: {
   );
   opts.meter?.add(msg.usage);
   if (msg.stop_reason !== "tool_use") {
-    throw new Error(`Extraction did not complete (stop_reason: ${msg.stop_reason})`);
+    throw new ExtractionError(`Extraction did not complete (stop_reason: ${msg.stop_reason})`);
   }
   const toolUse = msg.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-  if (!toolUse) throw new Error("Model did not return the expected structured tool call");
+  if (!toolUse) throw new ExtractionError("Model did not return the expected structured tool call");
   const input = toolUse.input as Record<string, unknown>;
   for (const field of opts.schema.required ?? []) {
     if (input[field] == null || input[field] === "") {
-      throw new Error(`Extraction is missing required field "${field}"`);
+      throw new ExtractionError(`Extraction is missing required field "${field}"`);
     }
   }
   return input as T;
+}
+
+// For results that can't fall back to anything (a watchlist entry is only its
+// structured fields): retry the extraction once, then fail the job for good.
+// Without this, a bad extraction sent the job back to pending and the next
+// attempt paid for the whole web research again, up to MAX_ATTEMPTS times.
+// API and timeout errors still propagate unchanged to the worker.
+export async function extractStructuredOrFail<T>(opts: Parameters<typeof extractStructured>[0]): Promise<T> {
+  try {
+    return await extractStructured<T>(opts);
+  } catch (err) {
+    if (!(err instanceof ExtractionError)) throw err;
+    console.warn("engine: extraction failed, retrying the extraction only", err);
+  }
+  try {
+    return await extractStructured<T>(opts);
+  } catch (err) {
+    if (!(err instanceof ExtractionError)) throw err;
+    console.error("engine: extraction failed twice", err);
+    throw new PermanentJobError("The research couldn't be turned into a finished entry");
+  }
 }
