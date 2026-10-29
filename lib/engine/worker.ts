@@ -5,6 +5,7 @@ import {
   researchWithWebSearch,
   writeFromData,
   extractStructured,
+  extractStructuredOrFail,
   isPermanentAnthropicFailure,
   isEngineUnavailable,
   PermanentJobError,
@@ -234,7 +235,7 @@ async function processWatchlistEntry(job: Job, deadline: number, meter: UsageMet
     effort: effortFor("watchlist_entry"),
     meter,
   });
-  const entry = await extractStructured<WatchlistEntry>({
+  const entry = await extractStructuredOrFail<WatchlistEntry>({
     researchedText: research.text,
     instructions: WATCHLIST_ENTRY_TOOL.instructions,
     toolName: WATCHLIST_ENTRY_TOOL.toolName,
