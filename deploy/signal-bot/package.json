@@ -1,0 +1,11 @@
+{
+  "name": "stock-studio-signal-bot",
+  "private": true,
+  "description": "Runtime dependencies for the signal-bot daemon image only. Keep versions in step with the root package-lock.json.",
+  "dependencies": {
+    "discord.js": "14.27.0",
+    "dotenv": "16.6.1",
+    "postgres": "3.4.9",
+    "tsx": "4.23.1"
+  }
+}
