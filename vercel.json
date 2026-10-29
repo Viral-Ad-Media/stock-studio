@@ -4,6 +4,7 @@
   "installCommand": "echo 'Dependencies are installed inside the daemon image'",
   "buildCommand": "",
   "outputDirectory": "deploy/signal-bot/site",
+  "ignoreCommand": "sh deploy/signal-bot/ignore-build.sh",
   "daemons": {
     "signal-bot": {
       "root": ".",
