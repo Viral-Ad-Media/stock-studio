@@ -40,7 +40,19 @@ Do not run a second copy on another host. Preview deployments do not run daemons
 Optional: `SIGNAL_FOOTER` and `SIGNAL_DISCLAIMER`. Keep tokens and database
 credentials out of Git, build arguments in the Dockerfile, and chat. The image
 copies only the runtime files and never reads deployment secrets during build.
-The runtime installs development dependencies because `tsx` is the bot launcher.
+The image installs only the bot's runtime dependencies (discord.js, postgres,
+dotenv and `tsx`, the bot launcher) from `deploy/signal-bot/package-lock.json`,
+not the web app's. Keep those versions in step with the root lock.
+
+## Build size
+
+Every production build pushes a new image to Vercel Container Registry, and the
+registry keeps old images until they are deleted. `ignoreCommand` runs
+`deploy/signal-bot/ignore-build.sh`, which skips preview branches (they never
+run daemons) and skips `main` commits that don't touch the bot's files. To
+clear old images, list them with `vercel vcr image ls daemon.signal-bot
+--project stock-studio-signals` and remove all but the running one with
+`vercel vcr image rm`.
 
 ## Verification and stopping
 
