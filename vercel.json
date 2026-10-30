@@ -9,9 +9,7 @@
     "signal-bot": {
       "root": ".",
       "entrypoint": "Dockerfile.signal-bot",
-      "instances": {
-        "iad1": 1
-      },
+      "instances": {},
       "resources": {
         "requests": {
           "memory": "1Gi"
