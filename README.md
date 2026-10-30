@@ -214,9 +214,11 @@ reposted to members. This is the one feature that makes directional trade calls;
 above stay educational.
 
 - **Posting.** The trader types one line in a private Discord channel, e.g.
-  `BUY GOOGL CALL @12.40 tp 15 sl 11 breakout over 285`. The signal bot
-  ([`scripts/signal-bot.ts`](scripts/signal-bot.ts), parser [`lib/signals.ts`](lib/signals.ts)) records it,
-  then posts a formatted signal to the members' channel.
+  `BUY GOOGL CALL @12.40 tp 15 sl 11 breakout over 285`. Within about a minute the signal relay
+  (a Supabase Edge Function run by pg_cron, [`supabase/functions/signal-relay`](supabase/functions/signal-relay/README.md);
+  logic in [`lib/signal-relay.ts`](lib/signal-relay.ts), parser [`lib/signals.ts`](lib/signals.ts)) records
+  it, then posts a formatted signal to the members' channel. The always-on gateway bot
+  ([`scripts/signal-bot.ts`](scripts/signal-bot.ts)) does the same instantly but needs a host that stays up.
 - **Who can post.** Only Discord user IDs listed in `SIGNAL_POSTER_IDS`. The bot refuses to start without
   at least one, and anyone else gets a ⛔ with nothing posted.
 - **Track record.** `stocks.signals` in Postgres: append-only (updates, deletes and truncates are refused by
@@ -229,8 +231,9 @@ above stay educational.
 - **Who sees it.** `/signals` is for members with paid access (`profiles.access_granted`) and platform
   admins, not trial accounts. No credits are charged. Like setup scans, signals are program-wide data
   without a `workspace_id`.
-- **Secrets.** The bot token lives only in a root-only env file on the bot host, loaded by systemd.
-  Deploy steps: [`deploy/signal-bot/README.md`](deploy/signal-bot/README.md).
+- **Secrets.** The bot token lives only in the relay's Supabase function secrets (or the gateway bot's
+  host env). Deploy steps: [`supabase/functions/signal-relay/README.md`](supabase/functions/signal-relay/README.md);
+  gateway bot: [`deploy/signal-bot/README.md`](deploy/signal-bot/README.md).
 - **SMS.** The rules allow SMS alerts and `signal_deliveries` accepts an `sms` channel, but no SMS
   sender is built yet.
 
@@ -321,7 +324,7 @@ All variables are listed in [`.env.example`](.env.example).
 | `STRIPE_PRICE_{SILVER,GOLD,DIAMOND}_{MONTHLY,YEARLY}` | billing | Recurring price ids of the six plan prices (amounts in `lib/plans.ts`). The webhook maps a subscription's price back to its plan with these, so an unknown price grants nothing. |
 | `STRIPE_PRICE_CREDIT_PACK` | billing | Price id of one credit pack. |
 | `STRIPE_CREDITS_PER_PACK` | billing | Credits granted per pack. Default 10. Diamond packs carry 50% more. |
-| `DISCORD_TOKEN`, `INPUT_CHANNEL_ID`, `SIGNALS_CHANNEL_ID`, `GOLD_SIGNALS_CHANNEL_ID`, `SILVER_SIGNALS_CHANNEL_ID`, `SIGNAL_POSTER_IDS`, `SIGNALS_DATABASE_URL` | signal bot host only | Never on the web host. See [`deploy/signal-bot/env.example`](deploy/signal-bot/env.example); in production they live in a root-only env file. |
+| `DISCORD_TOKEN`, `INPUT_CHANNEL_ID`, `SIGNALS_CHANNEL_ID`, `GOLD_SIGNALS_CHANNEL_ID`, `SILVER_SIGNALS_CHANNEL_ID`, `SIGNAL_POSTER_IDS`, `SIGNALS_DATABASE_URL` | signal relay only | Never on the web host. Set as Supabase function secrets for `signal-relay`, plus `SIGNAL_RELAY_SECRET`. See [`supabase/functions/signal-relay/README.md`](supabase/functions/signal-relay/README.md). |
 
 ---
 
