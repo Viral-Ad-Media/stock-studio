@@ -1,5 +1,12 @@
 # Discord relay on Vercel Daemons
 
+> Retired 2026-10-30. A daemon is billed for its reserved vCPU every hour it
+> runs (1 GiB, the smallest size, always reserves 1 vCPU), and on Hobby a
+> nonstop instance passes the 420 GB-hour monthly memory quota around the
+> 18th. The signal relay now runs as a Supabase Edge Function once a minute:
+> see [supabase/functions/signal-relay](../../supabase/functions/signal-relay/README.md).
+> `vercel.json` keeps the daemon defined with zero instances.
+
 Use a dedicated Vercel project for the relay. Leave the existing Stock Studio web
 deployment unchanged. Daemons are a public beta; check the current limits and
 pricing at https://vercel.com/docs/daemons/limits before enabling an instance.
