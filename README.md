@@ -1,57 +1,91 @@
 # Stock Studio
 
-> **Sweep Scanner foundation:** capture/replay tooling and the protected `/sweeps` preview are available. Live detection is not enabled. Historical tapes and an opt-in capture worker are now included; see [source reconciliation](docs/sweep-scanner/historical-evidence.md) and [worker deployment](deploy/sweep-scanner/README.md). See [setup and method blockers](docs/sweep-scanner/README.md) and the [initial delivery report](docs/sweep-scanner/delivery-report.md).
+Fact-checked, source-cited stock research, trade planning and a trading journal in one
+multi-tenant SaaS. A member queues a ticker, a research engine builds a dated study with
+every figure sourced, and the study then feeds a watchlist thesis, LEAPS scenarios and
+journal reviews.
 
-Public home and pricing pages use a lazy-loaded Three.js / React Three Fiber / Drei
-decorative scene. It runs on desktop only when visible, respects reduced-motion
-preferences, and offers a pause control. Product screenshots reveal as they enter
-the viewport where scroll-driven CSS is supported. WebGL failure keeps the static
-page usable. These visuals are abstract and never represent live market data.
+**Live:** [stock-studio.onrender.com](https://stock-studio.onrender.com)
 
-The product tour and first-run onboarding share a layered research → thesis →
-journal preview. The optional LEAPS 3D explorer reuses the deterministic pricing
-model for price/time/IV comparisons while keeping exact values accessible in the
-numeric readout and existing SVG charts. Its sliders are local illustrations and
-do not save scenarios. Motion visibility, pause controls, WebGL fallbacks, canvas
-defaults, page headers and range inputs live in reusable components under
-`components/motion` and `components/ui`.
+The research output is **educational business analysis, never personalized investment
+advice**. Every study opens with an "As of [date]" line and ends with a "Not investment
+advice" line. Trade signals are the one feature that makes directional calls, under their
+own [rules](#content-rules).
 
-The navy/teal theme uses shared CSS tokens in both dark and light mode. Explicit
-root and marketing-shell backgrounds prevent default canvas/background colors
-from showing through. Text, accents, input borders and primary-button contrast
-were checked against both palettes.
+![Dashboard with queued, building and finished studies, research grades and live prices](docs/screenshots/dashboard.png)
 
-Marketing product previews are responsive HTML/SVG illustrations using the same
-theme tokens as the app, including journal and LEAPS previews. They use fictional
-companies and synthetic values, with visible sample-data labels. The “How it
-works” and format cards follow the selected theme rather than fixed light colors.
+---
 
-Fact-checked, source-cited stock case studies as a multi-tenant SaaS. A user queues a ticker, a
-research engine builds the report, and the finished study appears in the app.
+## Screenshots
 
-The output is **educational business analysis, never personalized investment advice**. Every study
-opens with an "As of [date]" line and ends with a "Not investment advice" line.
+All screenshots use fictional companies and invented figures, rendered from a local preview
+database. They show layout only, not real research or market data.
 
-- **App**: Next.js 16 (App Router, React 19), Tailwind. Runs locally on port 3200 and is deployed on Vercel or Render.
+| | |
+|---|---|
+| ![Marketing home page](docs/screenshots/home.png) | ![Pricing page with Silver, Gold and Diamond plans](docs/screenshots/pricing.png) |
+| **Home.** Public landing page with the product tour. | **Pricing.** Silver, Gold and Diamond plans, monthly or yearly. |
+| ![Study page with research grade and live market data](docs/screenshots/study.png) | ![Watchlist with thesis status and triggers](docs/screenshots/watchlist.png) |
+| **Study.** Research grade, live quote since the as-of date, and the sourced report. | **Watchlist.** Thesis tracker (intact, weakening, broken), triggers and live prices. |
+| ![Today overview](docs/screenshots/today.png) | ![Trading journal with realized P&L curve](docs/screenshots/journal.png) |
+| **Today.** Daily overview of theses needing review, latest research and earnings. | **Trading journal.** Realized P&L, drawdown, win rate and strategy contribution. |
+| ![LEAPS workspace scenario charts](docs/screenshots/leaps.png) | ![Signals track record](docs/screenshots/signals.png) |
+| **LEAPS workspace.** Black-Scholes scenarios, early exit vs. expiration, time decay. | **Signals.** The trader's calls with a hash-chained, verified track record. |
+| ![Super admin user management](docs/screenshots/admin-users.png) | |
+| **Admin console.** Add, invite, disable and audit members. | |
+
+On a phone the sidebar collapses into a menu and every page reflows to one column:
+
+<p>
+  <img src="docs/screenshots/dashboard-phone.png" alt="Dashboard on a phone" width="250">
+  <img src="docs/screenshots/study-phone.png" alt="Study page on a phone" width="250">
+  <img src="docs/screenshots/journal-phone.png" alt="Trading journal on a phone" width="250">
+</p>
+
+---
+
+## Features at a glance
+
+| Area | Pages | What it does |
+|---|---|---|
+| Research | `/new`, `/dashboard`, `/study/[id]` | Queue a study in one of 12 formats; get a graded, source-cited report. Re-run or queue an earnings update from the study page. |
+| Thesis tracking | `/watchlist` | Thesis, snapshot and triggers per ticker; every refresh judges the thesis intact, weakening or broken and keeps the history. |
+| Live market data | dashboard, study, watchlist | Free quote refresh (price, day move, move since the as-of date vs. SPY, 52-week range) without touching the study text. |
+| Daily overview | `/today`, `/market` | Theses needing review, latest research, earnings, sector and breadth context, biggest movers. |
+| Scanners | `/setups`, `/gamma`, `/sweeps` | Rule-based setup bots with paper-tracked records, dealer-gamma model from CBOE chains, Sweep Scanner preview. |
+| Trading desk | `/journal`, `/leaps` | Self-reported trading journal with P&L analytics and CSV import/export; LEAPS chain discovery and scenario modeling. |
+| Signals | `/signals` + Discord | The program trader's calls, relayed to Discord and kept in an append-only, hash-chained record. |
+| Membership | `/pricing`, `/billing` | 30-day trial, then Silver, Gold or Diamond subscriptions with monthly credits, plus credit packs. |
+| Operations | `/admin` | Super admin console: users, invites, jobs, audit log, system health, failure alerts. |
+
+### Stack
+
+- **App**: Next.js 16 (App Router, React 19), Tailwind. Runs locally on port 3200; deployed on Render (Vercel also works).
 - **Database**: hosted Postgres on Supabase, in an isolated `stocks` schema.
-- **Auth**: Supabase Auth. Each signup gets its own workspace.
-- **Billing**: Stripe. A 30-day trial, then a Silver, Gold or Diamond subscription with monthly credits, plus per-report credit packs.
+- **Auth**: Supabase Auth (email/password and Google). Each signup gets its own workspace.
+- **Billing**: Stripe subscriptions and one-time credit packs.
 - **Research engine**: an automated Anthropic API worker, with a manual CLI fallback.
-- **Market data**: unauthenticated Yahoo Finance endpoints (no API key), with an optional Alpaca fallback for when Yahoo rate-limits the host.
+- **Market data**: unauthenticated Yahoo Finance endpoints (no API key), with an optional Alpaca fallback when Yahoo rate-limits the host; CBOE delayed option chains for LEAPS and gamma.
 
 ---
 
 ## Contents
 
+- [Screenshots](#screenshots)
+- [Features at a glance](#features-at-a-glance)
 - [What it produces](#what-it-produces)
 - [Insights: grades, thesis tracking, earnings, market context, setup bots, gamma](#insights-grades-thesis-tracking-earnings-market-context-setup-bots-gamma)
+- [Live market data](#live-market-data)
+- [Sweep Scanner (preview)](#sweep-scanner-preview)
 - [Trade signals](#trade-signals)
+- [Design and motion](#design-and-motion)
 - [Architecture](#architecture)
 - [Getting started](#getting-started)
 - [Environment variables](#environment-variables)
 - [The research engine](#the-research-engine)
 - [Billing](#billing)
 - [Accounts & sign-in](#accounts--sign-in)
+- [Admin console](#admin-console)
 - [Multi-tenancy & security](#multi-tenancy--security)
 - [Database](#database)
 - [CLI scripts](#cli-scripts)
@@ -160,6 +194,22 @@ the full methodology of each.
   credit charge. Signed-in users can still read/export their journal after a trial ends and
   use the manual model. Chain requests and calculations make no AI-provider calls.
 
+#### Research-led decision workflow
+
+Studies and tracked theses now link into LEAPS planning with workspace- and ticker-checked research context. Scenario saves retain this context inside the existing inputs JSON. Both saved and unsaved scenarios can open a journal draft carrying option type, strike, expiry, contract count and linked research. Entry/exit fill prices are always blank in new drafts; a scenario is not a trade. The journal still requires actual executed prices and dates. No schema migration is needed, and older scenarios remain loadable.
+
+LEAPS discovery filters the existing sampled CBOE feed by expiry/remaining days, absolute provider delta, quoted spread as a percentage of midpoint, volume, open interest and ask-based premium budget. Blank filters are disabled; unknown values fail active filters. Budget is ask × 100 × selected contracts plus user-entered total entry/exit fees (zero by default). Calls/puts and expiration stay explicit, and the interface discloses feed sampling, delay and missing values. This is a single-ticker sampled discovery tool, not a complete cross-market scanner or recommended-contract ranking.
+
+Journal decision review uses active closed lots, actual calendar holding periods and realized dollar P&L after entered fees. It shows historical expectancy per lot (including flat lots), win/loss averages, holding-period buckets, linked-study results, review completion and a month calendar that opens actual lot review. Partial-exit lots count separately. No unrealized prices, deposit-based returns or performance forecasts are inferred.
+
+The public `/examples` page uses a manually prepared, dated Apple fiscal Q3 2026 excerpt (`lib/public-example.ts`) linked to Apple's release and SEC 8-K. Its interactive demo uses separately labeled invented option assumptions and disposable local state, with no orders, account data or automatic copying of model prices into fill fields.
+
+#### LEAPS contract comparison
+
+Discovery results can be sorted by expiration/strike, ask-based lot cost, quoted spread percentage, absolute provider delta or open interest. Unavailable values sort last in either direction; sorting is not a recommended-contract ranking. Select up to three contracts from one loaded chain snapshot for side-by-side liquidity, expiry, provider Greeks, fee-inclusive lot cost and expiration breakeven comparisons. Selections survive filter and option-type changes with a visible out-of-filter label; reloading a chain clears them. Selection is local to the page and is not a saved watchlist.
+
+Costs use the delayed ask, standard 100-share contract count and entered total fees. Missing, zero-ask, crossed or nonfinite quotes never become zero-cost candidates or invented midpoint fills. Zero bids remain visible and do not establish sell-side liquidity. Comparison costs and breakevens are quote-based assumptions, not forecasts, early-exit breakevens or actual trade results. Loading a selected contract copies contract count and assumed fees into the existing scenario model; journal drafts continue to require actual fill prices. No new API calls, polling, database migration or AI usage is introduced.
+
 Before deploying journal/LEAPS routes, review and apply
 `supabase/migrations/20261013083434_trading_journal_and_leaps.sql` through your migration workflow.
 It creates only `stocks.journal_trades`, `stocks.leaps_plans`, their indexes, RLS and the study-scope
@@ -207,6 +257,31 @@ feature, [Trade signals](#trade-signals), with its own rules.
 
 ---
 
+## Live market data
+
+Finished studies and watchlist rows carry a live quote next to the research: price, today's
+move, the move since the study's as-of date against SPY, and the 52-week range. It is stored
+as `live_json` / `live_refreshed_at` on `case_studies` and `watchlist`
+(migration `20261026160000_live_market_data.sql`), so the study's own text, figures and
+sources are never changed.
+
+- **Refresh live data** (dashboard, watchlist, study page) calls `POST /api/live-refresh`
+  with `{ scope: "study" | "watchlist", id }` or `{ scope: "all" }`. It is free and makes no
+  AI call. Rows refreshed in the last minute are skipped; Silver refreshes each row at most
+  once a day (`liveRefreshCooldownHours` in `lib/plans.ts`).
+- A study page pulls a new quote on view once the stored one is more than 30 minutes old.
+- **Re-run study** is different: it queues a new paid study with fresh research.
+- Logic lives in [`lib/live-data.ts`](lib/live-data.ts); quotes come from Yahoo with the
+  Alpaca fallback described under [Environment variables](#environment-variables).
+
+---
+
+## Sweep Scanner (preview)
+
+Capture/replay tooling and the protected `/sweeps` preview are available. Live detection is not enabled. Historical tapes and an opt-in capture worker are now included; see [source reconciliation](docs/sweep-scanner/historical-evidence.md) and [worker deployment](deploy/sweep-scanner/README.md). See [setup and method blockers](docs/sweep-scanner/README.md) and the [initial delivery report](docs/sweep-scanner/delivery-report.md).
+
+---
+
 ## Trade signals
 
 The program trader's own calls (BUY, SELL, EXIT, CLOSE, ALERT, with optional entry, target and stop),
@@ -239,14 +314,44 @@ above stay educational.
 
 ---
 
+## Design and motion
+
+Public home and pricing pages use a lazy-loaded Three.js / React Three Fiber / Drei
+decorative scene. It runs on desktop only when visible, respects reduced-motion
+preferences, and offers a pause control. Product screenshots reveal as they enter
+the viewport where scroll-driven CSS is supported. WebGL failure keeps the static
+page usable. These visuals are abstract and never represent live market data.
+
+The product tour and first-run onboarding share a layered research → thesis →
+journal preview. The optional LEAPS 3D explorer reuses the deterministic pricing
+model for price/time/IV comparisons while keeping exact values accessible in the
+numeric readout and existing SVG charts. Its sliders are local illustrations and
+do not save scenarios. Motion visibility, pause controls, WebGL fallbacks, canvas
+defaults, page headers and range inputs live in reusable components under
+`components/motion` and `components/ui`.
+
+The navy/teal theme uses shared CSS tokens in both dark and light mode. Explicit
+root and marketing-shell backgrounds prevent default canvas/background colors
+from showing through. Text, accents, input borders and primary-button contrast
+were checked against both palettes.
+
+Marketing product previews are responsive HTML/SVG illustrations using the same
+theme tokens as the app, including journal and LEAPS previews. They use fictional
+companies and synthetic values, with visible sample-data labels. The “How it
+works” and format cards follow the selected theme rather than fixed light colors.
+
+---
+
 ## Architecture
 
 ```
-            ┌───────────────────────── Next.js app (Vercel) ──────────────────────────┐
+            ┌──────────────────── Next.js app (Render or Vercel) ─────────────────────┐
  browser ──▶│ (marketing)  /  /pricing  /terms  /privacy          ← public            │
-            │ (app)        /dashboard /new /watchlist /study/[id] /billing ← session  │
-            │ api/         case-studies · watchlist · jobs         ← session          │
-            │              billing/checkout                        ← session          │
+            │ (app)        /today /dashboard /new /watchlist /study/[id] /journal     │
+            │              /leaps /market /setups /gamma /signals /billing  ← session │
+            │ admin/       users · jobs · audit · system           ← super admin      │
+            │ api/         case-studies · watchlist · jobs · journal · leaps          │
+            │              live-refresh · billing/checkout · portal ← session         │
             │              billing/webhook   ◀── Stripe            ← signature        │
             │              engine/run        ◀── Postgres          ← shared secret    │
             └───────┬─────────────────────────────────────────────────────▲──────────┘
@@ -484,6 +589,17 @@ watch the balance update.
 - The shared UI is in `components/auth/`: `AuthShell`, `PasswordInput` (show/hide toggle),
   `GoogleButton` and `OrDivider`.
 
+## Admin console
+
+`/admin` is visible only to super admins (`stocks.platform_admins`); everyone else gets a
+plain 404.
+
+The superadmin console includes paginated job and audit history, job/workspace search, action/reason filters, expandable job results, manual data refresh, aggregate journal/LEAPS adoption and workspace-level usage counts. Existing superadmin gates and audited account mutations remain required. Admin credit adjustments are limited to ±10,000 per request in both the form and API.
+
+User management (`/admin/users`, migration `20261027160000_admin_user_management.sql`): add a user by email, disable or enable an account, give or take the super admin role, and remove an account. Every change needs a reason and goes to the audit log. The Supabase Auth users are shared with other apps, so the console never creates or deletes logins: adding someone without a Stock Studio account saves an invite (extra credits, trial length, paid access) that is applied when they sign up with that email, or straight away if the email already has a login. No email is sent; share the signup link. Removing deletes the Stock Studio profile and the workspaces only they belong to, and is refused for accounts with payment records (disable those). A disabled account gets no workspace, so the app and its API refuse it, and a disabled super admin loses the console. Plan labels come from `lib/plans.ts` so membership tiers can extend them in one place.
+
+---
+
 ## Multi-tenancy & security
 
 - **Workspace scoping in app code**: every tenant table (`case_studies`, `jobs`, `watchlist`,
@@ -501,8 +617,9 @@ watch the balance update.
   and authenticated **in the same migration that creates it**. New functions get PUBLIC EXECUTE
   by default in Postgres, so this step is easy to miss.
 - **Proxy** ([`proxy.ts`](proxy.ts), Next 16's name for middleware) protects an explicit list of paths:
-  - Session required: `/dashboard`, `/new`, `/watchlist`, `/study`, `/billing`, and the
-    `case-studies`, `jobs`, `watchlist` and `billing/checkout` APIs.
+  - Session required: every app page (`/dashboard`, `/new`, `/watchlist`, `/study`, `/journal`,
+    `/leaps`, `/market`, `/setups`, `/sweeps`, `/gamma`, `/signals`, `/billing`, `/admin`) and
+    their APIs. The `matcher` list in `proxy.ts` is the source of truth.
   - Public: marketing pages, `/login`, `/signup` and `/auth/callback`.
   - Authenticated by other means: `/api/engine/run` (shared secret) and `/api/billing/webhook`
     (Stripe signature).
@@ -595,31 +712,47 @@ queue.
 
 ```
 app/
-  (marketing)/          public site: landing, pricing, terms, privacy
-  (app)/                authenticated app: dashboard, new, watchlist, study/[id], billing
+  (marketing)/          public site: landing, pricing, examples, terms, privacy
+  (app)/                signed-in app: today, dashboard, new, watchlist, study/[id], market,
+                        setups, sweeps, gamma, signals, journal, leaps, billing
+  admin/                super admin console: overview, users, jobs, audit, system
   api/
     case-studies/       queue a study (access gate + credit charge); delete a study
     watchlist/          add / retag / requeue / remove tracked tickers
     jobs/               remove a job from the queue (refunds credits)
-    billing/checkout/   start a hosted Stripe Checkout
+    live-refresh/       free live-quote refresh for studies and watchlist rows
+    journal/ leaps/     journal entries, CSV import/export, LEAPS chain and saved scenarios
+    billing/checkout/   start a hosted Stripe Checkout (plan or credit pack)
+    billing/portal/     open the Stripe customer portal
     billing/webhook/    Stripe webhook — the only grant path
+    admin/              super admin user, invite and job actions
     engine/run/         automated worker entry point (shared secret)
+    health/             no-store instance readiness check
   auth/callback/        Supabase PKCE code exchange
-  login/ signup/
-components/             Nav, QueuePanel, StudyActions, WatchlistClient, BillingActions, AutoRefresh
+  login/ signup/ forgot-password/ reset-password/
+components/             app shell, study/watchlist/billing UI, charts, journal, leaps, admin,
+                        marketing, motion and shared ui primitives
 lib/
   db.ts                 lazy postgres client (stocks_app, transaction pooler, prepare: false)
   workspace.ts          currentUser(), currentWorkspaceId()
-  access.ts             requireAppAccess() gate for paid routes
-  billing.ts            billing state, charge/refund helpers
-  stripe.ts             Stripe client + price lookup
+  membership.ts         getMembership(): tier + entitlements per request
+  plans.ts              Silver/Gold/Diamond prices, credits and feature gates
+  billing.ts stripe.ts  billing state, charge/refund helpers, Stripe client
   shared.ts             client-safe types, VARIANTS, CREDIT_COSTS
-  marketdata.ts         Yahoo Finance candles/history/movers
+  live-data.ts          live quote snapshots for studies and watchlist rows
+  marketdata.ts alpaca.ts  Yahoo Finance data with the Alpaca fallback
+  journal*.ts leaps*.ts trading journal and LEAPS model, chain and discovery
+  setups*.ts gex.ts     setup bots and the gamma exposure model
+  signal*.ts            signal parser, relay, feed and delivery
+  admin.ts              super admin gate and actions
   engine/               worker loop, Anthropic client, prompts, methodology.md
   supabase/             browser + server Supabase clients
-scripts/                engine / candles / history / movers CLIs, signal bot
-deploy/signal-bot/      systemd unit, env template and deploy steps for the signal bot
-supabase/migrations/    SQL for recent migrations
+scripts/                engine / candles / history / movers CLIs, signal bot, sweep scanner
+deploy/                 signal-bot and sweep-scanner worker deploy files
+docs/                   screenshots and Sweep Scanner method notes
+supabase/migrations/    baseline plus forward migrations
+supabase/functions/     signal-relay Edge Function
+tests/                  node:test suites, including a full migration replay on PGlite
 ```
 
 ---
@@ -657,12 +790,14 @@ supabase/migrations/    SQL for recent migrations
    automated.
    Then set up [failure alerts](#failure-alerts): store a Discord webhook URL in Vault as
    `ops_alert_webhook_url` and run `supabase/ops-alerts.sql`.
-3. **Stripe**:
-   - Create two one-time prices (access fee and credit pack) and set their ids.
+3. **Stripe** (details under [Billing](#billing)):
+   - Create the Silver, Gold and Diamond products with a monthly and a yearly recurring price
+     each, plus a one-time credit-pack price, and set the `STRIPE_PRICE_*` ids.
    - Add a webhook endpoint at `https://<host>/api/billing/webhook` for
-     `checkout.session.completed`, `checkout.session.async_payment_succeeded` and
-     `charge.refunded`.
-   - Set `STRIPE_WEBHOOK_SECRET`.
+     `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+     `charge.refunded`, `customer.subscription.created/updated/deleted` and `invoice.paid`.
+   - Set `STRIPE_WEBHOOK_SECRET`, and turn on the customer portal with plan switching.
+   - Apply new migrations **before** merging the code that needs them; `main` auto-deploys.
 4. **Supabase Auth** (dashboard → Authentication):
    - **URL Configuration:** set the Site URL to your deploy URL, and add
      `https://<host>/auth/callback` (plus `http://localhost:3200/auth/callback` for dev) to the
@@ -676,6 +811,14 @@ supabase/migrations/    SQL for recent migrations
    - Sign up and confirm the trial credits appear.
    - Queue a `one_candle` study and confirm it builds with no manual engine running.
    - Run a test-mode checkout, then replay the webhook and confirm nothing is granted twice.
+
+### First-load reliability (Render free tier)
+
+The current Render web service was confirmed on Free compute on 2026-10-15. Render spins Free services down after 15 idle minutes and serves its own wake-up page during restart; application HTML, loaders, caching headers and Three.js changes cannot remove this platform interstitial. Marketing and `/examples` stay prerendered and make no server database/provider calls. Ambient Three.js on marketing pages now loads only after an explicit Enable animation action. `/api/health` is a no-store, no-secret instance readiness check (not database/provider health).
+
+To remove the platform wake-up page at the current URL, move this service to always-on paid compute after approving the recurring charge. Render's entry paid web compute is listed at $7/month as checked 2026-10-15; usage charges can be additional. Set the service health check path to `/api/health` after this release is deployed, then verify a 200 response, signed-out marketing, signed-in workflow links and error logs. Keep the same repository, branch, URL, auth settings and database. Do not use artificial keep-alive traffic as a substitute. A separate static marketing site can avoid cold starts for public pages, but requires its own deployment and URL/domain routing; do not assume prerendered Next pages on the current sleeping web service are CDN-hosted.
+
+Sources: https://render.com/docs/free and https://render.com/pricing .
 
 ---
 
@@ -714,41 +857,11 @@ Trade signals:
 | Jobs sit in `pending` forever | Either `engine_webhook_url` in Vault is still the placeholder, or the job is a web-research variant and `ENGINE_WEB_RESEARCH` is off (build it through the engine CLI). |
 | Study shows "We couldn't build this report" | The job failed and its credits were refunded. The real reason is in `jobs.result`: for example a refusal, output over the length limit, repeated timeouts, or invocations killed 3 times. For kills, check the host's function logs and keep `ENGINE_INVOCATION_BUDGET_MS` below the route's `maxDuration`. |
 | Browser console shows a CSP violation | The page is calling an origin not in `connect-src` in `next.config.mjs`; add it there. |
-| API returns 429 | The workspace hit a queue limit (`lib/limits.ts`): 10 reports in progress, or 30 queued in the last hour. The response says which one, with `Retry-After`. |
-| API returns 402 | The trial has ended without an unlock (`code: no_access`) or the balance is too low (`code: no_credits`). Both are handled on `/billing`. |
+| API returns 429 | The workspace hit a queue limit (`lib/limits.ts`): reports in progress for its plan (3 Silver, 5 Gold, 10 Diamond), or 30 queued in the last hour. The response says which one, with `Retry-After`. |
+| API returns 402 | The trial has ended without a plan (`code: no_access`) or the balance is too low (`code: no_credits`). Both are handled on `/billing`. |
 | Webhook returns 500 `BILLING_DATABASE_URL is not set` (or a login failure) | The webhook's database account isn't configured. Set a password on `stocks_billing` and `BILLING_DATABASE_URL`. Stripe keeps retrying, so nothing is lost. |
 | Paid, but no access or credits | The webhook isn't reaching the app. Check the Stripe dashboard's delivery log, `STRIPE_WEBHOOK_SECRET`, and that the event carries Stock Studio metadata. |
+| Signed-in pages error after a deploy (e.g. `column ... does not exist`) | The code was deployed before its migration. Apply the pending file in `supabase/migrations/`. |
 | Production returns 503 "Locked" | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` aren't set. |
 | `DATABASE_URL is not set` from a CLI | `.env.local` is missing from the repo root. |
 | `npm run candles` returns no data | The market isn't open yet, or the date is beyond Yahoo's ~30-day 1-minute history. |
-
-
-The superadmin console includes paginated job and audit history, job/workspace search, action/reason filters, expandable job results, manual data refresh, aggregate journal/LEAPS adoption and workspace-level usage counts. Existing superadmin gates and audited account mutations remain required. Admin credit adjustments are limited to ±10,000 per request in both the form and API.
-
-User management (`/admin/users`, migration `20261027160000_admin_user_management.sql`): add a user by email, disable or enable an account, give or take the super admin role, and remove an account. Every change needs a reason and goes to the audit log. The Supabase Auth users are shared with other apps, so the console never creates or deletes logins: adding someone without a Stock Studio account saves an invite (extra credits, trial length, paid access) that is applied when they sign up with that email, or straight away if the email already has a login. No email is sent; share the signup link. Removing deletes the Stock Studio profile and the workspaces only they belong to, and is refused for accounts with payment records (disable those). A disabled account gets no workspace, so the app and its API refuse it, and a disabled super admin loses the console. Plan labels come from `lib/plans.ts` so membership tiers can extend them in one place.
-
-
-### Research-led decision workflow
-
-Studies and tracked theses now link into LEAPS planning with workspace- and ticker-checked research context. Scenario saves retain this context inside the existing inputs JSON. Both saved and unsaved scenarios can open a journal draft carrying option type, strike, expiry, contract count and linked research. Entry/exit fill prices are always blank in new drafts; a scenario is not a trade. The journal still requires actual executed prices and dates. No schema migration is needed, and older scenarios remain loadable.
-
-LEAPS discovery filters the existing sampled CBOE feed by expiry/remaining days, absolute provider delta, quoted spread as a percentage of midpoint, volume, open interest and ask-based premium budget. Blank filters are disabled; unknown values fail active filters. Budget is ask × 100 × selected contracts plus user-entered total entry/exit fees (zero by default). Calls/puts and expiration stay explicit, and the interface discloses feed sampling, delay and missing values. This is a single-ticker sampled discovery tool, not a complete cross-market scanner or recommended-contract ranking.
-
-Journal decision review uses active closed lots, actual calendar holding periods and realized dollar P&L after entered fees. It shows historical expectancy per lot (including flat lots), win/loss averages, holding-period buckets, linked-study results, review completion and a month calendar that opens actual lot review. Partial-exit lots count separately. No unrealized prices, deposit-based returns or performance forecasts are inferred.
-
-The public `/examples` page uses a manually prepared, dated Apple FY2025 Q4 excerpt linked to Apple's release and SEC 8-K. Its interactive demo uses separately labeled invented option assumptions and disposable local state, with no orders, account data or automatic copying of model prices into fill fields.
-
-### First-load reliability
-
-The current Render web service was confirmed on Free compute on 2026-10-15. Render spins Free services down after 15 idle minutes and serves its own wake-up page during restart; application HTML, loaders, caching headers and Three.js changes cannot remove this platform interstitial. Marketing and `/examples` stay prerendered and make no server database/provider calls. Ambient Three.js on marketing pages now loads only after an explicit Enable animation action. `/api/health` is a no-store, no-secret instance readiness check (not database/provider health).
-
-To remove the platform wake-up page at the current URL, move this service to always-on paid compute after approving the recurring charge. Render's entry paid web compute is listed at $7/month as checked 2026-10-15; usage charges can be additional. Set the service health check path to `/api/health` after this release is deployed, then verify a 200 response, signed-out marketing, signed-in workflow links and error logs. Keep the same repository, branch, URL, auth settings and database. Do not use artificial keep-alive traffic as a substitute. A separate static marketing site can avoid cold starts for public pages, but requires its own deployment and URL/domain routing; do not assume prerendered Next pages on the current sleeping web service are CDN-hosted.
-
-Sources: https://render.com/docs/free and https://render.com/pricing .
-
-
-### LEAPS contract comparison
-
-Discovery results can be sorted by expiration/strike, ask-based lot cost, quoted spread percentage, absolute provider delta or open interest. Unavailable values sort last in either direction; sorting is not a recommended-contract ranking. Select up to three contracts from one loaded chain snapshot for side-by-side liquidity, expiry, provider Greeks, fee-inclusive lot cost and expiration breakeven comparisons. Selections survive filter and option-type changes with a visible out-of-filter label; reloading a chain clears them. Selection is local to the page and is not a saved watchlist.
-
-Costs use the delayed ask, standard 100-share contract count and entered total fees. Missing, zero-ask, crossed or nonfinite quotes never become zero-cost candidates or invented midpoint fills. Zero bids remain visible and do not establish sell-side liquidity. Comparison costs and breakevens are quote-based assumptions, not forecasts, early-exit breakevens or actual trade results. Loading a selected contract copies contract count and assumed fees into the existing scenario model; journal drafts continue to require actual fill prices. No new API calls, polling, database migration or AI usage is introduced.
