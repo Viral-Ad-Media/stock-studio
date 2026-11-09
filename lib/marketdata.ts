@@ -1,15 +1,16 @@
 // Pure market-data fetchers, shared by the CLI scripts (npm run
 // candles/history/movers — kept for manual debugging) and the automated
 // worker (lib/engine/worker.ts). Yahoo Finance public endpoints first (no API
-// key); when Yahoo rate-limits us and Alpaca keys are set, the same request is
-// served from Alpaca instead (lib/alpaca.ts). Functions throw on failure
+// key); when Yahoo rate-limits us or is unreachable, the same request is
+// served by whichever keyed providers are configured — Massive, Tiingo,
+// Twelve Data, Finnhub, Alpaca (lib/providers). Functions throw on failure
 // rather than process.exit, so callers (CLI or worker) decide how to handle it.
 
-import { alpacaChart, alpacaConfigured, alpacaMovers, type ChartQuery } from "./alpaca";
+import { type ChartQuery, type MarketSource, fallbackChart, fallbackMovers, hasFallback, resetProviderCooldowns, sourceFromMeta } from "./providers";
 import { assertTimeLeft, deadlineSignal, waitWithinBudget } from "./deadline";
 
 // Yahoo refused the request (429 or 5xx after retries), as opposed to a bad
-// ticker or malformed response. Only these fall back to Alpaca.
+// ticker or malformed response. Only these fall back to the keyed providers.
 export class YahooUnavailable extends Error {}
 
 // After Yahoo refuses once, skip it for a while when a fallback exists, so a
@@ -18,6 +19,7 @@ const YAHOO_COOLDOWN_MS = 10 * 60_000;
 let yahooCooldownUntil = 0;
 export function resetYahooCooldown() {
   yahooCooldownUntil = 0;
+  resetProviderCooldowns();
 }
 
 export type Candle = { t: string; o: number; h: number; l: number; c: number; v: number };
@@ -35,7 +37,16 @@ async function yahooFetch(url: string, label: string, revalidateSec?: number, de
       signal: deadlineSignal(deadline, 15_000),
       ...(revalidateSec ? { cache: "force-cache" as const, next: { revalidate: revalidateSec } } : {}),
     });
-  let res = await get(url);
+  let res: Response;
+  try {
+    res = await get(url);
+  } catch (err) {
+    // Network failure (DNS, reset) rather than a deadline: treat like a refusal.
+    if (deadline != null && deadline <= Date.now()) throw err;
+    if (!(err instanceof TypeError)) throw err;
+    yahooCooldownUntil = Date.now() + YAHOO_COOLDOWN_MS;
+    throw new YahooUnavailable(`Yahoo ${label} API unreachable: ${err.message}`);
+  }
   // Yahoo rate-limits shared hosting IPs per host. Retry a 429/5xx twice with
   // a short backoff, alternating query1 <-> query2 (same API, separate limits).
   for (let attempt = 1; attempt <= 2 && (res.status === 429 || res.status >= 500); attempt++) {
@@ -52,8 +63,8 @@ async function yahooFetch(url: string, label: string, revalidateSec?: number, de
   return body;
 }
 
-function useFallback(err: unknown): boolean {
-  return err instanceof YahooUnavailable && alpacaConfigured();
+function useFallback(err: unknown, kind: "chart" | "movers" = "chart"): boolean {
+  return err instanceof YahooUnavailable && hasFallback(kind);
 }
 
 async function chartBody(ticker: string, q: ChartQuery, revalidateSec?: number, deadline?: number) {
@@ -65,12 +76,12 @@ async function chartBody(ticker: string, q: ChartQuery, revalidateSec?: number, 
     params.set("range", q.range ?? "1d");
   }
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?${params}`;
-  if (alpacaConfigured() && Date.now() < yahooCooldownUntil) return alpacaChart(ticker, q, revalidateSec, deadline);
+  if (Date.now() < yahooCooldownUntil && hasFallback("chart")) return fallbackChart(ticker, q, revalidateSec, deadline);
   try {
     return await yahooFetch(url, "chart", revalidateSec, deadline);
   } catch (err) {
     if (!useFallback(err)) throw err;
-    return alpacaChart(ticker, q, revalidateSec, deadline);
+    return fallbackChart(ticker, q, revalidateSec, deadline);
   }
 }
 
@@ -248,18 +259,17 @@ export async function fetchMovers(count = 5, revalidateSec?: number, deadline?: 
   let losers: Mover[];
   let source = "Yahoo Finance predefined screeners";
   try {
-    if (alpacaConfigured() && Date.now() < yahooCooldownUntil) throw new YahooUnavailable("Yahoo cooling down");
+    if (Date.now() < yahooCooldownUntil && hasFallback("movers")) throw new YahooUnavailable("Yahoo cooling down");
     [gainers, losers] = await Promise.all([
       screener("day_gainers", count, revalidateSec, deadline),
       screener("day_losers", count, revalidateSec, deadline),
     ]);
   } catch (err) {
-    if (!useFallback(err)) throw err;
-    ({ gainers, losers } = await alpacaMovers(count, revalidateSec, deadline));
-    source = "Alpaca market movers (IEX feed)";
+    if (!useFallback(err, "movers")) throw err;
+    ({ gainers, losers, source } = await fallbackMovers(count, revalidateSec, deadline));
   }
   if (gainers.length === 0 && losers.length === 0) {
-    throw new Error("Yahoo screeners returned no quotes — try again later or fall back to web research.");
+    throw new Error("Market screeners returned no quotes — try again later or fall back to web research.");
   }
   return {
     as_of: new Date().toISOString(),
@@ -284,7 +294,7 @@ export type DailyBars = {
   volumes: number[];
   // When the vendor stamped the latest price (ISO), and who served it.
   marketTime?: string | null;
-  source?: "yahoo" | "alpaca";
+  source?: MarketSource;
 };
 
 export async function fetchDailyBars(ticker: string, range = "1y", revalidateSec = 1800, deadline?: number): Promise<DailyBars> {
@@ -295,7 +305,7 @@ export async function fetchDailyBars(ticker: string, range = "1y", revalidateSec
   const q = result.indicators?.quote?.[0] ?? {};
   const adj: (number | null)[] = result.indicators?.adjclose?.[0]?.adjclose ?? q.close ?? [];
   const marketTime = typeof result.meta?.regularMarketTime === "number" ? new Date(result.meta.regularMarketTime * 1000).toISOString() : null;
-  const source = result.meta?.dataSource === "alpaca-iex" ? "alpaca" : "yahoo";
+  const source = sourceFromMeta(result.meta?.dataSource);
   const bars: DailyBars = { symbol: ticker, dates: [], opens: [], highs: [], lows: [], closes: [], adjCloses: [], volumes: [], marketTime, source };
   const ok = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
   for (let i = 0; i < ts.length; i++) {

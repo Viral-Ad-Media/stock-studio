@@ -5,6 +5,7 @@
 // nothing here produces a directional call.
 
 import { sourceTimestamp } from "./data-freshness";
+import { fallbackOptionChain } from "./providers";
 
 // Index options are served under a leading underscore.
 const CBOE_INDEX = new Set(["SPX", "NDX", "RUT", "VIX", "XSP", "DJX"]);
@@ -67,6 +68,7 @@ export type GexSnapshot = {
   spot: number;
   fetchedAt: string;
   sourceAt: string | null; // vendor timestamp, never synthesized from retrieval time
+  source?: string; // who served the chain; CBOE unless a keyed provider stood in
   contracts: number;
   expirations: number;
   totalGex: number; // $ per 1% move, calls minus puts
@@ -236,17 +238,31 @@ export async function getGexSnapshot(symbol: string): Promise<GexSnapshot | null
   const hit = memo.get(display);
   if (hit && Date.now() - hit.at < MEMO_MS) return hit.value;
 
-  const res = await fetch(`https://cdn.cboe.com/api/global/delayed_quotes/options/${encodeURIComponent(cboeSymbol(display))}.json`, {
-    headers: { "User-Agent": "Mozilla/5.0 (stock-studio gamma exposure)", Accept: "application/json" },
-    signal: AbortSignal.timeout(20_000),
-    cache: "no-store",
-  });
   let value: GexSnapshot | null = null;
-  if (res.status !== 403 && res.status !== 404) {
-    // 403/404: no listed options for this symbol.
-    if (!res.ok) throw new Error(`CBOE returned ${res.status}`);
-    const parsed = parseCboeChain(display, await res.json());
+  let cboeError: unknown = null;
+  try {
+    const res = await fetch(`https://cdn.cboe.com/api/global/delayed_quotes/options/${encodeURIComponent(cboeSymbol(display))}.json`, {
+      headers: { "User-Agent": "Mozilla/5.0 (stock-studio gamma exposure)", Accept: "application/json" },
+      signal: AbortSignal.timeout(20_000),
+      cache: "no-store",
+    });
+    // 403/404: no listed options for this symbol (or CBOE refused this host).
+    if (res.status !== 403 && res.status !== 404) {
+      if (!res.ok) throw new Error(`CBOE returned ${res.status}`);
+      const parsed = parseCboeChain(display, await res.json());
+      value = parsed ? buildGexSnapshot(display, parsed.spot, parsed.contracts, parsed.expirations, parsed.sourceAt) : null;
+    }
+  } catch (err) {
+    cboeError = err;
+  }
+  if (value) value.source = "CBOE options chain";
+  else {
+    // CBOE failed or had nothing: try the keyed providers (Massive, Finnhub).
+    const alt = await fallbackOptionChain(display, { minDays: 0, maxDays: MAX_DAYS, strikeLo: 1 - STRIKE_BAND, strikeHi: 1 + STRIKE_BAND }).catch(() => null);
+    const parsed = alt ? parseCboeChain(display, alt) : null;
     value = parsed ? buildGexSnapshot(display, parsed.spot, parsed.contracts, parsed.expirations, parsed.sourceAt) : null;
+    if (value && alt) value.source = alt.source;
+    if (!value && cboeError) throw cboeError;
   }
   memo.set(display, { at: Date.now(), value });
   if (memo.size > 200) memo.delete(memo.keys().next().value!);

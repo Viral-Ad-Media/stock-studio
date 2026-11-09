@@ -1,7 +1,7 @@
 import { Activity } from "lucide-react";
 import type { LiveSnapshot } from "@/lib/shared";
 import { LIVE_STALE_MS } from "@/lib/live-data";
-import { formatDate } from "@/lib/shared";
+import { MARKET_SOURCE_LABELS, formatDate } from "@/lib/shared";
 import { timestampET } from "@/lib/data-freshness";
 import LiveRefreshButton from "@/components/LiveRefreshButton";
 import { moveClass, refreshedAge, signedPct } from "@/components/LiveQuote";
@@ -97,7 +97,7 @@ export default function LivePanel({
       )}
 
       <p className="mt-3 text-xs text-fg-subtle">
-        {s?.source === "alpaca" ? "Alpaca (IEX)" : "Yahoo Finance"} daily data; moves use adjusted closes. The study below
+        {MARKET_SOURCE_LABELS[s?.source ?? "yahoo"] ?? "Yahoo Finance"} daily data; moves use adjusted closes. The study below
         stays exactly as it was fact-checked{asOfDate ? ` on ${asOfDate}` : ""}, so its prices and multiples are from that
         date. A short-window price move says little about whether the analysis was right.
       </p>
