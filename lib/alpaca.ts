@@ -7,16 +7,16 @@
 // Caveats of the free feed: volumes are IEX-only (a few percent of
 // consolidated volume), and indices (^GSPC) and FX/crypto pairs aren't covered.
 
-import { assertTimeLeft, deadlineSignal } from "./deadline";
+import { assertTimeLeft } from "./deadline";
+import { type ChartQuery, type RawBar, ProviderNoData, dayStamp, getJson, queryWindow, toChartBody, usSymbol } from "./providers/common";
+
+export type { ChartQuery };
 
 const DATA_HOST = "https://data.alpaca.markets";
-const TZ = "America/New_York";
 
 export function alpacaConfigured(): boolean {
   return Boolean(process.env.ALPACA_KEY_ID && process.env.ALPACA_SECRET_KEY);
 }
-
-export type ChartQuery = { interval: string; range?: string; period1?: number; period2?: number };
 
 const TIMEFRAMES: Record<string, string> = {
   "1m": "1Min", "2m": "2Min", "5m": "5Min", "15m": "15Min", "30m": "30Min",
@@ -25,24 +25,14 @@ const TIMEFRAMES: Record<string, string> = {
 
 // Yahoo uses "BRK-B" for share classes; Alpaca uses "BRK.B".
 export function alpacaSymbol(ticker: string): string | null {
-  const t = ticker.trim().toUpperCase();
-  if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(t)) return null; // ^GSPC, EURUSD=X, BTC-USD style
-  if (/-USD$/.test(t)) return null;
-  return t.replace(/-/g, ".");
+  return usSymbol(ticker, ".");
 }
 
-async function alpacaGet(path: string, revalidateSec?: number, deadline?: number): Promise<any> {
-  const res = await fetch(`${DATA_HOST}${path}`, {
-    headers: {
-      "APCA-API-KEY-ID": process.env.ALPACA_KEY_ID ?? "",
-      "APCA-API-SECRET-KEY": process.env.ALPACA_SECRET_KEY ?? "",
-      Accept: "application/json",
-    },
-    signal: deadlineSignal(deadline, 15_000),
-    ...(revalidateSec ? { cache: "force-cache" as const, next: { revalidate: revalidateSec } } : {}),
-  });
-  if (!res.ok) throw new Error(`Alpaca market data API returned ${res.status}`);
-  return res.json();
+function alpacaGet(path: string, revalidateSec?: number, deadline?: number): Promise<any> {
+  return getJson("Alpaca", `${DATA_HOST}${path}`, {
+    "APCA-API-KEY-ID": process.env.ALPACA_KEY_ID ?? "",
+    "APCA-API-SECRET-KEY": process.env.ALPACA_SECRET_KEY ?? "",
+  }, revalidateSec, deadline);
 }
 
 type Bar = { t: string; o: number; h: number; l: number; c: number; v: number };
@@ -63,89 +53,26 @@ async function bars(symbol: string, timeframe: string, start: string, end: strin
   return out;
 }
 
-function exchangeDate(unix: number): string {
-  return new Date(unix * 1000).toLocaleDateString("en-CA", { timeZone: TZ });
-}
-
-function minutesIntoDay(unix: number): number {
-  const [h, m] = new Date(unix * 1000)
-    .toLocaleTimeString("en-GB", { timeZone: TZ, hour12: false, hour: "2-digit", minute: "2-digit" })
-    .split(":").map(Number);
-  return (h % 24) * 60 + m;
-}
-
-// Calendar lookback for a Yahoo range string, plus how many trading sessions
-// to keep for "Nd" ranges (weekends and holidays make calendar days too many).
-function rangeWindow(range: string, now: number): { start: number; sessions?: number } {
-  const day = 86_400_000;
-  const m = /^(\d+)(d|wk|mo|y)$/.exec(range);
-  if (range === "ytd") return { start: Date.UTC(new Date(now).getUTCFullYear(), 0, 1) };
-  if (range === "max") return { start: Date.UTC(2016, 0, 1) };
-  if (!m) throw new Error(`Unsupported range "${range}" for the Alpaca fallback`);
-  const n = Number(m[1]);
-  if (m[2] === "d") return { start: now - (Math.ceil(n * 1.5) + 4) * day, sessions: n };
-  if (m[2] === "wk") return { start: now - n * 7 * day };
-  if (m[2] === "mo") return { start: now - n * 31 * day };
-  return { start: now - n * 366 * day };
-}
-
 // Returns a body shaped like Yahoo's /v8/finance/chart response.
 export async function alpacaChart(ticker: string, q: ChartQuery, revalidateSec?: number, deadline?: number) {
   const symbol = alpacaSymbol(ticker);
-  if (!symbol) throw new Error(`${ticker} isn't available from the Alpaca fallback`);
+  if (!symbol) throw new ProviderNoData(`${ticker} isn't available from the Alpaca fallback`);
   const timeframe = TIMEFRAMES[q.interval];
-  if (!timeframe) throw new Error(`Unsupported interval "${q.interval}" for the Alpaca fallback`);
-  const intraday = /Min|Hour/.test(timeframe);
-
-  let start: number;
-  let end: number | undefined;
-  let sessions: number | undefined;
-  if (q.period1 != null) {
-    start = q.period1 * 1000;
-    end = q.period2 != null ? q.period2 * 1000 : undefined;
-  } else {
-    ({ start, sessions } = rangeWindow(q.range ?? "1d", Date.now()));
-  }
+  if (!timeframe) throw new ProviderNoData(`Unsupported interval "${q.interval}" for the Alpaca fallback`);
+  const w = queryWindow(q);
   const iso = (ms: number) => new Date(ms).toISOString();
-
-  let raw = await bars(symbol, timeframe, iso(start), end != null ? iso(end) : undefined, "raw", revalidateSec, deadline);
-  // Match Yahoo's includePrePost=false: regular session only (9:30-16:00 ET).
-  if (intraday) raw = raw.filter((b) => {
-    const mins = minutesIntoDay(Date.parse(b.t) / 1000);
-    return mins >= 570 && mins < 960;
-  });
-  if (sessions != null) {
-    const dates = [...new Set(raw.map((b) => exchangeDate(Date.parse(b.t) / 1000)))].slice(-sessions);
-    const keep = new Set(dates);
-    raw = raw.filter((b) => keep.has(exchangeDate(Date.parse(b.t) / 1000)));
-  }
-
+  const end = w.end != null ? iso(w.end) : undefined;
+  // Alpaca stamps daily bars at midnight New York; restamp to the session date.
+  const stamp = (t: string) => (w.intraday ? Date.parse(t) : dayStamp(new Date(Date.parse(t) + 6 * 3_600_000).toISOString()));
+  const raw = await bars(symbol, timeframe, iso(w.start), end, "raw", revalidateSec, deadline);
+  const rows: RawBar[] = raw.map((b) => ({ t: stamp(b.t), o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }));
   let adjclose: number[] | undefined;
-  if (!intraday) {
-    const adj = await bars(symbol, timeframe, iso(start), end != null ? iso(end) : undefined, "all", revalidateSec, deadline);
-    const byTime = new Map(adj.map((b) => [b.t, b.c]));
-    adjclose = raw.map((b) => byTime.get(b.t) ?? b.c);
+  if (!w.intraday) {
+    const adj = await bars(symbol, timeframe, iso(w.start), end, "all", revalidateSec, deadline);
+    const byTime = new Map(adj.map((b) => [stamp(b.t), b.c]));
+    adjclose = rows.map((b) => byTime.get(b.t) ?? b.c);
   }
-
-  return {
-    chart: {
-      error: null,
-      result: [{
-        meta: { symbol: ticker, exchangeTimezoneName: TZ, dataSource: "alpaca-iex" },
-        timestamp: raw.map((b) => Math.floor(Date.parse(b.t) / 1000)),
-        indicators: {
-          quote: [{
-            open: raw.map((b) => b.o),
-            high: raw.map((b) => b.h),
-            low: raw.map((b) => b.l),
-            close: raw.map((b) => b.c),
-            volume: raw.map((b) => b.v),
-          }],
-          ...(adjclose ? { adjclose: [{ adjclose }] } : {}),
-        },
-      }],
-    },
-  };
+  return toChartBody(ticker, rows, { intraday: w.intraday, sessions: w.sessions, dataSource: "alpaca-iex", adjclose });
 }
 
 // Top gainers and losers, shaped like lib/marketdata.ts's Mover rows.

@@ -1,6 +1,7 @@
 import { cboeSymbol, parseOcc } from "./gex";
 import { sourceTimestamp } from "./data-freshness";
 import { validDate } from "./journal";
+import { fallbackOptionChain } from "./providers";
 export type ChainOption = {
   symbol: string;
   type: "call" | "put";
@@ -21,6 +22,7 @@ export type LeapsChain = {
   fetchedAt: string;
   options: ChainOption[];
   totalMatches: number;
+  source?: string; // who served the chain; CBOE unless a keyed provider stood in
 };
 const nullableNumber = (v: unknown) =>
   typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null;
@@ -116,6 +118,37 @@ export async function getLeapsChain(
   if (hit && Date.now() - hit.at < 600000) return hit.value;
   if (pending.has(symbol)) return pending.get(symbol)!;
   const promise = (async () => {
+    let value: LeapsChain | null = null;
+    let cboeError: unknown = null;
+    try {
+      value = await cboeLeaps(symbol);
+      if (value) value.source = "CBOE options chain";
+    } catch (err) {
+      cboeError = err;
+    }
+    if (!value) {
+      // CBOE failed or had nothing: try the keyed providers (Massive, Finnhub).
+      const alt = await fallbackOptionChain(symbol, { minDays: 365, maxDays: 1460, strikeLo: 0.5, strikeHi: 1.5 }).catch(() => null);
+      value = alt ? parseLeapsChain(symbol, alt) : null;
+      if (value && alt) value.source = alt.source;
+      if (!value && cboeError) throw cboeError;
+    }
+    if (value) {
+      cache.set(symbol, { at: Date.now(), value });
+      if (cache.size > 50) cache.delete(cache.keys().next().value!);
+    }
+    return value;
+  })();
+  pending.set(symbol, promise);
+  try {
+    return await promise;
+  } finally {
+    pending.delete(symbol);
+  }
+}
+
+async function cboeLeaps(symbol: string): Promise<LeapsChain | null> {
+  {
     const res = await fetch(
       `https://cdn.cboe.com/api/global/delayed_quotes/options/${encodeURIComponent(cboeSymbol(symbol))}.json`,
       {
@@ -149,20 +182,9 @@ export async function getLeapsChain(
       bytes.set(c, pos);
       pos += c.length;
     }
-    const value = parseLeapsChain(
+    return parseLeapsChain(
       symbol,
       JSON.parse(new TextDecoder().decode(bytes)),
     );
-    if (value) {
-      cache.set(symbol, { at: Date.now(), value });
-      if (cache.size > 50) cache.delete(cache.keys().next().value!);
-    }
-    return value;
-  })();
-  pending.set(symbol, promise);
-  try {
-    return await promise;
-  } finally {
-    pending.delete(symbol);
   }
 }

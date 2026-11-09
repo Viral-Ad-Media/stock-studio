@@ -79,7 +79,7 @@ async function MarketOverview() {
     const ctx = await getMarketContext();
     if (!ctx.spy || !ctx.asOf) return <Panel title="Market context" href="/market"><p className="text-sm text-fg-subtle">Market data is unavailable right now.</p></Panel>;
     return <Panel title="Market context" href="/market">
-      <p className="mb-3 text-xs text-fg-subtle">Source: Yahoo Finance daily bars · Latest bar: {marketDay(ctx.asOf)} · May be in progress during the session; not live quotes</p>
+      <p className="mb-3 text-xs text-fg-subtle">Source: Yahoo Finance daily bars (or a backup market data provider) · Latest bar: {marketDay(ctx.asOf)} · May be in progress during the session; not live quotes</p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[["SPY · 1 session", ctx.spy.change1d], ["SPY · 5 sessions", ctx.spy.change5d], ["SPY · 1 month", ctx.spy.change1m]].map(([label, value]) => (
           <div key={String(label)} className="rounded-lg border border-ink-700 p-3">
@@ -139,7 +139,7 @@ async function SetupOverview() {
   try {
     const [scan] = await sql.unsafe(TODAY_SETUP_SQL);
     return <Panel title="Latest setup scan" href="/setups">
-      {scan ? <><p className="text-2xl font-semibold tabular-nums text-slate-100">{scan.matches} pattern matches</p><p className="mt-2 text-sm text-slate-300">Across {scan.universe_size} stocks in the latest completed scan.</p><p className="mt-2 text-xs text-fg-subtle">Source: Stock Studio rule-based scanners using Yahoo Finance bars · As of {marketDay(scan.session_date)} close. These are pattern matches, not trader calls.</p></> : <p className="text-sm text-fg-subtle">No completed scan yet. Matches appear after the worker completes a market-close scan.</p>}
+      {scan ? <><p className="text-2xl font-semibold tabular-nums text-slate-100">{scan.matches} pattern matches</p><p className="mt-2 text-sm text-slate-300">Across {scan.universe_size} stocks in the latest completed scan.</p><p className="mt-2 text-xs text-fg-subtle">Source: Stock Studio rule-based scanners using Yahoo Finance bars (or a backup provider) · As of {marketDay(scan.session_date)} close. These are pattern matches, not trader calls.</p></> : <p className="text-sm text-fg-subtle">No completed scan yet. Matches appear after the worker completes a market-close scan.</p>}
     </Panel>;
   } catch (error) { return <Unavailable title="Latest setup scan" href="/setups" error={error} />; }
 }
