@@ -10,6 +10,10 @@ export const metadata = { title: "System" };
 
 // Presence only — never print a secret's value.
 const ENV = [
+  { key: "MASSIVE_API_KEY", what: "Market data fallback: bars, movers, options (Massive)" },
+  { key: "TIINGO_API_KEY", what: "Market data fallback: daily and intraday bars (Tiingo)" },
+  { key: "TWELVE_DATA_API_KEY", what: "Market data fallback: bars (Twelve Data)" },
+  { key: "FINNHUB_API_KEY", what: "Market data fallback: candles, options (Finnhub)" },
   { key: "ALPACA_KEY_ID", what: "Live market data (key ID)" },
   { key: "ALPACA_SECRET_KEY", what: "Live market data (secret)" },
   { key: "DATABASE_URL", what: "App database connection" },

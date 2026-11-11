@@ -317,7 +317,7 @@ export default function LeapsClient({
       <section className="card p-5">
         <h2 className="font-semibold">Delayed long-dated options</h2>
         <p className="mt-2 text-xs text-fg-subtle">
-          CBOE chain · At least 365 days remaining, strikes within 50% of the
+          CBOE chain (Massive or Finnhub when CBOE is unavailable) · At least 365 days remaining, strikes within 50% of the
           underlying, standard symbol roots only. Up to 500 contracts sampled
           across expirations and types, with strikes nearest the underlying;
           this is not a recommended-contract ranking. Load on demand; no
@@ -344,7 +344,7 @@ export default function LeapsClient({
         {chain && (
           <>
             <DataStamp
-              source="CBOE options chain (about 15-minute delay; open interest updates daily)"
+              source={`${chain.source ?? "CBOE options chain"} (delayed; open interest updates daily)`}
               sourceAt={chain.sourceAt}
               fetchedAt={chain.fetchedAt}
               delayed

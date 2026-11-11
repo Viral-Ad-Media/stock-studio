@@ -88,7 +88,7 @@ export default async function GammaPage({ searchParams }: { searchParams: Promis
           </li>
           <li>The zero-gamma level is where the modeled total crosses zero when the price is shifted ±15%.</li>
           <li>
-            Open interest updates once a day, and the chain is 15-minute delayed (CBOE). Contracts within ±25% of the
+            Open interest updates once a day, and the chain is 15-minute delayed (CBOE, or Massive/Finnhub when CBOE is unavailable). Contracts within ±25% of the
             price and a year of expiry are included.
           </li>
         </ul>
@@ -128,7 +128,7 @@ async function GexSection({ symbol }: { symbol: string }) {
         {snap.contracts.toLocaleString("en-US")} contracts across {snap.expirations} expirations · calls{" "}
         {formatGexDollars(snap.callGex)}, puts {formatGexDollars(-snap.putGex)}
       </p>
-      <DataStamp source="CBOE options chain (about 15-minute delay; open interest updates daily)" sourceAt={snap.sourceAt} fetchedAt={snap.fetchedAt} delayed />
+      <DataStamp source={`${snap.source ?? "CBOE options chain"} (delayed; open interest updates daily)`} sourceAt={snap.sourceAt} fetchedAt={snap.fetchedAt} delayed />
     </div>
   );
 }

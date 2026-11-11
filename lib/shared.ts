@@ -129,6 +129,17 @@ export async function apiError(res: Response, fallback: string): Promise<string>
   return (body && typeof body.error === "string" && body.error) || fallback;
 }
 
+// Who served a quote or bar series (lib/providers). Labels are for display.
+export type MarketSource = "yahoo" | "massive" | "finnhub" | "twelvedata" | "tiingo" | "alpaca";
+export const MARKET_SOURCE_LABELS: Record<MarketSource, string> = {
+  yahoo: "Yahoo Finance",
+  massive: "Massive",
+  finnhub: "Finnhub",
+  twelvedata: "Twelve Data",
+  tiingo: "Tiingo",
+  alpaca: "Alpaca (IEX)",
+};
+
 // Live market data stored beside a finished study or watchlist row
 // (lib/live-data.ts writes it). Kept apart from the fact-checked study text.
 export type LiveSnapshot = {
@@ -140,7 +151,7 @@ export type LiveSnapshot = {
   // Session date of the latest bar, and the vendor's own price time when given.
   priceDate: string;
   marketTime: string | null;
-  source: "yahoo" | "alpaca";
+  source: MarketSource;
   // Move since the study's (or thesis's) as-of date, on adjusted closes.
   since: { from: string; startClose: number; changePct: number; spyChangePct: number | null } | null;
 };

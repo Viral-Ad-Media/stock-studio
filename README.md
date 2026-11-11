@@ -67,7 +67,7 @@ On a phone the sidebar collapses into a menu and every page reflows to one colum
 - **Auth**: Supabase Auth (email/password and Google). Each signup gets its own workspace.
 - **Billing**: Stripe subscriptions and one-time credit packs.
 - **Research engine**: an automated Anthropic API worker, with a manual CLI fallback.
-- **Market data**: unauthenticated Yahoo Finance endpoints (no API key), with an optional Alpaca fallback when Yahoo rate-limits the host; CBOE delayed option chains for LEAPS and gamma.
+- **Market data**: unauthenticated Yahoo Finance endpoints (no API key) first, with optional keyed fallbacks (Massive, Tiingo, Twelve Data, Finnhub, Alpaca) when Yahoo rate-limits the host; CBOE delayed option chains for LEAPS and gamma, with Massive or Finnhub standing in when CBOE fails.
 
 ---
 
@@ -458,6 +458,11 @@ All variables are listed in [`.env.example`](.env.example).
 | `ENGINE_WEBHOOK_SECRET` | automated worker | Must equal the Vault secret `engine_webhook_secret`. |
 | `ENGINE_WEB_RESEARCH` | automated worker | `1` also automates web-research variants. Off by default ([why](#automated-worker)). |
 | `ENGINE_INVOCATION_BUDGET_MS` / `ENGINE_MIN_CLAIM_MS` / `ENGINE_MAX_CALL_MS` | automated worker | Optional tuning: total budget per invocation, the minimum time left to start another job, and the cap on one model call. Defaults 280000 / 150000 / 170000 fit a 300 s serverless limit. On Render (no function limit) deep-research jobs need more, e.g. 720000 / 150000 / 600000. A running job's lock goes stale after the budget plus 2 minutes. |
+| `MASSIVE_API_KEY` | market data | Optional. Massive (formerly Polygon.io) key. Fallback for bars, quotes and movers when Yahoo answers 429/5xx or is unreachable, and for options chains when CBOE fails (options need a Massive plan that includes them). `POLYGON_API_KEY` is accepted too. |
+| `TIINGO_API_KEY` | market data | Optional. Tiingo fallback for daily bars (with split+dividend adjusted closes) and IEX intraday bars. |
+| `TWELVE_DATA_API_KEY` | market data | Optional. Twelve Data fallback for bars. The free plan allows 8 requests a minute. |
+| `FINNHUB_API_KEY` | market data | Optional. Finnhub fallback for candles and options chains. Historical candles need a paid Finnhub plan; on a free key they return 403 and the next provider is tried. |
+| `MARKET_DATA_PROVIDERS` | market data | Optional fallback order, comma-separated (default `massive,tiingo,twelvedata,finnhub,alpaca`). Only providers with keys set are used; one that rate-limits is skipped for 10 minutes. |
 | `ALPACA_KEY_ID` / `ALPACA_SECRET_KEY` | market data | Optional. Keys from a free Alpaca account (paper keys work). When Yahoo answers 429/5xx, charts, daily bars and movers come from Alpaca's IEX feed instead, and Yahoo is skipped for 10 minutes. Recommended on Render, whose shared IPs Yahoo rate-limits. IEX volumes are partial, and indices (`^GSPC`) aren't covered. |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | billing | |
 | `BILLING_DATABASE_URL` | billing (webhook only) | Pooler URL for the `stocks_billing` role, the only role allowed to grant access or credits. Set its password first in the Supabase SQL editor: `ALTER ROLE stocks_billing WITH PASSWORD '…';`. |
@@ -777,7 +782,8 @@ lib/
   billing.ts stripe.ts  billing state, charge/refund helpers, Stripe client
   shared.ts             client-safe types, VARIANTS, CREDIT_COSTS
   live-data.ts          live quote snapshots for studies and watchlist rows
-  marketdata.ts alpaca.ts  Yahoo Finance data with the Alpaca fallback
+  marketdata.ts alpaca.ts  Yahoo Finance data with the keyed fallbacks
+  providers/               Massive, Tiingo, Twelve Data, Finnhub clients and the fallback chain
   journal*.ts leaps*.ts trading journal and LEAPS model, chain and discovery
   setups*.ts gex.ts     setup bots and the gamma exposure model
   signal*.ts            signal parser, relay, feed and delivery

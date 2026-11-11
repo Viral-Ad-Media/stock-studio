@@ -75,7 +75,7 @@ export default async function MarketPage() {
       </section>
 
       <p className="mt-8 text-xs text-fg-subtle">
-        Data: Yahoo Finance daily closes and screeners, refreshed about every 30 minutes. Educational market context —
+        Data: Yahoo Finance daily closes and screeners (Massive, Tiingo, Twelve Data, Finnhub or Alpaca stand in when Yahoo is rate-limited), refreshed about every 30 minutes. Educational market context —
         not investment advice.
       </p>
     </div>
