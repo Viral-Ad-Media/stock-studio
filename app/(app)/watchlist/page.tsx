@@ -53,6 +53,11 @@ export default async function WatchlistPage() {
         </Suspense>
       )}
       <WatchlistClient rows={rows} history={historyByRow} />
+      <p className="mt-6 max-w-[72ch] text-xs text-fg-subtle">
+        Educational research tracking only: a watchlist thesis and its status badge (Intact, Weakening, or Broken)
+        represent an AI-assisted research hypothesis from public disclosures — never personalized investment advice or
+        an instruction to buy, sell, or hold. Verify material developments against primary filings.
+      </p>
     </div>
   );
 }

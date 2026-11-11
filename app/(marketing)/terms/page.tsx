@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/terms" },
 };
 
-const UPDATED = "October 27, 2026";
+const UPDATED = "November 11, 2026";
 
 export default function TermsPage() {
   return (
@@ -67,8 +67,16 @@ export default function TermsPage() {
         change pricing prospectively with notice.
       </p>
 
-      <h2>5. Acceptable use</h2>
-      <p>You agree not to:</p>
+      <h2>5. Acceptable use &amp; customer notes</h2>
+      <p>
+        Optional notes you submit when queueing a study are sent to our third-party AI research
+        provider solely to verify or contextualize your request. Although we apply automated
+        redaction for common identifiers (such as email addresses, phone numbers, Social Security
+        numbers, and payment card numbers), you agree not to include personal identifying
+        information (PII), non-public material inside information, or confidential third-party data
+        in study notes.
+      </p>
+      <p>You also agree not to:</p>
       <ul>
         <li>Use the Service to build a competing automated research product without permission</li>
         <li>Attempt to circumvent usage limits, credits, or access controls</li>

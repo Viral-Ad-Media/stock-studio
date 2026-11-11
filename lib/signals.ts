@@ -37,6 +37,69 @@ function num(re: RegExp, text: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+// Pre-record numeric sanity rule (SR 11-7 R5 / SS-09): catches inverted
+// stops/targets, missing @entry when tp/sl are supplied, and missing-decimal
+// magnitude typos before record_signal writes to the immutable hash chain.
+export function validateSignalLevels(sig: ParsedSignal): string | null {
+  const { action, instrument, entry, target, stop } = sig;
+  if (target == null && stop == null) return null;
+
+  if (action === "EXIT" || action === "CLOSE") {
+    return "EXIT/CLOSE signals record an exit fill (`@price`), not new `tp`/`sl` levels.";
+  }
+  if (entry == null) {
+    return "Include `@entry` whenever `tp` or `sl` is specified so levels can be sanity-checked.";
+  }
+
+  // Plausible magnitude bands relative to entry (catches e.g. `@12.40 sl 110`).
+  const isOption = instrument === "CALL" || instrument === "PUT";
+  const minTargetRatio = isOption ? 0.1 : 0.2;
+  const maxTargetRatio = isOption ? 15 : 3.0;
+  const minStopRatio = isOption ? 0.05 : 0.2;
+  const maxStopRatio = isOption ? 3.0 : 2.0;
+
+  if (target != null && (target < entry * minTargetRatio || target > entry * maxTargetRatio)) {
+    return `Target (${target}) is outside plausible range relative to entry (${entry}) — check for a typo.`;
+  }
+  if (stop != null && (stop < entry * minStopRatio || stop > entry * maxStopRatio)) {
+    return `Stop (${stop}) is outside plausible range relative to entry (${entry}) — check for a typo.`;
+  }
+
+  // Directional ordering checks.
+  if (action === "BUY" && instrument !== "PUT") {
+    if (target != null && !(target > entry)) {
+      return `For BUY ${instrument ?? "stock"}, target (${target}) must be above entry (${entry}).`;
+    }
+    if (stop != null && !(stop < entry)) {
+      return `For BUY ${instrument ?? "stock"}, stop (${stop}) must be below entry (${entry}).`;
+    }
+  } else if (action === "SELL" && instrument === null) {
+    if (target != null && !(target < entry)) {
+      return `For SELL stock, target (${target}) must be below entry (${entry}).`;
+    }
+    if (stop != null && !(stop > entry)) {
+      return `For SELL stock, stop (${stop}) must be above entry (${entry}).`;
+    }
+  } else {
+    // PUTs, SELL CALL/PUT, or ALERT with levels: entry must still sit strictly
+    // between stop and target when both are given, and neither may equal entry.
+    if (target != null && target === entry) {
+      return `Target (${target}) cannot equal entry (${entry}).`;
+    }
+    if (stop != null && stop === entry) {
+      return `Stop (${stop}) cannot equal entry (${entry}).`;
+    }
+    if (target != null && stop != null) {
+      const entryBetween = (stop < entry && entry < target) || (target < entry && entry < stop);
+      if (!entryBetween) {
+        return `Entry (${entry}) must sit strictly between stop (${stop}) and target (${target}) — check for a typo.`;
+      }
+    }
+  }
+
+  return null;
+}
+
 // One input line → a signal, or an error to show the poster.
 export function parseSignal(text: string | null | undefined): ParsedSignal | { error: string } {
   const m = (text ?? "").match(LINE_RE);
@@ -46,7 +109,7 @@ export function parseSignal(text: string | null | undefined): ParsedSignal | { e
   const detail = m[3].trim();
   if (detail.length > MAX_DETAIL) return { error: `Keep the details under ${MAX_DETAIL} characters.` };
   const inst = detail.match(INSTRUMENT_RE)?.[1].toUpperCase();
-  return {
+  const parsed: ParsedSignal = {
     action: m[1].toUpperCase() as SignalAction,
     ticker,
     instrument: inst ? (inst.startsWith("CALL") ? "CALL" : "PUT") : null,
@@ -55,6 +118,9 @@ export function parseSignal(text: string | null | undefined): ParsedSignal | { e
     stop: num(STOP_RE, detail),
     detail,
   };
+  const levelError = validateSignalLevels(parsed);
+  if (levelError) return { error: levelError };
+  return parsed;
 }
 
 export function isParseError(p: ParsedSignal | { error: string }): p is { error: string } {

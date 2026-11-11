@@ -3,6 +3,8 @@ import { CheckCircle2, XCircle } from "lucide-react";
 import { sql, formatDate, adminWritesConfigured } from "@/lib/db";
 import { requireSuperAdminPage } from "@/lib/admin";
 import { SITE } from "@/lib/site";
+import { formatCost } from "@/lib/engine/usage";
+import { loadModelMonitoring } from "@/lib/model-monitoring";
 
 export const metadata = { title: "System" };
 
@@ -43,10 +45,15 @@ export default async function AdminSystem() {
            count(*) FILTER (WHERE status = 'running' AND locked_at IS NOT NULL)::int AS worker_running
     FROM jobs
   `;
-  const scans =
-    await sql`SELECT session_date, status, universe_size, error, finished_at FROM setup_scans ORDER BY session_date DESC LIMIT 5`;
+  const scans = await sql`
+    SELECT session_date, status, universe_size, data_source, cost_usd, error, finished_at
+    FROM setup_scans ORDER BY session_date DESC LIMIT 5
+  `.catch(
+    () => sql`SELECT session_date, status, universe_size, error, finished_at FROM setup_scans ORDER BY session_date DESC LIMIT 5`
+  );
   const [matches] =
     await sql`SELECT count(*)::int AS open FROM setup_matches WHERE resolved_at IS NULL`;
+  const monitoring = await loadModelMonitoring().catch(() => null);
   // Null until the ops_alerts migration is applied.
   const alerts = await sql`
     SELECT key, severity, summary, opened_at, resolved_at FROM ops_alerts
@@ -226,6 +233,8 @@ export default async function AdminSystem() {
                 <span className="text-slate-200">
                   {s.session_date} · {s.status}
                   {s.universe_size ? ` · ${s.universe_size} stocks` : ""}
+                  {s.data_source ? ` · ${s.data_source}` : ""}
+                  {s.cost_usd != null ? ` · ${formatCost(s.cost_usd)}` : ""}
                 </span>
                 <span className="text-xs text-fg-subtle">
                   {s.error ??
@@ -241,6 +250,136 @@ export default async function AdminSystem() {
           {matches.open} matches still being tracked.
         </p>
       </section>
+
+      {monitoring && (
+        <section aria-labelledby="mrm-heading" className="card p-4 space-y-4">
+          <div>
+            <h2 id="mrm-heading" className="text-sm font-semibold text-slate-100">
+              Model risk &amp; calibration (SR 11-7)
+            </h2>
+            <p className="mt-0.5 text-xs text-fg-subtle">
+              Active model <span className="font-mono text-slate-200">{monitoring.governance.model}</span> · methodology{" "}
+              <span className="font-mono text-slate-200">v{monitoring.governance.promptVersion}</span> (
+              <span className="font-mono">{monitoring.governance.promptHash}</span>) · pricing verified{" "}
+              <span className="font-mono text-slate-200">{monitoring.governance.priceVerifiedOn}</span> (
+              {monitoring.governance.priceAgeDays}d old) · web research{" "}
+              <span className="text-slate-200">
+                {monitoring.governance.webResearchEnabled ? "enabled" : "gated (manual path)"}
+              </span>
+            </p>
+          </div>
+
+          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+            <div>
+              <dt className="text-xs text-fg-subtle">Daily spend vs cap (UTC)</dt>
+              <dd className="tabular-nums text-slate-200">
+                {formatCost(monitoring.governance.todaySpendUsd)} /{" "}
+                {monitoring.governance.dailySpendCapUsd > 0
+                  ? `$${monitoring.governance.dailySpendCapUsd.toFixed(2)}`
+                  : "off"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-fg-subtle">Extraction fallback (30d)</dt>
+              <dd className="tabular-nums text-slate-200">
+                {monitoring.process30d.extractionFallbackPct != null
+                  ? `${monitoring.process30d.extractionFallbackPct}% (${monitoring.process30d.extractionFallbacks}/${monitoring.process30d.doneStudyJobs})`
+                  : "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-fg-subtle">Post-check rejections (30d)</dt>
+              <dd className="tabular-nums text-slate-200">{monitoring.process30d.postcheckFailures}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-fg-subtle">Alpaca fallback scans (30d)</dt>
+              <dd className="tabular-nums text-slate-200">
+                {monitoring.process30d.alpacaScanPct != null
+                  ? `${monitoring.process30d.alpacaScanPct}% (${monitoring.process30d.alpacaOrMixedScans}/${monitoring.process30d.scansDone})`
+                  : "—"}
+              </dd>
+            </div>
+          </dl>
+
+          {monitoring.grades90d.driftWarning && (
+            <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              {monitoring.grades90d.driftWarning}
+            </p>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle mb-2">
+                Grade distribution &amp; excess return vs SPY (90d)
+              </h3>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-ink-700 text-left text-fg-subtle">
+                    <th className="py-1 font-medium">Band</th>
+                    <th className="py-1 font-medium">Studies</th>
+                    <th className="py-1 font-medium">Mean</th>
+                    <th className="py-1 font-medium">Excess vs SPY</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monitoring.grades90d.buckets.map((b) => (
+                    <tr key={b.bucket} className="border-b border-ink-800 last:border-0">
+                      <td className="py-1 font-mono text-slate-200">{b.bucket}</td>
+                      <td className="py-1 tabular-nums text-slate-300">{b.studies}</td>
+                      <td className="py-1 tabular-nums text-slate-300">{b.meanScore ?? "—"}</td>
+                      <td className="py-1 tabular-nums text-slate-300">
+                        {b.avgExcessVsSpyPct != null
+                          ? `${b.avgExcessVsSpyPct >= 0 ? "+" : ""}${b.avgExcessVsSpyPct}% (${b.tracked})`
+                          : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle mb-2">
+                Watchlist thesis status vs forward excess return
+              </h3>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-ink-700 text-left text-fg-subtle">
+                    <th className="py-1 font-medium">Status</th>
+                    <th className="py-1 font-medium">Rows</th>
+                    <th className="py-1 font-medium">Tracked</th>
+                    <th className="py-1 font-medium">Excess vs SPY</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monitoring.thesisStatus.map((t) => (
+                    <tr key={t.status} className="border-b border-ink-800 last:border-0">
+                      <td className="py-1 capitalize text-slate-200">{t.status}</td>
+                      <td className="py-1 tabular-nums text-slate-300">{t.rows}</td>
+                      <td className="py-1 tabular-nums text-slate-300">{t.tracked}</td>
+                      <td className="py-1 tabular-nums text-slate-300">
+                        {t.avgExcessVsSpyPct != null
+                          ? `${t.avgExcessVsSpyPct >= 0 ? "+" : ""}${t.avgExcessVsSpyPct}%`
+                          : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {monitoring.setupPlans && (
+            <p className="text-xs text-fg-subtle border-t border-ink-800 pt-3">
+              Setup-study plans (<span className="font-mono">one_candle</span> /{" "}
+              <span className="font-mono">davinci_model</span>): {monitoring.setupPlans.total} logged ·{" "}
+              {monitoring.setupPlans.open} open · {monitoring.setupPlans.target} hit target ·{" "}
+              {monitoring.setupPlans.stop} hit stop · {monitoring.setupPlans.expired} expired ·{" "}
+              {monitoring.setupPlans.ambiguous} same-bar ambiguous.
+            </p>
+          )}
+        </section>
+      )}
     </div>
   );
 }

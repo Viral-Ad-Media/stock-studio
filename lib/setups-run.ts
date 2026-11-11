@@ -15,7 +15,10 @@ import {
   isDescriptiveNote,
   type SetupMatch,
 } from "./setups";
-import { extractStructured } from "./engine/anthropic";
+import { ENGINE_MODEL, extractStructured } from "./engine/anthropic";
+import { UsageMeter } from "./engine/usage";
+import { resolveSetupStudyPlan } from "./engine/postcheck";
+import { methodologyPromptHash, methodologyVersion } from "./engine/prompts";
 
 // Minutes after 4pm ET before a session counts as complete (Yahoo's daily bar
 // settles a little after the close).
@@ -41,9 +44,37 @@ export function lastCompletedSession(spyDates: string[], now = new Date()): stri
   return null;
 }
 
-type RunResult = { ran: boolean; session?: string; matches?: number; resolved?: number; reason?: string };
+type RunResult = {
+  ran: boolean;
+  session?: string;
+  matches?: number;
+  resolved?: number;
+  resolvedPlans?: number;
+  dataSource?: "yahoo" | "alpaca" | "mixed";
+  reason?: string;
+};
 
-export async function maybeRunSetupScan({ deadline, force = false }: { deadline: number; force?: boolean }): Promise<RunResult> {
+export function summarizeScanDataSource(bars: DailyBars[]): "yahoo" | "alpaca" | "mixed" {
+  let yahoo = 0;
+  let alpaca = 0;
+  for (const b of bars) {
+    if (b.source === "alpaca") alpaca++;
+    else yahoo++;
+  }
+  if (alpaca > 0 && yahoo > 0) return "mixed";
+  if (alpaca > 0) return "alpaca";
+  return "yahoo";
+}
+
+export async function maybeRunSetupScan({
+  deadline,
+  force = false,
+  skipDeskNotes = false,
+}: {
+  deadline: number;
+  force?: boolean;
+  skipDeskNotes?: boolean;
+}): Promise<RunResult> {
   // Cheap exit: the latest done scan is from today (after the close) or the
   // previous weekday — nothing new can exist yet. Skips the Yahoo fetch on
   // nearly every per-minute invocation.
@@ -79,6 +110,7 @@ export async function maybeRunSetupScan({ deadline, force = false }: { deadline:
     if (bars.length < SETUP_UNIVERSE.length * 0.8) {
       throw new Error(`Only ${bars.length}/${SETUP_UNIVERSE.length} tickers loaded — market data unavailable`);
     }
+    const dataSource = summarizeScanDataSource(bars);
     const byTicker = new Map(bars.map((b) => [b.symbol, b]));
     let earnings: Awaited<ReturnType<typeof earningsForTickers>> | null = null;
     try {
@@ -97,7 +129,21 @@ export async function maybeRunSetupScan({ deadline, force = false }: { deadline:
     const spyAdj = spy.dates.at(-1) === session ? spy.adjCloses.at(-1)! : null;
 
     const resolved = await resolveOpenMatches(byTicker, spy, dataDeadline);
-    const notes = deadline - Date.now() > 45_000 ? await deskNotes(session, matches, deadline) : null;
+    const resolvedPlans = await resolveOpenStudyPlans(byTicker, session, dataDeadline);
+    const meter = new UsageMeter(ENGINE_MODEL);
+    const notes =
+      !skipDeskNotes && deadline - Date.now() > 45_000
+        ? await deskNotes(session, matches, deadline, meter)
+        : null;
+    const usageJson =
+      meter.totals.calls > 0
+        ? {
+            ...meter.totals,
+            prompt_version: methodologyVersion(),
+            prompt_hash: methodologyPromptHash(),
+          }
+        : null;
+    const costUsd = meter.totals.calls > 0 ? meter.costUsd() : null;
 
     await sql.begin(async (tx) => {
       await tx`DELETE FROM setup_matches WHERE session_date = ${session}`;
@@ -114,11 +160,15 @@ export async function maybeRunSetupScan({ deadline, force = false }: { deadline:
       }
       await tx`
         UPDATE setup_scans SET status = 'done', universe_size = ${bars.length},
-          notes_json = ${notes ? sql.json(notes) : null}, finished_at = now()
+          data_source = ${dataSource},
+          notes_json = ${notes ? sql.json(notes) : null},
+          usage_json = COALESCE(${usageJson ? sql.json(usageJson) : null}, usage_json),
+          cost_usd = CASE WHEN ${costUsd}::numeric IS NULL THEN cost_usd ELSE coalesce(cost_usd, 0) + ${costUsd}::numeric END,
+          finished_at = now()
         WHERE id = ${claim.id}
       `;
     });
-    return { ran: true, session, matches: matches.length, resolved };
+    return { ran: true, session, matches: matches.length, resolved, resolvedPlans, dataSource };
   } catch (err) {
     const msg = (err instanceof Error ? err.message : String(err)).slice(0, 1000);
     await sql`UPDATE setup_scans SET status = 'error', error = ${msg}, finished_at = now() WHERE id = ${claim.id}`;
@@ -189,9 +239,64 @@ const NOTES_TOOL = {
   },
 };
 
+// Resolves open setup-study plans (one_candle / davinci_model, SR 11-7 R2)
+// against subsequent daily bars, fetching up to 15 non-universe tickers if needed.
+async function resolveOpenStudyPlans(
+  byTicker: Map<string, DailyBars>,
+  session: string,
+  deadline: number
+): Promise<number> {
+  const open = await sql`
+    SELECT id, ticker, session_date, direction, entry_price, stop_price, target_price, horizon_sessions
+    FROM setup_study_plans
+    WHERE resolved_at IS NULL AND session_date < ${session}
+    ORDER BY id LIMIT 500
+  `.catch(() => []);
+  if (open.length === 0) return 0;
+
+  const extraTickers = [...new Set(open.map((p) => String(p.ticker)))].filter((t) => !byTicker.has(t)).slice(0, 15);
+  if (extraTickers.length > 0 && deadline - Date.now() > 15_000) {
+    const extraBars = await mapLimit(extraTickers, 4, (t) => fetchDailyBars(t, "6mo", 900, deadline), deadline);
+    for (const b of extraBars) {
+      if (b) byTicker.set(b.symbol, barsThrough(b, session));
+    }
+  }
+
+  let n = 0;
+  for (const p of open) {
+    assertTimeLeft(deadline);
+    const bars = byTicker.get(p.ticker);
+    if (!bars) continue;
+    const out = resolveSetupStudyPlan(
+      {
+        sessionDate: p.session_date,
+        direction: p.direction,
+        entryPrice: Number(p.entry_price),
+        stopPrice: Number(p.stop_price),
+        targetPrice: Number(p.target_price),
+        horizonSessions: Number(p.horizon_sessions),
+      },
+      bars
+    );
+    if (!out) continue;
+    await sql`
+      UPDATE setup_study_plans
+      SET resolved_at = now(), exit_date = ${out.exitDate}, outcome = ${out.outcome}
+      WHERE id = ${p.id} AND resolved_at IS NULL
+    `;
+    n++;
+  }
+  return n;
+}
+
 // One small model call per session. Any failure (no key, timeout) or any note
 // that reads as a directive just means no note — the scan itself stands.
-async function deskNotes(session: string, matches: SetupMatch[], deadline: number): Promise<Record<string, string> | null> {
+async function deskNotes(
+  session: string,
+  matches: SetupMatch[],
+  deadline: number,
+  meter: UsageMeter
+): Promise<Record<string, string> | null> {
   if (!process.env.ANTHROPIC_API_KEY || matches.length === 0) return null;
   const data = BOTS.map((b) => ({
     bot: b.key,
@@ -205,6 +310,7 @@ async function deskNotes(session: string, matches: SetupMatch[], deadline: numbe
       toolName: NOTES_TOOL.toolName,
       schema: NOTES_TOOL.schema,
       deadline,
+      meter,
     });
     const notes: Record<string, string> = {};
     for (const n of Array.isArray(out.notes) ? out.notes : []) {

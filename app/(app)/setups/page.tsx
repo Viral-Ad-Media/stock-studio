@@ -1,7 +1,14 @@
 import { Radar, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { sql, formatDate } from "@/lib/db";
 import EmptyState from "@/components/guide/EmptyState";
-import { BOTS, botRecord, type Direction, type Level } from "@/lib/setups";
+import {
+  BOTS,
+  VOLUME_DEPENDENT_BOTS,
+  botRecord,
+  isBotUnderperforming,
+  type Direction,
+  type Level,
+} from "@/lib/setups";
 import Link from "next/link";
 import PageHeader from "@/components/ui/PageHeader";
 import { currentMembership } from "@/lib/membership";
@@ -22,7 +29,7 @@ export default async function SetupsPage() {
   // Silver sees each bot's track record; today's matches and desk notes are Gold and Diamond.
   const live = (await currentMembership())?.ent.setupsLive ?? true;
   const [scan] = await sql`
-    SELECT id, session_date, universe_size, notes_json FROM setup_scans
+    SELECT id, session_date, universe_size, data_source, notes_json FROM setup_scans
     WHERE status = 'done' ORDER BY session_date DESC LIMIT 1
   `;
   const matches = scan && live
@@ -33,7 +40,7 @@ export default async function SetupsPage() {
     : [];
   const history = (await sql`
     SELECT bot, direction, fwd_return::float8 AS fwd_return, spy_return::float8 AS spy_return, invalidated
-    FROM setup_matches WHERE resolved_at IS NOT NULL
+    FROM setup_matches WHERE resolved_at IS NOT NULL ORDER BY resolved_at DESC, id DESC
   `) as unknown as RecordRow[];
   const notes: Record<string, string> = (live && scan?.notes_json) || {};
 
@@ -44,10 +51,18 @@ export default async function SetupsPage() {
         description="Five rule-based scanners check about 100 large caps after every close for well-known chart patterns. A match means a stock's last session fits a pattern's published definition. It is not a prediction or a suggestion to trade. Every match is tracked afterwards, so you can see how each pattern has really behaved."
       />
       {scan ? (
-        <p className="mb-6 text-sm font-medium text-slate-300">
-          As of the {day(scan.session_date)} close · {scan.universe_size} stocks scanned
-          {live ? <> · {matches.length} {matches.length === 1 ? "match" : "matches"}</> : null}
-        </p>
+        <div className="mb-6 space-y-2">
+          <p className="text-sm font-medium text-slate-300">
+            As of the {day(scan.session_date)} close · {scan.universe_size} stocks scanned
+            {scan.data_source ? ` · feed: ${scan.data_source === "yahoo" ? "Yahoo consolidated" : scan.data_source === "alpaca" ? "Alpaca IEX fallback" : "Yahoo + Alpaca mixed"}` : ""}
+            {live ? <> · {matches.length} {matches.length === 1 ? "match" : "matches"}</> : null}
+          </p>
+          {(scan.data_source === "alpaca" || scan.data_source === "mixed") && (
+            <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              Data-source note: {scan.data_source === "alpaca" ? "this scan used" : "part of this scan used"} Alpaca&apos;s IEX feed (single-exchange volume). Volume-ratio scanners (52-week breakout and Unusual volume) automatically skip IEX-sourced tickers to avoid partial-volume false matches.
+            </p>
+          )}
+        </div>
       ) : (
         <div className="mb-6">
           <EmptyState
@@ -72,13 +87,29 @@ export default async function SetupsPage() {
       <div className="space-y-4">
         {BOTS.map((bot) => {
           const rows = matches.filter((m) => m.bot === bot.key);
-          const rec = botRecord(history.filter((h) => h.bot === bot.key));
+          const botHist = history.filter((h) => h.bot === bot.key);
+          const rec = botRecord(botHist);
+          const trailing60 = botRecord(botHist.slice(0, 60));
+          const underperforming = isBotUnderperforming(trailing60);
+          const skippedForIex = scan?.data_source === "alpaca" && VOLUME_DEPENDENT_BOTS.has(bot.key);
           return (
             <section key={bot.key} aria-labelledby={`bot-${bot.key}`} className="card p-4">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 id={`bot-${bot.key}`} className="text-base font-semibold text-slate-100">
-                  {bot.name}
-                </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 id={`bot-${bot.key}`} className="text-base font-semibold text-slate-100">
+                    {bot.name}
+                  </h2>
+                  {underperforming && (
+                    <span className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300">
+                      Trailing 60 follow-through &lt; 50% ({trailing60.followedThrough}%)
+                    </span>
+                  )}
+                  {skippedForIex && (
+                    <span className="rounded border border-slate-600 bg-ink-800 px-2 py-0.5 text-[11px] text-fg-subtle">
+                      Skipped on IEX volume fallback
+                    </span>
+                  )}
+                </div>
                 {live && (
                   <span className="text-xs text-fg-subtle">
                     {rows.length} {rows.length === 1 ? "match" : "matches"}

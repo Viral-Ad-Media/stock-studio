@@ -137,12 +137,31 @@ function base(b: DailyBars) {
   return { i, close: b.closes[i], adjClose: b.adjCloses[i] };
 }
 
+// Expresses historical closes on bar `refIdx`'s split/dividend basis so stock
+// splits inside a 50/200/252-day lookback don't manufacture false breakouts or
+// distort moving averages, while keeping today's level values in raw-share dollars.
+export function splitNormalizedCloses(b: DailyBars, refIdx = b.closes.length - 1): number[] {
+  if (refIdx < 0 || refIdx >= b.closes.length) return b.closes.slice();
+  const refClose = b.closes[refIdx];
+  const refAdj = b.adjCloses[refIdx];
+  const scale = refClose > 0 && refAdj > 0 ? refClose / refAdj : 1;
+  return b.closes.map((c, k) => {
+    const a = b.adjCloses[k];
+    return a > 0 && Number.isFinite(a) ? a * scale : c;
+  });
+}
+
+// Bots that rely on consolidated market volume and must be skipped when data
+// comes from Alpaca's IEX-only fallback (~2-3% of consolidated volume; R6).
+export const VOLUME_DEPENDENT_BOTS = new Set<BotKey>(["breakout_52w", "volume_surge"]);
+
 // ---- bots ------------------------------------------------------------------
 
 export function detectBreakout(b: DailyBars): SetupMatch | null {
   const { i, close, adjClose } = base(b);
   if (i < 252) return null;
-  const prior = b.closes.slice(i - 251, i);
+  const normCloses = splitNormalizedCloses(b, i);
+  const prior = normCloses.slice(i - 251, i);
   const priorHigh = Math.max(...prior);
   const avgVol = avgPriorVolume(b);
   if (!(close > priorHigh) || !avgVol || b.volumes[i] < 1.5 * avgVol) return null;
@@ -161,9 +180,10 @@ export function detectBreakout(b: DailyBars): SetupMatch | null {
 
 export function detectRsi2Pullback(b: DailyBars): SetupMatch | null {
   const { close, adjClose } = base(b);
-  const sma200 = smaAt(b.closes, 200);
-  const sma5 = smaAt(b.closes, 5);
-  const r = rsi(b.closes, 2);
+  const normCloses = splitNormalizedCloses(b);
+  const sma200 = smaAt(normCloses, 200);
+  const sma5 = smaAt(normCloses, 5);
+  const r = rsi(normCloses, 2);
   if (sma200 == null || sma5 == null || r == null) return null;
   if (!(close > sma200 && r < 10)) return null;
   return {
@@ -183,18 +203,19 @@ export function detectRsi2Pullback(b: DailyBars): SetupMatch | null {
 
 export function detectTrendPullback(b: DailyBars): SetupMatch | null {
   const { i, close, adjClose } = base(b);
-  const sma50 = smaAt(b.closes, 50);
-  const sma200 = smaAt(b.closes, 200);
-  const sma200Prev = smaAt(b.closes, 200, i - 20);
-  const sma50Prev = smaAt(b.closes, 50, i - 10);
+  const normCloses = splitNormalizedCloses(b, i);
+  const sma50 = smaAt(normCloses, 50);
+  const sma200 = smaAt(normCloses, 200);
+  const sma200Prev = smaAt(normCloses, 200, i - 20);
+  const sma50Prev = smaAt(normCloses, 50, i - 10);
   if (sma50 == null || sma200 == null || sma200Prev == null || sma50Prev == null) return null;
   const uptrend = sma50 > sma200 && sma200 > sma200Prev && sma50 > sma50Prev && close > sma200;
   const touched = b.lows[i] <= sma50 * 1.01 && close >= sma50;
   // A real pullback: at least 5% above the 50-day at some point in the last 20 sessions.
   let extended = false;
   for (let k = i - 20; k < i; k++) {
-    const m = smaAt(b.closes, 50, k);
-    if (m != null && b.closes[k] >= m * 1.05) extended = true;
+    const m = smaAt(normCloses, 50, k);
+    if (m != null && normCloses[k] >= m * 1.05) extended = true;
   }
   if (!uptrend || !touched || !extended) return null;
   return {
@@ -215,8 +236,9 @@ export function detectTrendPullback(b: DailyBars): SetupMatch | null {
 export function detectVolumeSurge(b: DailyBars): SetupMatch | null {
   const { i, close, adjClose } = base(b);
   if (i < 51) return null;
+  const normCloses = splitNormalizedCloses(b, i);
   const avgVol = avgPriorVolume(b);
-  const chg = close / b.closes[i - 1] - 1;
+  const chg = close / normCloses[i - 1] - 1;
   if (!avgVol || b.volumes[i] < 3 * avgVol || Math.abs(chg) < 0.04) return null;
   const direction: Direction = chg > 0 ? "up" : "down";
   return {
@@ -247,13 +269,16 @@ export function detectEarningsGap(b: DailyBars, earnings: TickerEarnings | undef
     r += 1;
   }
   if (r < 1 || r > i || i - r > 4) return null;
-  const preClose = b.closes[r - 1];
-  const gap = b.opens[r] / preClose - 1;
+  const normCloses = splitNormalizedCloses(b, i);
+  const rScale = b.closes[r] > 0 && b.adjCloses[r] > 0 ? normCloses[r] / b.closes[r] : 1;
+  const preClose = normCloses[r - 1];
+  const openR = b.opens[r] * rScale;
+  const gap = openR / preClose - 1;
   if (Math.abs(gap) < 0.05) return null;
   const direction: Direction = gap > 0 ? "up" : "down";
   // Unfilled: no close back through the pre-report close since.
   for (let k = r; k <= i; k++) {
-    if (direction === "up" ? b.closes[k] <= preClose : b.closes[k] >= preClose) return null;
+    if (direction === "up" ? normCloses[k] <= preClose : normCloses[k] >= preClose) return null;
   }
   return {
     bot: "earnings_gap",
@@ -263,7 +288,7 @@ export function detectEarningsGap(b: DailyBars, earnings: TickerEarnings | undef
     direction,
     levels: [
       { label: "Pre-report close (gap fill)", value: r2(preClose) },
-      { label: direction === "up" ? "Reaction-day low" : "Reaction-day high", value: r2(direction === "up" ? b.lows[r] : b.highs[r]) },
+      { label: direction === "up" ? "Reaction-day low" : "Reaction-day high", value: r2((direction === "up" ? b.lows[r] : b.highs[r]) * rScale) },
     ],
     invalidation: { value: r2(preClose), when: direction === "up" ? "close_below" : "close_above" },
     detail: `Gapped ${pct(gap)} at the open on ${b.dates[r]} after reporting earnings; now ${usd(close)} versus a pre-report close of ${usd(preClose)}.`,
@@ -271,11 +296,14 @@ export function detectEarningsGap(b: DailyBars, earnings: TickerEarnings | undef
 }
 
 export function scanTicker(b: DailyBars, earnings?: TickerEarnings): SetupMatch[] {
+  // Skip volume-ratio bots on Alpaca IEX fallback bars (IEX carries a small
+  // single-exchange share of consolidated volume; SR 11-7 R6).
+  const allowVolumeBots = b.source !== "alpaca";
   return [
-    detectBreakout(b),
+    allowVolumeBots ? detectBreakout(b) : null,
     detectRsi2Pullback(b),
     detectTrendPullback(b),
-    detectVolumeSurge(b),
+    allowVolumeBots ? detectVolumeSurge(b) : null,
     detectEarningsGap(b, earnings),
   ].filter((m): m is SetupMatch => m !== null);
 }
@@ -294,6 +322,8 @@ export function barsThrough(b: DailyBars, date: string): DailyBars {
     closes: b.closes.slice(0, n),
     adjCloses: b.adjCloses.slice(0, n),
     volumes: b.volumes.slice(0, n),
+    marketTime: b.marketTime,
+    source: b.source,
   };
 }
 
@@ -319,10 +349,12 @@ export function resolveOutcome(
   if (start === -1) return null;
   const end = start + m.horizon;
   if (end >= bars.dates.length) return null;
+  // Normalize forward closes to the signal session's split basis before checking invalidation.
+  const normCloses = splitNormalizedCloses(bars, start);
   let invalidated = false;
   if (m.invalidation) {
     for (let k = start + 1; k <= end; k++) {
-      const c = bars.closes[k];
+      const c = normCloses[k];
       if (m.invalidation.when === "close_below" ? c < m.invalidation.value : c > m.invalidation.value) invalidated = true;
     }
   }
@@ -337,6 +369,12 @@ export function resolveOutcome(
 }
 
 export type BotRecord = { resolved: number; followedThrough: number; avgExcess: number | null; invalidatedPct: number | null };
+
+export const UNDERPERFORMING_MIN_RESOLVED = 60;
+
+export function isBotUnderperforming(rec: BotRecord): boolean {
+  return rec.resolved >= UNDERPERFORMING_MIN_RESOLVED && rec.followedThrough < 50;
+}
 
 // "Followed through" = the move beat SPY in the pattern's direction over the
 // horizon. avgExcess is signed by direction (percentage points).
