@@ -11,6 +11,7 @@ import GradeBreakdown from "@/components/insights/GradeBreakdown";
 import LivePanel from "@/components/insights/LivePanel";
 import { isLiveTicker, parseSnapshot } from "@/lib/live-data";
 import { parseStoredGrade } from "@/lib/grades";
+import { extractInlineCitedUrls, isUrlCitedInline } from "@/lib/engine/postcheck";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,7 @@ export default async function StudyPage({
   if (!study) notFound();
 
   const sources = study.sources_json ?? [];
+  const inlineCitedUrls = extractInlineCitedUrls(study.content_md);
   const updates = (await sql`
     SELECT * FROM case_studies WHERE parent_id = ${study.id} AND workspace_id = ${ws} ORDER BY id DESC
   `) as unknown as CaseStudy[];
@@ -200,14 +202,21 @@ export default async function StudyPage({
 
       {sources.length > 0 && (
         <div className="card p-4 mt-4">
-          <div className="text-xs uppercase tracking-wide text-fg-subtle mb-2 font-medium">
-            Sources
+          <div className="text-xs uppercase tracking-wide text-fg-subtle mb-1 font-medium">
+            Pages searched &amp; referenced ({sources.length})
           </div>
-          <ul className="space-y-1 text-sm">
+          <p className="text-xs text-fg-subtle mb-3">
+            Web pages retrieved while building this report. Links marked{" "}
+            <span className="text-emerald-400 font-medium">Cited in text</span>{" "}
+            appear directly in the study body; verify material figures against
+            primary SEC/IR filings before acting.
+          </p>
+          <ul className="space-y-1.5 text-sm">
             {sources.map((s, i) => {
               const href = safeHttpUrl(s.url);
+              const citedInline = isUrlCitedInline(s.url, inlineCitedUrls);
               return (
-                <li key={i}>
+                <li key={i} className="flex flex-wrap items-center gap-2">
                   {href ? (
                     <a
                       href={href}
@@ -220,6 +229,11 @@ export default async function StudyPage({
                   ) : (
                     <span className="text-slate-400">
                       {s.title || String(s.url)}
+                    </span>
+                  )}
+                  {citedInline && (
+                    <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-medium text-emerald-300">
+                      Cited in text
                     </span>
                   )}
                 </li>

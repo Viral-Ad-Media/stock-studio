@@ -7,6 +7,8 @@ import { RefreshCcw, Trash2, Plus, Eye } from "lucide-react";
 import Tooltip from "@/components/guide/Tooltip";
 import EmptyState from "@/components/guide/EmptyState";
 import { apiError, creditCost, formatDate, parseSnapshot, type WatchlistRow } from "@/lib/shared";
+import { isInvalid, parseTicker } from "@/lib/validate";
+import { offlineMutate } from "@/lib/offline/store";
 import LiveQuote from "@/components/LiveQuote";
 import ThesisStatusBadge from "@/components/insights/ThesisStatusBadge";
 
@@ -84,21 +86,66 @@ export default function WatchlistClient({
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
-    const ok = await act(
-      "add",
-      () =>
-        fetch("/api/watchlist", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ticker }),
-        }),
-      "Couldn't add ticker",
-    );
-    if (ok) {
-      setNotice(
-        `${ticker.trim()} added. The research engine is writing its entry.`,
-      );
+    const parsed = parseTicker(ticker);
+    if (isInvalid(parsed)) {
+      setError(parsed.error);
+      return;
+    }
+    setBusy("add");
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await offlineMutate({
+        kind: "watchlist_add",
+        label: `Add ${parsed} to watchlist`,
+        endpoint: "/api/watchlist",
+        method: "POST",
+        body: { ticker: parsed },
+      });
+      if (result.mode === "queued") {
+        setNotice(`${parsed} saved offline — will be queued for the research engine when you're back online.`);
+        setTicker("");
+        return;
+      }
+      if (!result.response.ok) {
+        setError(await apiError(result.response, "Couldn't add ticker"));
+        return;
+      }
+      setNotice(`${parsed} added. The research engine is writing its entry.`);
       setTicker("");
+      router.refresh();
+    } catch {
+      setError("Couldn't add ticker");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function updateStatusTag(id: number, t: string, nextTag: string) {
+    setBusy(`tag-${id}`);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await offlineMutate({
+        kind: "watchlist_tag",
+        label: `Set ${t} watchlist status to ${nextTag.replace("_", " ")}`,
+        endpoint: "/api/watchlist",
+        method: "PATCH",
+        body: { id, status_tag: nextTag },
+      });
+      if (result.mode === "queued") {
+        setNotice(`Status change for ${t} saved offline — will sync when online.`);
+        return;
+      }
+      if (!result.response.ok) {
+        setError(await apiError(result.response, "Couldn't update the status"));
+        return;
+      }
+      router.refresh();
+    } catch {
+      setError("Couldn't update the status");
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -206,11 +253,7 @@ export default function WatchlistClient({
                       value={r.status_tag}
                       disabled={busy !== null}
                       onChange={(e) =>
-                        act(
-                          `tag-${r.id}`,
-                          () => patch({ id: r.id, status_tag: e.target.value }),
-                          "Couldn't update the status",
-                        )
+                        void updateStatusTag(r.id, r.ticker, e.target.value)
                       }
                       className={`h-9 rounded-lg border bg-ink-800 pl-2 pr-7 text-xs ${
                         TAGS.find((t) => t.value === r.status_tag)?.cls ?? ""

@@ -9,7 +9,23 @@ type Price = { input: number; output: number; cacheWrite: number; cacheRead: num
 
 const PRICES: Record<string, Price> = {
   "claude-sonnet-5": { input: 2, output: 10, cacheWrite: 2.5, cacheRead: 0.2, perSearch: 0.01 },
+  "claude-sonnet-5-5": { input: 3, output: 15, cacheWrite: 3.75, cacheRead: 0.3, perSearch: 0.01 },
 };
+
+// Last date list prices above were verified against Anthropic's published pricing
+// schedule (R9 / SS-11). Unit tests fail once age exceeds MAX_PRICE_AGE_DAYS.
+export const PRICE_VERIFIED_ON = "2026-11-10";
+export const MAX_PRICE_AGE_DAYS = 365;
+
+export function priceVerificationAgeDays(now = new Date()): number {
+  const verifiedMs = Date.parse(`${PRICE_VERIFIED_ON}T00:00:00Z`);
+  if (!Number.isFinite(verifiedMs)) return Infinity;
+  return (now.getTime() - verifiedMs) / 86_400_000;
+}
+
+export function hasKnownPrice(model: string): boolean {
+  return Object.prototype.hasOwnProperty.call(PRICES, model);
+}
 
 export type UsageTotals = {
   model: string;

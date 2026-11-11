@@ -11,6 +11,7 @@
     "history": "tsx scripts/history.ts",
     "movers": "tsx scripts/movers.ts",
     "signal-bot": "tsx scripts/signal-bot.ts",
+    "vapid-keys": "tsx scripts/vapid-keys.ts",
     "test": "node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "sweep-scanner": "node scripts/sweep-scanner.mjs",

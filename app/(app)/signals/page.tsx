@@ -8,6 +8,7 @@ import UpgradeCard from "@/components/billing/UpgradeCard";
 import EmptyState from "@/components/guide/EmptyState";
 import { ACTION_STYLE, SIGNAL_ACTIONS, formatPrice, type SignalAction } from "@/lib/signals";
 import PageHeader from "@/components/ui/PageHeader";
+import OpenPushSettingsButton from "@/components/pwa/OpenPushSettingsButton";
 
 export const metadata = { title: "Signals", description: "The program trader's calls, with the full track record." };
 
@@ -90,6 +91,7 @@ export default async function SignalsPage() {
         className="mb-4"
         title="Signals"
         description="Calls posted by the program's trader, newest first, the moment they go out on Discord. Every call is kept permanently in the track record below: signals can't be edited, deleted or backdated."
+        actions={<OpenPushSettingsButton label="Push alerts" />}
       />
       {ent.signals !== "all" && (
         <div className="card mb-6 max-w-[72ch] p-4 text-sm text-slate-300">

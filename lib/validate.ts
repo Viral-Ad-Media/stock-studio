@@ -34,3 +34,22 @@ export function parseOptionalText(raw: unknown, max: number, label: string): str
 export function isInvalid(x: unknown): x is Invalid {
   return typeof x === "object" && x !== null && "error" in x;
 }
+
+const EMAIL_PII_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
+const SSN_PII_RE = /\b\d{3}-\d{2}-\d{4}\b/g;
+// Payment card sequences: 13-19 digits in 4-digit separated groups or contiguous digits
+// (avoids $-prefixed currency figures and comma-grouped share/market-cap counts).
+const CARD_PII_RE = /(?<![$\d,])(?:\d{4}[ -]){3}\d{1,7}\b|(?<![$\d,.-])\b\d{13,19}\b(?![.,\d%BMK])/g;
+// Formatted phone numbers: requires separators/parens or +country prefix so plain
+// 10-digit share counts or unix timestamps are not mangled.
+const PHONE_PII_RE = /(?<!\w)(?:\+\d{1,3}[\s.-]?)?\(\d{3}\)[\s.-]?\d{3}[\s.-]\d{4}\b|(?<!\w)(?:\+\d{1,3}[\s.-])?\b\d{3}[\s.-]\d{3}[\s.-]\d{4}\b/g;
+
+// Redacts common customer PII (emails, SSNs, payment cards, phone numbers)
+// before user-supplied notes are assembled into third-party LLM prompts (R12).
+export function scrubPii(text: string): string {
+  return text
+    .replace(EMAIL_PII_RE, "[EMAIL REDACTED]")
+    .replace(SSN_PII_RE, "[SSN REDACTED]")
+    .replace(CARD_PII_RE, "[CARD REDACTED]")
+    .replace(PHONE_PII_RE, "[PHONE REDACTED]");
+}

@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { VARIANTS, HIDDEN_FORM_VARIANTS, MAX_NOTES, creditCost, apiError } from "@/lib/shared";
+import { VARIANTS, HIDDEN_FORM_VARIANTS, MAX_NOTES, creditCost, apiError, variantLabel } from "@/lib/shared";
+import { isInvalid, MAX_COMPANY, parseOptionalText, parseTicker, parseVariant } from "@/lib/validate";
+import { offlineMutate } from "@/lib/offline/store";
 import PageHeader from "@/components/ui/PageHeader";
 import Link from "next/link";
 
@@ -32,23 +34,50 @@ export default function NewStudyForm({
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [queuedNotice, setQueuedNotice] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
     setError(null);
+    setQueuedNotice(null);
+
+    const parsedTicker = parseTicker(ticker);
+    const parsedVariant = parseVariant(variant);
+    const parsedCompany = parseOptionalText(company, MAX_COMPANY, "Company");
+    const parsedNotes = parseOptionalText(notes, MAX_NOTES, "Notes");
+    if (isInvalid(parsedTicker)) return setError(parsedTicker.error);
+    if (isInvalid(parsedVariant)) return setError(parsedVariant.error);
+    if (isInvalid(parsedCompany)) return setError(parsedCompany.error);
+    if (isInvalid(parsedNotes)) return setError(parsedNotes.error);
+
+    setBusy(true);
     try {
-      const res = await fetch("/api/case-studies", {
+      const result = await offlineMutate({
+        kind: "study_queue",
+        label: `Queue ${variantLabel(parsedVariant)} · ${parsedTicker}`,
+        endpoint: "/api/case-studies",
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker, company, variant, notes }),
+        body: {
+          ticker: parsedTicker,
+          company: parsedCompany,
+          variant: parsedVariant,
+          notes: parsedNotes,
+        },
       });
-      if (res.ok) {
+      if (result.mode === "queued") {
+        setQueuedNotice(
+          `${parsedTicker} (${variantLabel(parsedVariant)}) saved to your offline queue — it will submit automatically as soon as your connection returns.`,
+        );
+        setNotes("");
+        setBusy(false);
+        return;
+      }
+      if (result.response.ok) {
         router.push("/dashboard");
         router.refresh();
         return;
       }
-      setError(await apiError(res, "Something went wrong"));
+      setError(await apiError(result.response, "Something went wrong"));
     } catch {
       setError("Couldn't reach the server — check your connection and try again.");
     }
@@ -169,6 +198,11 @@ export default function NewStudyForm({
         {error && (
           <p id="new-error" role="alert" className="text-sm text-red-400">
             {error}
+          </p>
+        )}
+        {queuedNotice && (
+          <p role="status" className="text-sm text-emerald-400">
+            {queuedNotice}
           </p>
         )}
 

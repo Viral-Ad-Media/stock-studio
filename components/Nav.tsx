@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut, CreditCard, Menu, X, Globe2, Radar, Sigma, BookOpen, HelpCircle, ShieldCheck, Megaphone } from "lucide-react";
+import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut, CreditCard, Menu, X, Globe2, Radar, Sigma, BookOpen, HelpCircle, ShieldCheck, Megaphone, Bell } from "lucide-react";
 import { useTour } from "@/components/guide/Tour";
 import ThemeToggle from "@/components/theme/ThemeToggle";
 import { getSupabase } from "@/lib/supabase/lazy";
 import { setRememberMe } from "@/lib/supabase/remember";
+import { clearAllOfflineData } from "@/lib/offline/store";
+import { usePwa } from "@/components/pwa/PwaProvider";
 
 const links = [
   { href: "/today", label: "Today", icon: Globe2, tour: "today" },
@@ -66,6 +68,7 @@ export default function Nav({ userEmail, userName, credits, isAdmin = false }: P
             onClick={(e) => e.stopPropagation()}
           >
             <NavLinks pathname={pathname} credits={credits} />
+            <PwaNavButton onOpen={() => setOpen(false)} />
             <HelpButton onStart={() => setOpen(false)} />
             <ThemeToggle withLabel />
             {isAdmin && <AdminLink />}
@@ -82,6 +85,7 @@ export default function Nav({ userEmail, userName, credits, isAdmin = false }: P
           <Brand withTagline />
         </div>
         <NavLinks pathname={pathname} credits={credits} />
+        <PwaNavButton />
         <HelpButton />
         <ThemeToggle withLabel />
         {isAdmin && <AdminLink />}
@@ -164,9 +168,41 @@ function HelpButton({ onStart }: { onStart?: () => void }) {
   );
 }
 
+function PwaNavButton({ onOpen }: { onOpen?: () => void }) {
+  const { setSettingsOpen, pendingCount, failedCount, isOffline } = usePwa();
+  const badgeCount = pendingCount + failedCount;
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onOpen?.();
+        setSettingsOpen(true);
+      }}
+      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-slate-400 hover:bg-ink-800 hover:text-slate-200"
+    >
+      <Bell className="h-4 w-4" aria-hidden />
+      <span>Alerts &amp; offline</span>
+      {(badgeCount > 0 || isOffline) && (
+        <span
+          className={`ml-auto rounded-full px-1.5 py-0.5 text-[11px] font-medium tabular-nums ${
+            failedCount > 0
+              ? "bg-red-500/20 text-red-300"
+              : isOffline
+                ? "bg-amber-500/20 text-amber-300"
+                : "bg-emerald-500/20 text-emerald-300"
+          }`}
+        >
+          {badgeCount > 0 ? badgeCount : "Offline"}
+        </span>
+      )}
+    </button>
+  );
+}
+
 function Account({ userEmail, userName }: { userEmail: string | null; userName: string | null }) {
   const router = useRouter();
   async function signOut() {
+    await clearAllOfflineData();
     await (await getSupabase()).auth.signOut();
     setRememberMe(true); // clear the session-only flag
     router.push("/login");

@@ -20,6 +20,7 @@ export type CaseStudy = {
   // Live market data snapshot (lib/live-data.ts LiveSnapshot), separate from the study text.
   live_json: unknown | null;
   live_refreshed_at: string | null;
+  data_source?: string | null;
   created_at: string;
   updated_at: string;
 };

@@ -169,6 +169,7 @@ export async function fetchOpeningCandle(ticker: string, date?: string, deadline
     ticker,
     exchange_timezone: tz,
     session_date: sessionDate,
+    data_source: (meta?.dataSource === "alpaca-iex" ? "alpaca" : "yahoo") as "yahoo" | "alpaca",
     note: "Times are exchange-local. The regular session start comes from the exchange metadata (9:30 ET for US equities).",
     first_five_minute_candle: opening,
     one_minute_candles: series,
@@ -221,6 +222,7 @@ export async function fetchHistory(ticker: string, interval = "5m", range = "5d"
     interval,
     requested_range: range,
     exchange_timezone: tz,
+    data_source: (meta?.dataSource === "alpaca-iex" ? "alpaca" : "yahoo") as "yahoo" | "alpaca",
     candle_count: candles.length,
     first_candle_time: candles[0].t,
     last_candle_time: candles[candles.length - 1].t,
@@ -273,6 +275,7 @@ export async function fetchMovers(count = 5, revalidateSec?: number, deadline?: 
   }
   return {
     as_of: new Date().toISOString(),
+    data_source: (source.startsWith("Alpaca") ? "alpaca" : "yahoo") as "yahoo" | "alpaca",
     note: `${source} (US equities). Percent moves are for the current/most recent regular session.`,
     gainers,
     losers,

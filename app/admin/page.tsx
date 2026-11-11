@@ -49,15 +49,32 @@ export default async function AdminOverview() {
       count(*) FILTER (WHERE status = 'ready' AND updated_at > now() - interval '7 days')::int AS ready7
     FROM case_studies
   `;
-  // Model spend, recorded per job by the worker (estimates at list price).
+  // Model spend, recorded per job and per setup-bot scan by the worker (estimates at list price).
   const [m] = await sql`
+    WITH bounds AS (SELECT (date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') AS utc_start),
+    job_spend AS (
+      SELECT
+        coalesce(sum(cost_usd) FILTER (WHERE updated_at >= (SELECT utc_start FROM bounds)), 0)::float AS today,
+        coalesce(sum(cost_usd) FILTER (WHERE updated_at > now() - interval '7 days'), 0)::float AS d7,
+        coalesce(sum(cost_usd) FILTER (WHERE updated_at > now() - interval '30 days'), 0)::float AS d30,
+        coalesce(sum(cost_usd) FILTER (WHERE status <> 'done' AND updated_at > now() - interval '30 days'), 0)::float AS unbuilt30,
+        coalesce(sum((usage_json->>'web_search_requests')::int) FILTER (WHERE updated_at > now() - interval '30 days'), 0)::int AS searches30
+      FROM jobs WHERE cost_usd IS NOT NULL
+    ),
+    scan_spend AS (
+      SELECT
+        coalesce(sum(cost_usd) FILTER (WHERE finished_at >= (SELECT utc_start FROM bounds)), 0)::float AS today,
+        coalesce(sum(cost_usd) FILTER (WHERE finished_at > now() - interval '7 days'), 0)::float AS d7,
+        coalesce(sum(cost_usd) FILTER (WHERE finished_at > now() - interval '30 days'), 0)::float AS d30
+      FROM setup_scans WHERE cost_usd IS NOT NULL
+    )
     SELECT
-      coalesce(sum(cost_usd) FILTER (WHERE updated_at >= date_trunc('day', now())), 0)::float AS today,
-      coalesce(sum(cost_usd) FILTER (WHERE updated_at > now() - interval '7 days'), 0)::float AS d7,
-      coalesce(sum(cost_usd) FILTER (WHERE updated_at > now() - interval '30 days'), 0)::float AS d30,
-      coalesce(sum(cost_usd) FILTER (WHERE status <> 'done' AND updated_at > now() - interval '30 days'), 0)::float AS unbuilt30,
-      coalesce(sum((usage_json->>'web_search_requests')::int) FILTER (WHERE updated_at > now() - interval '30 days'), 0)::int AS searches30
-    FROM jobs WHERE cost_usd IS NOT NULL
+      (job_spend.today + scan_spend.today)::float AS today,
+      (job_spend.d7 + scan_spend.d7)::float AS d7,
+      (job_spend.d30 + scan_spend.d30)::float AS d30,
+      job_spend.unbuilt30,
+      job_spend.searches30
+    FROM job_spend, scan_spend
   `;
   const byFormat = await sql`
     SELECT coalesce(cs.variant, j.type) AS format, count(*)::int AS jobs,

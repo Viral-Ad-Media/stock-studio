@@ -73,6 +73,8 @@ export const config = {
     "/api/case-studies/:path*",
     "/api/jobs/:path*",
     "/api/watchlist/:path*",
+    "/api/push/:path*",
+    "/api/offline/:path*",
     "/billing/:path*",
     "/admin/:path*",
     "/api/admin/:path*",

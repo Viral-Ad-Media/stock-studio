@@ -7,6 +7,7 @@ import { TIER_LABEL, isPlanId, planCreditGrant } from "@/lib/plans";
 import BillingActions, { PlanPicker } from "@/components/BillingActions";
 import AutoRefresh from "@/components/AutoRefresh";
 import PageHeader from "@/components/ui/PageHeader";
+import { PushAndOfflinePanel } from "@/components/pwa/PushAndOfflinePanel";
 
 export const metadata = { title: "Billing", description: "Your plan and credit balance." };
 
@@ -97,6 +98,10 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
       {showPlans && (
         <PlanPicker current={sub?.live ? sub.plan : null} highlight={isPlanId(wanted) ? wanted : null} />
       )}
+
+      <div className="card p-6 mb-6 max-w-2xl">
+        <PushAndOfflinePanel />
+      </div>
 
       {payments.length > 0 && (
         <>

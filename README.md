@@ -1,9 +1,10 @@
 # Stock Studio
 
-Fact-checked, source-cited stock research, trade planning and a trading journal in one
-multi-tenant SaaS. A member queues a ticker, a research engine builds a dated study with
-every figure sourced, and the study then feeds a watchlist thesis, LEAPS scenarios and
-journal reviews.
+Source-linked, AI-assisted stock research, trade planning and a trading journal in one
+multi-tenant SaaS. A member queues a ticker, a research engine builds a dated study grounded
+in public filings and retrieved sources (with deterministic output post-checks, not an
+independent human audit), and the study then feeds a watchlist thesis hypothesis, LEAPS
+scenarios and journal reviews.
 
 **Live:** [stock-studio.onrender.com](https://stock-studio.onrender.com)
 
@@ -55,6 +56,7 @@ On a phone the sidebar collapses into a menu and every page reflows to one colum
 | Scanners | `/setups`, `/gamma`, `/sweeps` | Rule-based setup bots with paper-tracked records, dealer-gamma model from CBOE chains, Sweep Scanner preview. |
 | Trading desk | `/journal`, `/leaps` | Self-reported trading journal with P&L analytics and CSV import/export; LEAPS chain discovery and scenario modeling. |
 | Signals | `/signals` + Discord | The program trader's calls, relayed to Discord and kept in an append-only, hash-chained record. |
+| Offline PWA & push | `/offline`, `/billing` | Installable standalone PWA with Service Worker caching, IndexedDB workspace snapshot + FIFO mutation outbox, and RFC 8291/8292 Web Push alerts. |
 | Membership | `/pricing`, `/billing` | 30-day trial, then Silver, Gold or Diamond subscriptions with monthly credits, plus credit packs. |
 | Operations | `/admin` | Super admin console: users, invites, jobs, audit log, system health, failure alerts. |
 
@@ -78,6 +80,7 @@ On a phone the sidebar collapses into a menu and every page reflows to one colum
 - [Live market data](#live-market-data)
 - [Sweep Scanner (preview)](#sweep-scanner-preview)
 - [Trade signals](#trade-signals)
+- [Offline-first PWA & Web Push](#offline-first-pwa--web-push)
 - [Design and motion](#design-and-motion)
 - [Architecture](#architecture)
 - [Getting started](#getting-started)
@@ -314,6 +317,38 @@ above stay educational.
 
 ---
 
+## Offline-first PWA & Web Push
+
+Stock Studio installs as a standalone Progressive Web App (`app/manifest.ts`, `public/sw.js`) on
+desktop, Android and iOS (Home Screen standalone mode) and keeps your workspace readable and
+writable when connectivity drops.
+
+- **Offline workspace library (`/offline`).** Signed-in sessions sync a workspace-scoped snapshot
+  (`GET /api/offline/snapshot` → IndexedDB `stock-studio-pwa`) holding finished case studies
+  (pre-sanitized HTML + cited sources), watchlist theses/triggers, active journal lots, saved LEAPS
+  plans and entitled trade signals. The Service Worker caches static bundles (`/_next/static/*`)
+  cache-first and HTML navigations network-first with an automatic `/offline` fallback.
+- **FIFO offline outbox (`lib/offline/store.ts`).** Queuing a new study, adding/retagging a
+  watchlist ticker, logging/editing/archiving a journal trade, or saving a LEAPS scenario while
+  offline stores the validated mutation in IndexedDB and replays it in order when online (or via the
+  Service Worker `ss-outbox-sync` Background Sync event). Signing out purges IndexedDB, private
+  Service Worker caches and the device's push endpoint so shared browsers retain no member data.
+- **Web Push notifications (`lib/push.ts`, `lib/push-dispatch.ts`, `/api/push`).** Pure Web Crypto
+  RFC 8291 (`aes128gcm`) + RFC 8292 (`VAPID` ES256) push delivery with zero external dependencies.
+  Members opt in per device from the sidebar **Alerts & offline** button, `/signals`, or `/billing`
+  and choose categories:
+  - **Case studies**: finished report (with research grade) or refunded build error.
+  - **Watchlist**: refreshed thesis status (`intact`, `weakening`, `broken`), raised to high urgency
+    when a thesis weakens or breaks.
+  - **Live signals**: enqueued by trigger (`stocks.signal_push_queue`) and drained by the worker
+    using `stocks.signal_push_recipients()`, enforcing the exact Diamond/Gold/Silver live-pick tier
+    rules and excluding trial, expired and disabled accounts. Signals older than 30 minutes are
+    never pushed after an outage.
+- **Database migration.** Apply `supabase/migrations/20261111000000_pwa_push_notifications.sql`
+  before enabling push in production, and generate VAPID keys with `npm run vapid-keys`.
+
+---
+
 ## Design and motion
 
 Public home and pricing pages use a lazy-loaded Three.js / React Three Fiber / Drei
@@ -434,6 +469,7 @@ All variables are listed in [`.env.example`](.env.example).
 | `STRIPE_PRICE_{SILVER,GOLD,DIAMOND}_{MONTHLY,YEARLY}` | billing | Recurring price ids of the six plan prices (amounts in `lib/plans.ts`). The webhook maps a subscription's price back to its plan with these, so an unknown price grants nothing. |
 | `STRIPE_PRICE_CREDIT_PACK` | billing | Price id of one credit pack. |
 | `STRIPE_CREDITS_PER_PACK` | billing | Credits granted per pack. Default 10. Diamond packs carry 50% more. |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Web Push | Optional. P-256 VAPID keypair generated via `npm run vapid-keys`, plus optional `mailto:` or `https://` contact subject. Without them, push opt-in stays disabled while the offline PWA still works. |
 | `DISCORD_TOKEN`, `INPUT_CHANNEL_ID`, `SIGNALS_CHANNEL_ID`, `GOLD_SIGNALS_CHANNEL_ID`, `SILVER_SIGNALS_CHANNEL_ID`, `SIGNAL_POSTER_IDS`, `SIGNALS_DATABASE_URL` | signal relay only | Never on the web host. Set as Supabase function secrets for `signal-relay`, plus `SIGNAL_RELAY_SECRET`. See [`supabase/functions/signal-relay/README.md`](supabase/functions/signal-relay/README.md). |
 
 ---
@@ -699,6 +735,7 @@ npm run candles -- <TICKER> [--date YYYY-MM-DD]              # 1m OHLC + first 5
 npm run history -- <TICKER> [--interval 1m|5m|15m|30m|60m|1d|1wk] [--range 1d|5d|1mo|3mo|6mo|1y|2y|5y]
 npm run movers -- --count 5                                  # day gainers/losers screeners
 npm run signal-bot                                           # Discord signal bot (see deploy/signal-bot)
+npm run vapid-keys                                           # generate P-256 VAPID keys for Web Push
 ```
 
 `complete` metadata depends on the job type:
