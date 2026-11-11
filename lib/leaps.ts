@@ -4,6 +4,9 @@ export type LeapsInput = {
   as_of: string; premium: number; contracts: number; iv: number; rate: number; dividend: number;
   exit_days: number; scenario_move: number; scenario_iv: number; fees: number;
 };
+// Default baseline assumptions when starting a fresh scenario before loading a
+// CBOE contract (`rate: 4` = 4.0%/yr US T-bill risk-free benchmark convention;
+// `iv: 30` = 30%/yr user-editable placeholder volatility; SR 11-7 SS-05).
 export const DEFAULT_LEAPS: LeapsInput = { ticker: "", type: "call", spot: 100, strike: 100,
   as_of: "", expiration: "", premium: 15, contracts: 1, iv: 30, rate: 4, dividend: 0,
   exit_days: 30, scenario_move: 10, scenario_iv: 30, fees: 0 };

@@ -5,11 +5,12 @@ import ResearchContextCard from "@/components/leaps/ResearchContextCard";
 import { EMPTY_CONTEXT, type ResearchContext } from "@/lib/research-workflow";
 import DecisionAnalysis from "./DecisionAnalysis";
 import { useRouter } from "next/navigation";
-import { journalStats, realizedPnl, type JournalTrade } from "@/lib/journal";
+import { InputError, journalStats, realizedPnl, validateTrade, type JournalTrade } from "@/lib/journal";
 import JournalCharts from "@/components/charts/JournalCharts";
 import PageHeader from "@/components/ui/PageHeader";
 import { CSV_TEMPLATE } from "@/lib/journal-csv";
 import { variantLabel } from "@/lib/shared";
+import { offlineMutate } from "@/lib/offline/store";
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", {
@@ -180,16 +181,52 @@ export default function JournalClient({
   }
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    const data = await request(
-      editing
+    setError("");
+    setNotice("");
+    let validated;
+    try {
+      validated = validateTrade(form, today);
+    } catch (err) {
+      setError(err instanceof InputError ? err.message : "Invalid trade details.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const payload = editing
         ? { id: editing.id, version: editing.revision, trade: form }
-        : form,
-      editing ? "PATCH" : "POST",
-    );
-    if (data) {
+        : form;
+      const result = await offlineMutate({
+        kind: editing ? "journal_update" : "journal_create",
+        label: editing
+          ? `Update journal lot · ${validated.ticker}`
+          : `Log journal lot · ${validated.ticker}`,
+        endpoint: "/api/journal",
+        method: editing ? "PATCH" : "POST",
+        body: payload,
+      });
+
+      if (result.mode === "queued") {
+        reset();
+        setNotice("Trade saved offline — it will sync automatically when your connection returns.");
+        return;
+      }
+
+      if (!result.response.ok) {
+        const data = await result.response.json().catch(() => ({}));
+        throw new Error(
+          data.errors?.join("\n") ||
+            data.error ||
+            "Couldn't save journal changes.",
+        );
+      }
       reset();
       setNotice("Trade saved.");
       router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Request failed.");
+    } finally {
+      setBusy(false);
     }
   }
   function edit(row: JournalTrade) {
@@ -207,18 +244,37 @@ export default function JournalClient({
       ?.scrollIntoView({ behavior: "smooth" });
   }
   async function archive(row: JournalTrade) {
-    if (
-      await request(
-        { id: row.id, version: row.revision, archived: !archived },
-        "PATCH",
-      )
-    ) {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await offlineMutate({
+        kind: "journal_archive",
+        label: `${archived ? "Restore" : "Archive"} journal lot · ${row.ticker}`,
+        endpoint: "/api/journal",
+        method: "PATCH",
+        body: { id: row.id, version: row.revision, archived: !archived },
+      });
+      if (result.mode === "queued") {
+        setNotice(
+          `${archived ? "Restore" : "Archive"} queued offline — will sync automatically when online.`,
+        );
+        return;
+      }
+      if (!result.response.ok) {
+        const data = await result.response.json().catch(() => ({}));
+        throw new Error(data.error || "Couldn't update trade.");
+      }
       setNotice(
         archived
           ? "Trade restored."
           : "Trade archived. You can restore it from Archived.",
       );
       router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Request failed.");
+    } finally {
+      setBusy(false);
     }
   }
   async function readFile(file: File | undefined) {

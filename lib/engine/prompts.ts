@@ -2,8 +2,10 @@
 // methodology itself is NOT duplicated here — it's read straight from
 // lib/engine/methodology.md, the same file the manual engine follows, so
 // the two paths can't drift apart.
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { scrubPii } from "@/lib/validate";
 
 let _skillMd: string | null = null;
 function skillMarkdown(): string {
@@ -12,25 +14,44 @@ function skillMarkdown(): string {
   return _skillMd;
 }
 
+// Strips manual-CLI-only blocks (`npm run engine`, `npm run candles`, operator
+// checklist) so the automated API worker receives only the analytical rules (R11).
+export function stripManualCliSections(md: string): string {
+  return md
+    .replace(/<!--\s*BEGIN_MANUAL_CLI_ONLY\s*-->[\s\S]*?<!--\s*END_MANUAL_CLI_ONLY\s*-->/g, "")
+    .replace(/<!--\s*methodology-version:[^>]*-->\s*/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function methodologyVersion(): string {
+  const m = skillMarkdown().match(/<!--\s*methodology-version:\s*([^|\s>]+)/);
+  return m?.[1] ?? "2.0.0";
+}
+
+export function methodologyPromptHash(): string {
+  return crypto.createHash("sha256").update(skillMarkdown()).digest("hex").slice(0, 12);
+}
+
 // Variants that need no broad web research — the data is already fetched
 // from Yahoo (lib/marketdata.ts) and handed to the model directly.
 export const OHLC_ONLY_VARIANTS = new Set(["one_candle", "davinci_model", "movers_digest"]);
 
 export function systemPromptWithWebSearch(): string {
   return (
-    skillMarkdown() +
+    stripManualCliSections(skillMarkdown()) +
     "\n\n---\n\n" +
     "You are running as the automated backend worker for this app, not an interactive " +
-    "session — everything above still applies exactly as written, substituting your " +
-    "hosted web_search tool wherever it says WebSearch/WebFetch. Output ONLY the finished " +
-    "markdown study (starting with the \"As of\" line) — no preamble, no commentary, no code " +
-    "fences around it."
+    "session — everything above applies as written, using your hosted web_search tool " +
+    "for primary filings, investor-relations releases, and market sources. Output ONLY the " +
+    "finished markdown study (starting with the \"As of\" line) — no preamble, no commentary, " +
+    "no code fences around it."
   );
 }
 
 export function systemPromptFromDataOnly(): string {
   return (
-    skillMarkdown() +
+    stripManualCliSections(skillMarkdown()) +
     "\n\n---\n\n" +
     "You are running as the automated backend worker for this app. You have NO web browsing " +
     "tool for this job — evaluate strictly from the real market data provided in the prompt " +
@@ -64,7 +85,7 @@ export function buildCaseStudyPrompt(job: {
     lines.push(
       "The user supplied raw notes to fact-check and correct — do not just repeat them, verify " +
         "each claim per the Evidence standards:",
-      untrusted("user_notes", job.notes),
+      untrusted("user_notes", scrubPii(job.notes)),
       ""
     );
   }
@@ -94,7 +115,7 @@ export function moversDigestPrompt(moversData: unknown): string {
 export function oneCandlePrompt(ticker: string, notes: string | null, candleData: unknown): string {
   return [
     `Evaluate the one-candle setup for ${ticker} per the One-candle setup jobs section.`,
-    notes ? `User notes on which session to check:\n${untrusted("user_notes", notes)}` : "",
+    notes ? `User notes on which session to check:\n${untrusted("user_notes", scrubPii(notes))}` : "",
     "Real 1-minute OHLC data already fetched (Yahoo Finance chart API) — evaluate strictly from this:",
     "",
     JSON.stringify(candleData, null, 2),
@@ -106,7 +127,7 @@ export function oneCandlePrompt(ticker: string, notes: string | null, candleData
 export function davinciModelPrompt(ticker: string, notes: string | null, historyData: unknown): string {
   return [
     `Evaluate the Da Vinci liquidity model for ${ticker} per the Da Vinci liquidity model jobs section.`,
-    notes ? `User notes on timeframe/session:\n${untrusted("user_notes", notes)}` : "",
+    notes ? `User notes on timeframe/session:\n${untrusted("user_notes", scrubPii(notes))}` : "",
     "Real OHLC data already fetched (Yahoo Finance chart API) — evaluate strictly from this:",
     "",
     JSON.stringify(historyData, null, 2),

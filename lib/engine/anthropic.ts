@@ -240,9 +240,79 @@ export async function writeFromData(opts: {
 }
 
 // Second-stage extraction: converts already-researched text into a discrete
-// JSON shape. No tools, no web search, thinking off (a small forced tool call
-// doesn't need it and thinking could eat the token budget) — it only reformats
-// what it's given. Required fields are checked before the result is trusted.
+// JSON shape. Required fields are checked before the result is trusted.
+//
+// Vendor compatibility note (SR 11-7 R3 / SS-03 / SS-04):
+// - `claude-sonnet-5` accepts `thinking: { type: "disabled" }` with forced
+//   `tool_choice: { type: "tool", name }`, avoiding unnecessary thinking tokens.
+// - `claude-sonnet-5-5` (and newer Sonnet/Opus generations) rejects both
+//   `thinking: { type: "disabled" }` and forced `tool_choice: { type: "tool" }`
+//   with HTTP 400. For any model other than `claude-sonnet-5`, we omit
+//   `thinking: disabled` and switch to `tool_choice: { type: "auto" }` with
+//   `strict: true` (adding `additionalProperties: false` recursively).
+function withStrictObjectSchemas(node: unknown): unknown {
+  if (!node || typeof node !== "object") return node;
+  if (Array.isArray(node)) return node.map(withStrictObjectSchemas);
+  const obj = node as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    out[k] = k === "properties" && v && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([pk, pv]) => [pk, withStrictObjectSchemas(pv)]))
+      : withStrictObjectSchemas(v);
+  }
+  const t = obj.type;
+  const isObj = t === "object" || (Array.isArray(t) && t.includes("object"));
+  if (isObj && obj.properties && out.additionalProperties === undefined) {
+    out.additionalProperties = false;
+  }
+  return out;
+}
+
+export function supportsForcedToolWithDisabledThinking(model: string): boolean {
+  return model === "claude-sonnet-5";
+}
+
+export function buildExtractionRequest(
+  opts: {
+    researchedText: string;
+    instructions: string;
+    toolName: string;
+    schema: { required?: string[] } & Record<string, unknown>;
+  },
+  model = ENGINE_MODEL
+): Anthropic.MessageCreateParamsNonStreaming {
+  const legacyForced = supportsForcedToolWithDisabledThinking(model);
+  const baseSystem =
+    "Extract the requested structured fields from the research below. Do not add facts that " +
+    "aren't in the research text — if something wasn't covered, use null or omit it.";
+  if (legacyForced) {
+    return {
+      model,
+      max_tokens: 4096,
+      thinking: { type: "disabled" },
+      system: baseSystem,
+      tools: [{ name: opts.toolName, description: opts.instructions, input_schema: opts.schema as any }],
+      tool_choice: { type: "tool", name: opts.toolName },
+      messages: [{ role: "user", content: opts.researchedText }],
+    };
+  }
+  return {
+    model,
+    max_tokens: 8192,
+    system: `${baseSystem} Always respond by invoking the "${opts.toolName}" tool once with the extracted fields.`,
+    tools: [
+      {
+        name: opts.toolName,
+        description: opts.instructions,
+        input_schema: withStrictObjectSchemas(opts.schema) as any,
+        strict: true,
+      } as any,
+    ],
+    tool_choice: { type: "auto" },
+    messages: [{ role: "user", content: opts.researchedText }],
+  };
+}
+
 export async function extractStructured<T>(opts: {
   researchedText: string;
   instructions: string;
@@ -250,19 +320,10 @@ export async function extractStructured<T>(opts: {
   schema: { required?: string[] } & Record<string, unknown>;
   deadline: number;
   meter?: UsageMeter;
+  model?: string;
 }): Promise<T> {
   const msg = await client().messages.create(
-    {
-      model: ENGINE_MODEL,
-      max_tokens: 4096,
-      thinking: { type: "disabled" },
-      system:
-        "Extract the requested structured fields from the research below. Do not add facts that " +
-        "aren't in the research text — if something wasn't covered, use null or omit it.",
-      tools: [{ name: opts.toolName, description: opts.instructions, input_schema: opts.schema as any }],
-      tool_choice: { type: "tool", name: opts.toolName },
-      messages: [{ role: "user", content: opts.researchedText }],
-    },
+    buildExtractionRequest(opts, opts.model ?? ENGINE_MODEL),
     { timeout: callTimeout(opts.deadline, WRITE_BACK_MS, EXTRACT_CALL_MS) }
   );
   opts.meter?.add(msg.usage);

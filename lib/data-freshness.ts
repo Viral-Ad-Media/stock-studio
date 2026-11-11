@@ -31,3 +31,21 @@ export function marketDay(value: string): string {
     timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric",
   });
 }
+
+// Age in minutes of a CBOE delayed-quote `sourceAt` timestamp (SR 11-7 R10).
+export function cboeSourceAgeMinutes(sourceAt: string | null | undefined, now = Date.now()): number | null {
+  const iso = sourceTimestamp(sourceAt);
+  if (!iso) return null;
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return null;
+  return Math.max(0, Math.round((now - ms) / 60_000));
+}
+
+export function isCboeSourceStale(
+  sourceAt: string | null | undefined,
+  maxAgeMinutes = 90,
+  now = Date.now()
+): boolean {
+  const age = cboeSourceAgeMinutes(sourceAt, now);
+  return age === null || age > maxAgeMinutes;
+}

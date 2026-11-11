@@ -31,6 +31,18 @@ import { sql } from "../lib/db";
 import { earningsForTickers } from "../lib/earnings";
 import { maybeRunSetupScan } from "../lib/setups-run";
 import { computeGrade, cleanSummaryLine, parseThesisStatus, GRADED_VARIANTS } from "../lib/grades";
+import { notifyStudyFinished, notifyWatchlistUpdated } from "../lib/push-dispatch";
+import {
+  extractSetupPlan,
+  validateAsOfDate,
+  validateWebStudyOutput,
+} from "../lib/engine/postcheck";
+import {
+  MAX_SNAPSHOT_LENGTH,
+  MAX_THESIS_LENGTH,
+  MAX_TRIGGERS_COUNT,
+  MAX_TRIGGER_LENGTH,
+} from "../lib/engine/worker";
 
 function arg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -118,6 +130,9 @@ async function main() {
     const content = contentPath ? fs.readFileSync(contentPath, "utf8") : null;
     const meta = metaPath ? JSON.parse(fs.readFileSync(metaPath, "utf8")) : {};
 
+    let completedStudyPush: Parameters<typeof notifyStudyFinished>[0] | null = null;
+    let completedWatchlistPush: Parameters<typeof notifyWatchlistUpdated>[0] | null = null;
+
     await sql.begin(async (tx) => {
       // Only a job this manual session claimed (running, not worker-locked)
       // can be completed — never a finished, failed/refunded, or worker job.
@@ -134,40 +149,104 @@ async function main() {
           console.error("--content <file.md> is required for case study jobs");
           process.exit(1);
         }
-        const [study] = await tx`SELECT variant FROM case_studies WHERE id = ${payload.case_study_id}`;
+        const [study] = await tx`SELECT workspace_id, ticker, variant FROM case_studies WHERE id = ${payload.case_study_id}`;
+        if (study && study.variant !== "one_candle" && study.variant !== "davinci_model") {
+          const check = validateWebStudyOutput({
+            content,
+            variant: study.variant,
+            sources: Array.isArray(meta.sources) ? meta.sources : [],
+            asOfDate: meta.as_of_date,
+          });
+          if (!check.ok) {
+            console.error(check.reason);
+            process.exit(1);
+          }
+        }
         // Same rules as the worker: overall letter computed from the card
         // scores, graded variants only.
         const grade = study && GRADED_VARIANTS.has(study.variant) ? computeGrade(meta.grade) : null;
+        const summaryLine = cleanSummaryLine(meta.summary_line);
         if (meta.grade && !grade && study && GRADED_VARIANTS.has(study.variant)) {
           console.error("meta.grade ignored: needs growth/profitability/valuation/moat, each {score 0-100, note}");
         }
         await tx`
           UPDATE case_studies SET
             status = 'ready', content_md = ${content}, error = NULL,
-            summary_line = COALESCE(${cleanSummaryLine(meta.summary_line)}, summary_line),
+            summary_line = COALESCE(${summaryLine}, summary_line),
             grade_json = COALESCE(${grade ? sql.json(grade) : null}, grade_json),
             company = COALESCE(${meta.company ?? null}, company),
             as_of_date = COALESCE(${meta.as_of_date ?? null}, as_of_date),
             sources_json = COALESCE(${meta.sources ? sql.json(meta.sources) : null}, sources_json),
             corrections_md = COALESCE(${meta.corrections_md ?? null}, corrections_md),
+            data_source = COALESCE(${meta.data_source ?? "manual"}, data_source),
             updated_at = now()
           WHERE id = ${payload.case_study_id}
         `;
+        if (study && (study.variant === "one_candle" || study.variant === "davinci_model")) {
+          const plan = extractSetupPlan(content);
+          const asOfCheck = validateAsOfDate(meta.as_of_date);
+          if (plan && asOfCheck.ok) {
+            await tx`
+              INSERT INTO setup_study_plans
+                (case_study_id, workspace_id, ticker, variant, session_date, direction, entry_price, stop_price, target_price)
+              VALUES
+                (${payload.case_study_id}, ${study.workspace_id}, ${study.ticker}, ${study.variant},
+                 ${meta.session_date ?? asOfCheck.isoDate}, ${plan.direction}, ${plan.entry}, ${plan.stop}, ${plan.target})
+              ON CONFLICT (case_study_id) DO UPDATE SET
+                session_date = EXCLUDED.session_date,
+                direction = EXCLUDED.direction,
+                entry_price = EXCLUDED.entry_price,
+                stop_price = EXCLUDED.stop_price,
+                target_price = EXCLUDED.target_price,
+                resolved_at = NULL,
+                exit_date = NULL,
+                outcome = NULL
+            `;
+          }
+        }
+        if (study) {
+          completedStudyPush = {
+            workspaceId: study.workspace_id,
+            studyId: Number(payload.case_study_id),
+            ticker: study.ticker,
+            variant: study.variant,
+            status: "ready",
+            gradeLetter: grade?.overall ?? null,
+            summaryLine,
+          };
+        }
       } else if (job.type === "watchlist_entry") {
         if (!meta.thesis) {
           console.error("--meta with at least {thesis} is required for watchlist jobs");
           process.exit(1);
         }
+        if (meta.as_of_date) {
+          const asOfCheck = validateAsOfDate(meta.as_of_date);
+          if (!asOfCheck.ok) {
+            console.error(asOfCheck.reason);
+            process.exit(1);
+          }
+        }
+        const boundedThesis = String(meta.thesis).replace(/\s+/g, " ").trim().slice(0, MAX_THESIS_LENGTH);
+        const boundedSnapshot = meta.snapshot
+          ? String(meta.snapshot).replace(/\s+/g, " ").trim().slice(0, MAX_SNAPSHOT_LENGTH) || null
+          : null;
+        const boundedTriggers = Array.isArray(meta.triggers)
+          ? meta.triggers
+              .slice(0, MAX_TRIGGERS_COUNT)
+              .map((t: unknown) => String(t).replace(/\s+/g, " ").trim().slice(0, MAX_TRIGGER_LENGTH))
+              .filter(Boolean)
+          : null;
         const statusTag = ["watching", "building_conviction", "pass"].includes(meta.status_tag) ? meta.status_tag : null;
-        const [prev] = await tx`SELECT thesis FROM watchlist WHERE id = ${payload.watchlist_id}`;
+        const [prev] = await tx`SELECT workspace_id, ticker, thesis FROM watchlist WHERE id = ${payload.watchlist_id}`;
         // A first entry has nothing to judge against.
         const thesisStatus = prev?.thesis ? parseThesisStatus(meta.thesis_status) ?? "unknown" : "unknown";
         const thesisNote = prev?.thesis ? cleanSummaryLine(meta.thesis_status_note) : null;
         await tx`
           UPDATE watchlist SET
-            thesis = ${meta.thesis},
-            snapshot = COALESCE(${meta.snapshot ?? null}, snapshot),
-            triggers_json = COALESCE(${meta.triggers ? sql.json(meta.triggers) : null}, triggers_json),
+            thesis = ${boundedThesis},
+            snapshot = COALESCE(${boundedSnapshot}, snapshot),
+            triggers_json = COALESCE(${boundedTriggers ? sql.json(boundedTriggers) : null}, triggers_json),
             as_of_date = COALESCE(${meta.as_of_date ?? null}, as_of_date),
             company = COALESCE(${meta.company ?? null}, company),
             status_tag = COALESCE(${statusTag}, status_tag),
@@ -176,12 +255,24 @@ async function main() {
             updated_at = now()
           WHERE id = ${payload.watchlist_id}
         `;
+        if (prev) {
+          completedWatchlistPush = {
+            workspaceId: prev.workspace_id,
+            watchlistId: Number(payload.watchlist_id),
+            ticker: prev.ticker,
+            thesisStatus,
+            note: thesisNote,
+          };
+        }
       }
     });
+    if (completedStudyPush) await notifyStudyFinished(completedStudyPush);
+    if (completedWatchlistPush) await notifyWatchlistUpdated(completedWatchlistPush);
     out({ ok: true, job_id: id });
   } else if (cmd === "fail") {
     const id = Number(process.argv[3]);
     const message = arg("--message") ?? "unknown error";
+    let failedStudyPush: Parameters<typeof notifyStudyFinished>[0] | null = null;
     await sql.begin(async (tx) => {
       // Same guard as complete: failing (and refunding) a delivered report
       // or a worker-held job is refused.
@@ -193,15 +284,26 @@ async function main() {
       if (!job) refuse(id, "fail");
       const payload = job.payload as Record<string, any>;
       if (payload.case_study_id) {
-        await tx`
+        const [study] = await tx`
           UPDATE case_studies SET status = 'error',
           error = 'We couldn''t build this report. Your credits have been refunded.', updated_at = now()
           WHERE id = ${payload.case_study_id}
+          RETURNING id, workspace_id, ticker, variant
         `;
+        if (study) {
+          failedStudyPush = {
+            workspaceId: study.workspace_id,
+            studyId: study.id,
+            ticker: study.ticker,
+            variant: study.variant,
+            status: "error",
+          };
+        }
       }
       // Return the queue-time credit charge (no-op if the job was never charged).
       await tx`SELECT refund_job_credits(${id})`;
     });
+    if (failedStudyPush) await notifyStudyFinished(failedStudyPush);
     out({ ok: true, job_id: id, failed: true });
   } else if (cmd === "watchlist") {
     // For the watchlist refresh sweep: every tracked ticker, across all
