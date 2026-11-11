@@ -31,6 +31,7 @@ import {
   type DiscoveryFilters,
 } from "@/lib/leaps-discovery";
 import { apiError } from "@/lib/shared";
+import { offlineMutate } from "@/lib/offline/store";
 const money = (v: number) =>
   new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -198,17 +199,31 @@ export default function LeapsClient({
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!computed.input) return;
+    const trimmedName = name.trim();
+    if (!trimmedName || trimmedName.length > 100) {
+      setError("Name your scenario (up to 100 characters).");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/leaps", {
+      const result = await offlineMutate({
+        kind: "leaps_save",
+        label: `Save LEAPS scenario · ${computed.input.ticker} (${trimmedName})`,
+        endpoint: "/api/leaps",
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, inputs: computed.input, context }),
+        body: { name: trimmedName, inputs: computed.input, context },
       });
-      if (!res.ok)
-        throw new Error(await apiError(res, "Couldn't save scenario"));
-      const saved = await res.json();
+      if (result.mode === "queued") {
+        setNotice(
+          "Scenario saved offline — it will sync to your workspace automatically when online.",
+        );
+        setName("");
+        return;
+      }
+      if (!result.response.ok)
+        throw new Error(await apiError(result.response, "Couldn't save scenario"));
+      const saved = await result.response.json();
       setLoadedPlanId(saved.id);
       setNotice(
         "Scenario saved. This does not record a trade or place an order.",
@@ -926,13 +941,16 @@ export default function LeapsClient({
         <h2 className="font-semibold">How to interpret the model</h2>
         <p className="mt-2 text-sm text-fg-subtle">
           European Black-Scholes with continuous dividend yield, constant
-          volatility and interest rate. Equity options may allow early exercise,
-          which this model does not capture. Discrete dividends, volatility
-          skew, assignment, taxes and execution slippage are not modeled. Enter
-          total fees yourself. Greeks are per share; theta is per day and vega
-          per one percentage-point change in IV. A theoretical value is not a
-          quote, fill or forecast. Purchased options can lose the entire
-          premium.
+          volatility and interest rate. Before loading a live CBOE contract,
+          inputs default to a 4.0%/yr risk-free rate (US Treasury bill
+          convention) and a 30% placeholder implied volatility — adjust both to
+          match current market rates and the contract&rsquo;s quoted IV. Equity
+          options may allow early exercise, which this model does not capture.
+          Discrete dividends, volatility skew, assignment, taxes and execution
+          slippage are not modeled. Enter total fees yourself. Greeks are per
+          share; theta is per day and vega per one percentage-point change in
+          IV. A theoretical value is not a quote, fill or forecast. Purchased
+          options can lose the entire premium.
         </p>
         <p className="mt-3 text-xs">
           <a

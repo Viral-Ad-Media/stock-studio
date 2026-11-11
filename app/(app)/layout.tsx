@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Nav from "@/components/Nav";
 import { TourProvider } from "@/components/guide/Tour";
+import { AuthenticatedOfflineSync } from "@/components/pwa/PwaProvider";
 import { currentUser, currentWorkspaceId, accountDisabled } from "@/lib/workspace";
 import { getBillingState } from "@/lib/billing";
 import { isSuperAdmin } from "@/lib/admin";
@@ -43,6 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
   return (
     <TourProvider>
+      <AuthenticatedOfflineSync enabled={Boolean(user && ws)} />
       <div className="min-h-screen md:flex">
         <Nav userEmail={user?.email ?? null} userName={user?.name ?? null} credits={billing?.balance ?? null} isAdmin={Boolean(admin)} />
         <main id="main" className="w-full min-w-0 flex-1 p-4 sm:p-6 md:p-8 max-w-[1440px] mx-auto">

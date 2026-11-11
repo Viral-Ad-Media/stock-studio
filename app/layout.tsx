@@ -1,10 +1,14 @@
 import type { Metadata, Viewport } from "next";
 import { SITE } from "@/lib/site";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
+import { PwaProvider } from "@/components/pwa/PwaProvider";
+import ConnectivityBanner from "@/components/pwa/ConnectivityBanner";
+import PwaSettingsModal from "@/components/pwa/PushAndOfflinePanel";
 import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE.url),
+  manifest: "/manifest.webmanifest",
   title: {
     default: `${SITE.name}: research-led LEAPS planning`,
     template: `%s | ${SITE.name}`,
@@ -14,6 +18,19 @@ export const metadata: Metadata = {
   authors: [{ name: SITE.operator }],
   creator: SITE.operator,
   publisher: SITE.operator,
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: SITE.name,
+  },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
   openGraph: {
     type: "website",
     siteName: SITE.name,
@@ -49,7 +66,13 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body>{children}</body>
+      <body>
+        <PwaProvider>
+          <ConnectivityBanner />
+          {children}
+          <PwaSettingsModal />
+        </PwaProvider>
+      </body>
     </html>
   );
 }

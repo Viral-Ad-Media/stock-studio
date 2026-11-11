@@ -24,6 +24,7 @@ export default function robots(): MetadataRoute.Robots {
           "/signals",
           "/billing",
           "/admin",
+          "/offline",
           "/reset-password",
         ],
       },
