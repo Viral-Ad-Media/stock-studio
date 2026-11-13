@@ -1,5 +1,10 @@
 # Signal relay (Supabase Edge Function)
 
+> On Neon this function is not used: Neon has no pg_cron, so the web app runs the
+> same relay pass itself. See the Signals section of the main README and
+> [`lib/signal-relay-host.ts`](../../../lib/signal-relay-host.ts). The steps below
+> apply only when the database is a Supabase project.
+
 The relay does the signal bot's job in short passes instead of holding a Discord
 connection open. pg_cron calls it once a minute. Each pass reads the latest 50
 messages in the input channel, records approved calls with `stocks.record_signal`,

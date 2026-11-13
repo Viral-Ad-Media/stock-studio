@@ -1,15 +1,17 @@
 // One pass of the Discord signal relay: read new messages in the input channel,
 // record approved calls, then post queued signals to the member channels. It
-// runs once a minute (supabase/functions/signal-relay, scheduled by pg_cron), so
-// nothing has to stay online between passes.
+// runs once a minute, so nothing has to stay online between passes. The web
+// app starts it on Neon (lib/signal-relay-host.ts); the Supabase edge function
+// (supabase/functions/signal-relay) is the same pass for a pg_cron database.
 //
 // The bot's own reaction marks a message as handled (📥 queued, ❓ bad format,
 // ⛔ unapproved, ⚠️ not saved), so a pass that dies halfway is picked up by the
 // next one. record_signal is idempotent per source message, and deliveries keep
 // their leases and retries in the database, so a replay never double-posts.
 //
-// No Discord or database imports: the edge function passes both in, and the
-// tests pass fakes. Imports use .ts extensions because Deno requires them.
+// No Discord library or database imports: the caller passes both in, and the
+// tests pass fakes. discordRestClient below is the plain-fetch Discord client
+// both callers use. Imports use .ts extensions because Deno requires them.
 import { parseSignal, isParseError, ACTION_STYLE, formatPrice, type ParsedSignal } from "./signals.ts";
 
 export type DiscordMessage = {
@@ -162,6 +164,33 @@ async function handleMessage(cfg: RelayConfig, discord: RelayDiscord, store: Rel
   // replay returns the same record instead of making a new one.
   await discord.react(channel, msg.id, "📥");
   return rec != null;
+}
+
+const DISCORD_API = "https://discord.com/api/v10";
+
+// Discord over its REST API with a bot token: no gateway connection to hold open.
+export function discordRestClient(token: string): RelayDiscord {
+  async function call(method: string, path: string, body?: unknown): Promise<Response> {
+    const res = await fetch(`${DISCORD_API}${path}`, {
+      method,
+      headers: { Authorization: `Bot ${token}`, "Content-Type": "application/json", "User-Agent": "StockStudioSignalRelay (https://stock-studio.onrender.com, 1)" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) throw new Error(`Discord ${method} ${path.split("?")[0]} -> ${res.status} ${(await res.text()).slice(0, 200)}`);
+    return res;
+  }
+  const noPings = { parse: [], replied_user: false };
+  return {
+    recentMessages: async (channel) => await (await call("GET", `/channels/${channel}/messages?limit=50`)).json(),
+    react: async (channel, id, emoji) => { await call("PUT", `/channels/${channel}/messages/${id}/reactions/${encodeURIComponent(emoji)}/@me`); },
+    reply: async (channel, id, content) => {
+      await call("POST", `/channels/${channel}/messages`, { content, message_reference: { message_id: id, fail_if_not_exists: false }, allowed_mentions: noPings });
+    },
+    // Discord also deduplicates a retried send inside its recent-nonce window.
+    post: async (channel, embed, nonce) =>
+      (await (await call("POST", `/channels/${channel}/messages`, { embeds: [embed], nonce, enforce_nonce: true, allowed_mentions: { parse: [] } })).json()).id,
+  };
 }
 
 function errorText(error: unknown): string {

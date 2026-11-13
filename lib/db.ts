@@ -103,6 +103,25 @@ function getAdminClient() {
   return globalThis.__stocksAdminSql;
 }
 
+declare global {
+  // eslint-disable-next-line no-var
+  var __stocksSignalsSql: ReturnType<typeof postgres> | undefined;
+}
+
+// Separate connection for the in-app signal relay only, as the stocks_signals
+// role: it can record and read signals and their deliveries, nothing else.
+export const signalsSql = new Proxy(function () {} as unknown as ReturnType<typeof postgres>, {
+  apply: (_target, _thisArg, args) => (getSignalsClient() as any)(...args),
+  get: (_target, prop) => (getSignalsClient() as any)[prop],
+}) as ReturnType<typeof postgres>;
+
+function getSignalsClient() {
+  if (!globalThis.__stocksSignalsSql) {
+    globalThis.__stocksSignalsSql = createClient(process.env.SIGNALS_DATABASE_URL, "SIGNALS_DATABASE_URL", 1);
+  }
+  return globalThis.__stocksSignalsSql;
+}
+
 export function adminWritesConfigured(): boolean {
   return Boolean(process.env.ADMIN_DATABASE_URL);
 }

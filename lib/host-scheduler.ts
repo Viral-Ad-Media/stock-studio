@@ -1,5 +1,6 @@
 import { sql } from "./db";
 import { runWorkerLoop } from "./engine/worker";
+import { runSignalRelayOnce } from "./signal-relay-host";
 
 declare global { var __stocksHostScheduler: ReturnType<typeof setInterval> | undefined; }
 
@@ -32,8 +33,20 @@ export async function runHostMaintenance() {
   } finally { running = false; }
 }
 
+// The Discord signal relay, when its settings are present. It runs beside
+// maintenance rather than inside it: a research run can hold maintenance for
+// minutes, and a trade call shouldn't wait for that.
+export async function runHostSignalRelay() {
+  try {
+    await runSignalRelayOnce();
+  } catch (error) {
+    // Relay errors name the Discord endpoint or the database error, never the bot token or a connection URL.
+    console.error("host-scheduler: signal relay pass failed:", error instanceof Error ? error.message : String(error));
+  }
+}
+
 export function startHostScheduler() {
   if (globalThis.__stocksHostScheduler) return;
-  globalThis.__stocksHostScheduler = setInterval(() => { void runHostMaintenance(); }, 60_000);
+  globalThis.__stocksHostScheduler = setInterval(() => { void runHostSignalRelay(); void runHostMaintenance(); }, 60_000);
   globalThis.__stocksHostScheduler.unref();
 }

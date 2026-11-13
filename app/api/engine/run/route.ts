@@ -1,6 +1,6 @@
-import { createHash, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { runWorkerLoop } from "@/lib/engine/worker";
+import { secretMatches } from "@/lib/secret";
 
 // Called by a Supabase Postgres trigger (instant, on stocks.jobs INSERT via
 // pg_net) and a pg_cron backstop (every ~1 min) — see the
@@ -16,13 +16,4 @@ export async function POST(req: NextRequest) {
   }
   const result = await runWorkerLoop();
   return NextResponse.json({ ok: true, ...result });
-}
-
-// Constant-time compare (hash first so lengths match). Fails closed when the
-// env var is unset or empty.
-function secretMatches(given: string | null, expected: string | undefined): boolean {
-  if (!given || !expected) return false;
-  const a = createHash("sha256").update(given).digest();
-  const b = createHash("sha256").update(expected).digest();
-  return timingSafeEqual(a, b);
 }

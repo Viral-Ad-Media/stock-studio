@@ -293,9 +293,12 @@ above stay educational.
 
 - **Posting.** The trader types one line in a private Discord channel, e.g.
   `BUY GOOGL CALL @12.40 tp 15 sl 11 breakout over 285`. Within about a minute the signal relay
-  (a Supabase Edge Function run by pg_cron, [`supabase/functions/signal-relay`](supabase/functions/signal-relay/README.md);
-  logic in [`lib/signal-relay.ts`](lib/signal-relay.ts), parser [`lib/signals.ts`](lib/signals.ts)) records
-  it, then posts a formatted signal to the members' channel. The always-on gateway bot
+  (run by the web app, [`lib/signal-relay-host.ts`](lib/signal-relay-host.ts); logic in
+  [`lib/signal-relay.ts`](lib/signal-relay.ts), parser [`lib/signals.ts`](lib/signals.ts)) records
+  it, then posts a formatted signal to the members' channel. A pass starts from the host's minute
+  scheduler (`STOCKS_HOST_SCHEDULER=1`) and from `POST /api/signals/relay`, which an outside
+  once-a-minute ping calls with the `x-relay-secret` header so the relay keeps running while a free
+  host would otherwise sleep. Both can fire at once: recording is idempotent and deliveries are leased. The always-on gateway bot
   ([`scripts/signal-bot.ts`](scripts/signal-bot.ts)) does the same instantly but needs a host that stays up.
 - **Who can post.** Only Discord user IDs listed in `SIGNAL_POSTER_IDS`. The bot refuses to start without
   at least one, and anyone else gets a ⛔ with nothing posted.
@@ -309,9 +312,15 @@ above stay educational.
 - **Who sees it.** `/signals` is for members with paid access (`profiles.access_granted`) and platform
   admins, not trial accounts. No credits are charged. Like setup scans, signals are program-wide data
   without a `workspace_id`.
-- **Secrets.** The bot token lives only in the relay's Supabase function secrets (or the gateway bot's
-  host env). Deploy steps: [`supabase/functions/signal-relay/README.md`](supabase/functions/signal-relay/README.md);
-  gateway bot: [`deploy/signal-bot/README.md`](deploy/signal-bot/README.md).
+- **Secrets.** The bot token and the `stocks_signals` connection are private settings of the web
+  service (or of the gateway bot's host). The relay endpoint returns counts only.
+- **Turning it on.** Set `DISCORD_TOKEN`, `INPUT_CHANNEL_ID`, `SIGNALS_CHANNEL_ID`, `SIGNAL_POSTER_IDS`,
+  `SIGNALS_DATABASE_URL` and a long random `SIGNAL_RELAY_SECRET` on the web service, then point a
+  once-a-minute scheduler (for example cron-job.org) at `POST https://<host>/api/signals/relay` with the
+  header `x-relay-secret: <SIGNAL_RELAY_SECRET>`. A healthy pass answers `{"ok":true,"status":"ok",...}`;
+  `/admin/system` shows which settings are present and the relay's last check-in. The Supabase edge
+  function ([`supabase/functions/signal-relay`](supabase/functions/signal-relay/README.md)) and the
+  gateway bot ([`deploy/signal-bot/README.md`](deploy/signal-bot/README.md)) remain as alternatives.
 - **SMS.** The rules allow SMS alerts and `signal_deliveries` accepts an `sms` channel, but no SMS
   sender is built yet.
 
@@ -478,7 +487,7 @@ All variables are listed in [`.env.example`](.env.example).
 | `BILLING_DATABASE_URL` | billing (webhook only) | Neon pooled URL for the `stocks_billing` role, the only role allowed to grant access or credits. Set its password privately in Neon: `ALTER ROLE stocks_billing WITH PASSWORD '…';`. |
 | `STRIPE_PRICE_{SILVER,GOLD,DIAMOND}_MONTHLY` | billing | Recurring monthly price ids of the three plans (amounts in `lib/plans.ts`: Silver $97, Gold $47, Diamond $47). The webhook maps a subscription's price back to its plan with these, so an unknown price grants nothing. The old `_YEARLY` variables are still read for subscriptions started before yearly billing was withdrawn. |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Web Push | Optional. P-256 VAPID keypair generated via `npm run vapid-keys`, plus optional `mailto:` or `https://` contact subject. Without them, push opt-in stays disabled while the offline PWA still works. |
-| `DISCORD_TOKEN`, `INPUT_CHANNEL_ID`, `SIGNALS_CHANNEL_ID`, `GOLD_SIGNALS_CHANNEL_ID`, `SILVER_SIGNALS_CHANNEL_ID`, `SIGNAL_POSTER_IDS`, `SIGNALS_DATABASE_URL` | signal relay only | Never on the web host. Set as Supabase function secrets for `signal-relay`, plus `SIGNAL_RELAY_SECRET`. See [`supabase/functions/signal-relay/README.md`](supabase/functions/signal-relay/README.md). |
+| `DISCORD_TOKEN`, `INPUT_CHANNEL_ID`, `SIGNALS_CHANNEL_ID`, `GOLD_SIGNALS_CHANNEL_ID`, `SILVER_SIGNALS_CHANNEL_ID`, `SIGNAL_POSTER_IDS`, `SIGNALS_DATABASE_URL`, `SIGNAL_RELAY_SECRET` | signal relay | Set on the web service to run the relay in the app (`lib/signal-relay-host.ts`). `SIGNALS_DATABASE_URL` is the Neon `stocks_signals` role, which can only record and read signals. `SIGNAL_RELAY_SECRET` authenticates the once-a-minute ping to `POST /api/signals/relay`. Without the first five the relay is off. |
 
 ---
 

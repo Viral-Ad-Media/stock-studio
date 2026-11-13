@@ -36,8 +36,9 @@ Set the following as private environment variables on the web service:
 | `STOCKS_ENGINE_ENABLED` | Leave unset until paid research is ready; `1` enables it |
 | `OPS_ALERT_WEBHOOK_URL` | Optional private operator Discord webhook |
 
-Set `SIGNALS_DATABASE_URL` on the existing Vercel bot to a Neon
-`stocks_signals` connection. Retain its other channel, poster and bot settings.
+The signal relay now runs inside the web app (see Scheduling). Set
+`SIGNALS_DATABASE_URL` on the web service to a Neon `stocks_signals`
+connection, with the bot's channel, poster and token settings.
 Neon usernames have no Supabase project suffix. Use TLS; URL-encode passwords.
 Create random role passwords privately and enable `LOGIN` for the five runtime
 roles after import. Keep the migration owner credential off runtime hosts.
@@ -106,8 +107,10 @@ job-insert notifications become no-ops. On the existing long-running web host,
 advisory lock prevents concurrent maintenance across replicas and stays pinned
 under pooling. It runs the engine only with `STOCKS_ENGINE_ENABLED=1`; that
 includes setup scans and push dispatch handled by the worker. Operator alerts
-use `OPS_ALERT_WEBHOOK_URL`, replacing Vault. The Vercel bot retains its own
-delivery loop. A free web host sleeps while idle, so this is not an always-on
+use `OPS_ALERT_WEBHOOK_URL`, replacing Vault. The same scheduler starts one
+Discord signal relay pass a minute when the relay settings are present, and
+`POST /api/signals/relay` (header `x-relay-secret`) runs the same pass for an
+outside once-a-minute ping. A free web host sleeps while idle, so this is not an always-on
 scheduler; use a persistent host or authenticated external calls to
 `POST /api/engine/run` for that requirement. Do not enable this scheduler inside
 serverless functions.

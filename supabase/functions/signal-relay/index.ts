@@ -1,7 +1,7 @@
 // Supabase Edge Function: one pass of the Discord signal relay per call.
-// pg_cron calls it every minute (supabase/signal-relay.sql). It replaces the
-// always-on gateway bot, which Vercel billed for a reserved vCPU around the
-// clock. See supabase/functions/signal-relay/README.md for setup.
+// pg_cron calls it every minute (supabase/signal-relay.sql). Only for a
+// Supabase database: on Neon the web app runs the same pass itself
+// (lib/signal-relay-host.ts). See supabase/functions/signal-relay/README.md.
 //
 // Secrets (supabase secrets set, never committed): SIGNAL_RELAY_SECRET,
 // DISCORD_TOKEN, SIGNALS_DATABASE_URL, INPUT_CHANNEL_ID, SIGNALS_CHANNEL_ID,
@@ -9,10 +9,9 @@
 // SILVER_SIGNALS_CHANNEL_ID, SIGNAL_FOOTER, SIGNAL_DISCLAIMER.
 import postgres from "npm:postgres@3.4.9";
 import { parsePosterIds, type ParsedSignal } from "../../../lib/signals.ts";
-import { runRelayPass, type Delivery, type DiscordMessage, type RelayDiscord, type RelayStore } from "../../../lib/signal-relay.ts";
+import { discordRestClient, runRelayPass, type Delivery, type DiscordMessage, type RelayStore } from "../../../lib/signal-relay.ts";
 
 const env = (name: string) => Deno.env.get(name)?.trim() || "";
-const API = "https://discord.com/api/v10";
 
 let sql: ReturnType<typeof postgres> | undefined;
 
@@ -39,7 +38,7 @@ Deno.serve(async (req) => {
   sql ??= postgres(dbUrl, { ssl: "require", prepare: false, max: 1, idle_timeout: 20 });
   const db = sql;
 
-  const discord = discordClient(token);
+  const discord = discordRestClient(token);
   const store: RelayStore = {
     heartbeat: async () => { await db`SELECT stocks.signal_bot_heartbeat(${db.json({ via: "edge-relay" })})`; },
     record: async (sig: ParsedSignal, msg: DiscordMessage) => {
@@ -70,29 +69,6 @@ Deno.serve(async (req) => {
     return Response.json({ error: "pass failed" }, { status: 500 });
   }
 });
-
-function discordClient(token: string): RelayDiscord {
-  async function call(method: string, path: string, body?: unknown): Promise<Response> {
-    const res = await fetch(`${API}${path}`, {
-      method,
-      headers: { Authorization: `Bot ${token}`, "Content-Type": "application/json", "User-Agent": "StockStudioSignalRelay (https://stock-studio.onrender.com, 1)" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`Discord ${method} ${path.split("?")[0]} -> ${res.status} ${(await res.text()).slice(0, 200)}`);
-    return res;
-  }
-  const noPings = { parse: [], replied_user: false };
-  return {
-    recentMessages: async (channel) => await (await call("GET", `/channels/${channel}/messages?limit=50`)).json(),
-    react: async (channel, id, emoji) => { await call("PUT", `/channels/${channel}/messages/${id}/reactions/${encodeURIComponent(emoji)}/@me`); },
-    reply: async (channel, id, content) => {
-      await call("POST", `/channels/${channel}/messages`, { content, message_reference: { message_id: id, fail_if_not_exists: false }, allowed_mentions: noPings });
-    },
-    // Discord also deduplicates a retried send inside its recent-nonce window.
-    post: async (channel, embed, nonce) =>
-      (await (await call("POST", `/channels/${channel}/messages`, { embeds: [embed], nonce, enforce_nonce: true, allowed_mentions: { parse: [] } })).json()).id,
-  };
-}
 
 // Constant-time compare (hash first so lengths match).
 async function sameSecret(given: string | null, expected: string): Promise<boolean> {
