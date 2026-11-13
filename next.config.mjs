@@ -1,20 +1,6 @@
 const isDev = process.env.NODE_ENV !== "production";
 
-// Supabase is the only third-party origin the browser talks to (auth). Stripe
-// Checkout is a full-page redirect, so it needs no CSP allowance.
-const supabaseOrigin = (() => {
-  try {
-    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").origin;
-  } catch {
-    return "https://*.supabase.co";
-  }
-})();
-
-// Defense in depth behind lib/markdown.ts's sanitizer. 'unsafe-inline' for
-// scripts is needed by Next's inline bootstrap without per-request nonces
-// (which would force every page, including static marketing pages, dynamic);
-// the value here is that nothing can load third-party script, exfiltrate via
-// fetch/XHR/images to another origin, frame the app, or hijack <base>/forms.
+// Authentication is served from this application origin.
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
@@ -23,7 +9,7 @@ const csp = [
   "font-src 'self' data:",
   "worker-src 'self'",
   "manifest-src 'self'",
-  `connect-src 'self' ${supabaseOrigin} ${supabaseOrigin.replace(/^https:/, "wss:")}`,
+  "connect-src 'self'",
   "frame-ancestors 'none'",
   "frame-src 'none'",
   "object-src 'none'",

@@ -21,7 +21,7 @@ ALTER ROLE stocks_signals WITH PASSWORD '<long random password>';
 ```
 
 Its connection string (transaction pooler, port 6543) is
-`postgres://stocks_signals.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres`.
+`postgresql://stocks_signals:<password>@ep-PROJECT-pooler.REGION.aws.neon.tech/stockstudio?sslmode=require`.
 
 ## 1. Install
 

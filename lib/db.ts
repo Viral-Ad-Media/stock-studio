@@ -1,7 +1,7 @@
 import postgres from "postgres";
 import dns from "dns";
 
-// Hosted Postgres (Supabase, isolated `stocks` schema). The stocks_app role's
+// Neon Postgres, isolated `stocks` schema. The stocks_app role's
 // search_path is set to stocks, so table names stay unqualified here.
 // int8 → Number so ids and counts behave like plain JS numbers in JSON.
 
@@ -38,7 +38,7 @@ function createClient(url: string | undefined = process.env.DATABASE_URL, envNam
   if (!url) throw new Error(`${envName} is not set`);
   return postgres(url, {
     ssl: "require",
-    prepare: false, // required for Supabase transaction pooler
+    prepare: false, // compatible with Neon transaction pooling
     max,
     types: {
       bigint: {

@@ -379,6 +379,12 @@ works” and format cards follow the selected theme rather than fixed light colo
 
 ## Architecture
 
+The active migration targets **Neon Postgres and self-managed Better Auth**.
+See [the migration and cutover guide](db/README.md) for validation status,
+required secrets, role boundaries, scheduling and rollback. Historical SQL
+in `supabase/` remains the application schema history; it is not the runtime
+authentication provider.
+
 ```
             ┌──────────────────── Next.js app (Render or Vercel) ─────────────────────┐
  browser ──▶│ (marketing)  /  /pricing  /terms  /privacy          ← public            │
@@ -430,9 +436,10 @@ cp .env.example .env.local      # then fill it in (see below)
 npm run dev                     # http://localhost:3200
 ```
 
-At minimum, local dev needs `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL` and
-`NEXT_PUBLIC_SUPABASE_ANON_KEY`. Without the Supabase auth vars, the auth gate is skipped in dev
-and the app refuses to start in production (503).
+Local development needs `DATABASE_URL`, `AUTH_DATABASE_URL`, `BETTER_AUTH_URL`
+and a persistent `BETTER_AUTH_SECRET`. The authentication gate fails closed
+when configuration is missing. SMTP credentials and `AUTH_EMAIL_FROM` are
+required for signup verification and password resets.
 
 ### Build
 
@@ -450,12 +457,15 @@ All variables are listed in [`.env.example`](.env.example).
 
 | Variable | Needed for | Notes |
 |---|---|---|
-| `DATABASE_URL` | everything | Supabase **transaction pooler**, `stocks_app` role (`stocks_app.<ref>` username). |
-| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | auth | From Project Settings → API. |
-| `SUPABASE_PROJECT_ID` | tooling | Project ref, for read-only inspection with the Supabase SQL tools. |
+| `DATABASE_URL` | everything | Neon pooled Postgres connection, `stocks_app` role. |
+| `AUTH_DATABASE_URL` | auth | Separate Neon connection using `stocks_auth`; search path `auth,stocks,public`. |
+| `BETTER_AUTH_SECRET` / `BETTER_AUTH_URL` | auth | Persistent random secret (32+ characters) and the deployed application origin. |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `AUTH_EMAIL_FROM` | account emails | Authenticated sender for verification and password reset. |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | optional Google sign-in | Callback: `/api/auth/callback/google`. |
+| `STOCKS_HOST_SCHEDULER` / `STOCKS_ENGINE_ENABLED` | maintenance | Separate opt-ins: host scheduling and paid research respectively. |
 | `NEXT_PUBLIC_APP_URL` | login + Stripe redirects, canonical URLs, sitemap, social cards | **Set it in production, available at build time**, e.g. `https://app.example.com`. Behind a host's proxy the server sees itself as `0.0.0.0:$PORT`. Without it, `appOrigin()` falls back to the forwarded `Host` header and SEO URLs fall back to Render's/Vercel's own public URL. |
 | `ANTHROPIC_API_KEY` | automated worker | |
-| `ENGINE_WEBHOOK_SECRET` | automated worker | Must equal the Vault secret `engine_webhook_secret`. |
+| `ENGINE_WEBHOOK_SECRET` | automated worker | Shared secret for external `/api/engine/run` callers. |
 | `ENGINE_WEB_RESEARCH` | automated worker | `1` also automates web-research variants. Off by default ([why](#automated-worker)). |
 | `ENGINE_INVOCATION_BUDGET_MS` / `ENGINE_MIN_CLAIM_MS` / `ENGINE_MAX_CALL_MS` | automated worker | Optional tuning: total budget per invocation, the minimum time left to start another job, and the cap on one model call. Defaults 280000 / 150000 / 170000 fit a 300 s serverless limit. On Render (no function limit) deep-research jobs need more, e.g. 720000 / 150000 / 600000. A running job's lock goes stale after the budget plus 2 minutes. |
 | `MASSIVE_API_KEY` | market data | Optional. Massive (formerly Polygon.io) key. Fallback for bars, quotes and movers when Yahoo answers 429/5xx or is unreachable, and for options chains when CBOE fails (options need a Massive plan that includes them). `POLYGON_API_KEY` is accepted too. |
@@ -465,7 +475,7 @@ All variables are listed in [`.env.example`](.env.example).
 | `MARKET_DATA_PROVIDERS` | market data | Optional fallback order, comma-separated (default `massive,tiingo,twelvedata,finnhub,alpaca`). Only providers with keys set are used; one that rate-limits is skipped for 10 minutes. |
 | `ALPACA_KEY_ID` / `ALPACA_SECRET_KEY` | market data | Optional. Keys from a free Alpaca account (paper keys work). When Yahoo answers 429/5xx, charts, daily bars and movers come from Alpaca's IEX feed instead, and Yahoo is skipped for 10 minutes. Recommended on Render, whose shared IPs Yahoo rate-limits. IEX volumes are partial, and indices (`^GSPC`) aren't covered. |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | billing | |
-| `BILLING_DATABASE_URL` | billing (webhook only) | Pooler URL for the `stocks_billing` role, the only role allowed to grant access or credits. Set its password first in the Supabase SQL editor: `ALTER ROLE stocks_billing WITH PASSWORD '…';`. |
+| `BILLING_DATABASE_URL` | billing (webhook only) | Neon pooled URL for the `stocks_billing` role, the only role allowed to grant access or credits. Set its password privately in Neon: `ALTER ROLE stocks_billing WITH PASSWORD '…';`. |
 | `STRIPE_PRICE_{SILVER,GOLD,DIAMOND}_{MONTHLY,YEARLY}` | billing | Recurring price ids of the six plan prices (amounts in `lib/plans.ts`). The webhook maps a subscription's price back to its plan with these, so an unknown price grants nothing. |
 | `STRIPE_PRICE_CREDIT_PACK` | billing | Price id of one credit pack. |
 | `STRIPE_CREDITS_PER_PACK` | billing | Credits granted per pack. Default 10. Diamond packs carry 50% more. |
@@ -617,16 +627,15 @@ watch the balance update.
 ## Accounts & sign-in
 
 - **Sign up** asks for first name, last name, email and a password (at least 8 characters,
-  including a letter and a number). The names go into Supabase Auth user metadata and are used only
-  for display; nothing security-relevant is read from them. Supabase sends a confirmation email,
+  including a letter and a number). The names go into Better Auth and are used only
+  for display; nothing security-relevant is read from them. The configured mail sender delivers a confirmation email,
   which can be re-sent from the "check your email" screen.
 - **Log in** with email and password, or **Continue with Google**.
 - **Remember me** is on by default, which keeps you signed in on that device. Unchecked, the
-  login is kept only for the browser session: the `ss_remember=0` flag makes every auth cookie a
-  session cookie (`lib/auth-cookies.ts`).
+  login uses Better Auth’s `rememberMe: false` browser-session cookie.
 - **Forgot password**: `/forgot-password` sends a reset link. It shows the same response whether
-  or not the account exists, so it can't be used to find registered emails. The link goes through
-  `/auth/callback` to `/reset-password`, where the new password is set.
+  or not the account exists, so it can't be used to find registered emails. Better Auth validates a single-use token
+  before `/reset-password` accepts a new password.
 - The shared UI is in `components/auth/`: `AuthShell`, `PasswordInput` (show/hide toggle),
   `GoogleButton` and `OrDivider`.
 
@@ -789,7 +798,7 @@ lib/
   signal*.ts            signal parser, relay, feed and delivery
   admin.ts              super admin gate and actions
   engine/               worker loop, Anthropic client, prompts, methodology.md
-  supabase/             browser + server Supabase clients
+  auth.ts               Better Auth with a separate identity database role
 scripts/                engine / candles / history / movers CLIs, signal bot, sweep scanner
 deploy/                 signal-bot and sweep-scanner worker deploy files
 docs/                   screenshots and Sweep Scanner method notes
@@ -820,8 +829,7 @@ tests/                  node:test suites, including a full migration replay on P
      docker compose --env-file .env.local --profile signals up   # plus the signal bot
      # or directly:
      docker build --target web -t stock-studio \
-       --build-arg NEXT_PUBLIC_APP_URL=https://app.example.com \
-       --build-arg NEXT_PUBLIC_SUPABASE_URL=... --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=... .
+       --build-arg NEXT_PUBLIC_APP_URL=https://app.example.com .
      docker run -p 3200:3200 --env-file .env.local stock-studio
      ```
      Behind a TLS-inspecting proxy, add `--secret id=ca_bundle,src=/path/to/ca.pem`. It's mounted only
@@ -841,7 +849,11 @@ tests/                  node:test suites, including a full migration replay on P
      `charge.refunded`, `customer.subscription.created/updated/deleted` and `invoice.paid`.
    - Set `STRIPE_WEBHOOK_SECRET`, and turn on the customer portal with plan switching.
    - Apply new migrations **before** merging the code that needs them; `main` auto-deploys.
-4. **Supabase Auth** (dashboard → Authentication):
+4. **Better Auth:** configure the runtime values in [db/README.md](db/README.md).
+
+   Legacy Supabase deployment instructions below apply only before cutover:
+
+   **Supabase Auth** (dashboard → Authentication):
    - **URL Configuration:** set the Site URL to your deploy URL, and add
      `https://<host>/auth/callback` (plus `http://localhost:3200/auth/callback` for dev) to the
      redirect allowlist. Email confirmation, password reset and Google all return through it.
@@ -905,6 +917,6 @@ Trade signals:
 | Webhook returns 500 `BILLING_DATABASE_URL is not set` (or a login failure) | The webhook's database account isn't configured. Set a password on `stocks_billing` and `BILLING_DATABASE_URL`. Stripe keeps retrying, so nothing is lost. |
 | Paid, but no access or credits | The webhook isn't reaching the app. Check the Stripe dashboard's delivery log, `STRIPE_WEBHOOK_SECRET`, and that the event carries Stock Studio metadata. |
 | Signed-in pages error after a deploy (e.g. `column ... does not exist`) | The code was deployed before its migration. Apply the pending file in `supabase/migrations/`. |
-| Production returns 503 "Locked" | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` aren't set. |
+| Production returns 503 "Authentication is not configured" | Set `AUTH_DATABASE_URL`, `BETTER_AUTH_SECRET`, and `BETTER_AUTH_URL`. |
 | `DATABASE_URL is not set` from a CLI | `.env.local` is missing from the repo root. |
 | `npm run candles` returns no data | The market isn't open yet, or the date is beyond Yahoo's ~30-day 1-minute history. |

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
-import { getSupabase } from "@/lib/supabase/lazy";
+import { authClient } from "@/lib/auth-client";
 import AuthShell from "@/components/auth/AuthShell";
 import PasswordInput from "@/components/auth/PasswordInput";
 
@@ -13,9 +13,7 @@ const RULES = [
   { label: "A letter and a number", test: (p: string) => /[a-z]/i.test(p) && /\d/.test(p) },
 ];
 
-// Reached from the emailed reset link via /auth/callback, which has already
-// exchanged the link's code for a recovery session. Without that session the
-// link was used, expired, or opened in another browser.
+// A single-use, expiring reset token is validated server-side by Better Auth.
 export default function ResetPasswordPage() {
   const router = useRouter();
   const [state, setState] = useState<"checking" | "ready" | "no-session">("checking");
@@ -25,10 +23,8 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getSupabase()
-      .then((sb) => sb.auth.getUser())
-      .then(({ data }) => setState(data.user ? "ready" : "no-session"))
-      .catch(() => setState("no-session"));
+    const params = new URLSearchParams(window.location.search);
+    setState(params.get("token") && !params.get("error") ? "ready" : "no-session");
   }, []);
 
   const rulesOk = RULES.every((r) => r.test(password));
@@ -40,13 +36,13 @@ export default function ResetPasswordPage() {
     setBusy(true);
     setError(null);
     try {
-      const { error } = await (await getSupabase()).auth.updateUser({ password });
+      const { error } = await authClient.resetPassword({ newPassword: password, token: new URLSearchParams(window.location.search).get("token") || "" });
       if (error) {
-        setError(/different from the old/i.test(error.message) ? "Choose a password you haven't used before." : error.message);
+        setError(/different from the old/i.test((error.message || "Authentication failed. Please try again.")) ? "Choose a password you haven't used before." : (error.message || "Authentication failed. Please try again."));
         setBusy(false);
         return;
       }
-      router.push("/dashboard");
+      router.push("/login?message=password_updated");
       router.refresh();
     } catch {
       setError("Couldn't reach the server — check your connection and try again.");
@@ -66,7 +62,7 @@ export default function ResetPasswordPage() {
 
   if (state === "no-session") {
     return (
-      <AuthShell title="This link has expired" subtitle="Reset links work once, for an hour, in the browser that requested them.">
+      <AuthShell title="This link has expired" subtitle="Reset links work once and expire after an hour.">
         <Link href="/forgot-password" className="btn-primary w-full py-2.5 text-sm">
           Send a new link
         </Link>

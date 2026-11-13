@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Check, MailCheck } from "lucide-react";
-import { getSupabase } from "@/lib/supabase/lazy";
+import { authClient } from "@/lib/auth-client";
 import AuthShell from "@/components/auth/AuthShell";
 import PasswordInput from "@/components/auth/PasswordInput";
 import GoogleButton from "@/components/auth/GoogleButton";
@@ -36,18 +36,12 @@ export default function SignupPage() {
     const first = firstName.trim().slice(0, NAME_MAX);
     const last = lastName.trim().slice(0, NAME_MAX);
     try {
-      const { error } = await (await getSupabase()).auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-          // Display name only — stored in Supabase Auth user metadata. Nothing
-          // security-relevant (trial, access, credits) is ever read from here.
-          data: { first_name: first, last_name: last, full_name: `${first} ${last}` },
-        },
+      const { error } = await authClient.signUp.email({
+        email: email.trim(), password, name: `${first} ${last}`,
+        callbackURL: "/dashboard",
       });
       if (error) {
-        setError(/already registered/i.test(error.message) ? "An account with this email already exists — sign in instead." : error.message);
+        setError(/already registered/i.test((error.message || "Authentication failed. Please try again.")) ? "An account with this email already exists — sign in instead." : (error.message || "Authentication failed. Please try again."));
         setBusy(false);
         return;
       }
@@ -60,13 +54,11 @@ export default function SignupPage() {
 
   async function resend() {
     setResent("sending");
-    const { error } = await (await getSupabase()).auth.resend({
-      type: "signup",
-      email: email.trim(),
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+    const { error } = await authClient.sendVerificationEmail({
+      email: email.trim(), callbackURL: "/dashboard",
     });
     if (error) {
-      setError(error.message);
+      setError((error.message || "Authentication failed. Please try again."));
       setResent("idle");
     } else {
       setResent("sent");

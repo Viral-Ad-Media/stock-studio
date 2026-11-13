@@ -43,7 +43,7 @@ export function adminErrorResponse(err: unknown): NextResponse {
     return NextResponse.json(
       {
         error:
-          "The admin database connection was rejected. Set a password on the stocks_admin role (ALTER ROLE stocks_admin WITH PASSWORD ...) and put that exact password in ADMIN_DATABASE_URL, with the user stocks_admin.<project ref>.",
+          "The admin database connection was rejected. Set a password on the stocks_admin role (ALTER ROLE stocks_admin WITH PASSWORD ...) and put that exact password in ADMIN_DATABASE_URL, with the user stocks_admin.",
       },
       { status: 503 }
     );
@@ -53,7 +53,7 @@ export function adminErrorResponse(err: unknown): NextResponse {
     return NextResponse.json(
       {
         error:
-          "The admin database user can't run admin changes. ADMIN_DATABASE_URL must log in as stocks_admin.<project ref>, and the latest migrations must be applied.",
+          "The admin database user can't run admin changes. ADMIN_DATABASE_URL must log in as stocks_admin, and the latest migrations must be applied.",
       },
       { status: 503 }
     );

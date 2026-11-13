@@ -1,12 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { getSupabase } from "@/lib/supabase/lazy";
-import { setRememberMe } from "@/lib/supabase/remember";
+import { authClient } from "@/lib/auth-client";
 
-// "Continue with Google" via Supabase OAuth (PKCE). Supabase sends the user to
-// Google, then back to /auth/callback, which exchanges the code for a session.
-// Requires the Google provider to be enabled in the Supabase dashboard.
+// Better Auth handles OAuth state and the provider callback server-side.
 export default function GoogleButton({
   label = "Continue with Google",
   remember = true,
@@ -22,16 +19,14 @@ export default function GoogleButton({
 
   async function go() {
     setBusy(true);
-    setRememberMe(remember);
-    const { error } = await (await getSupabase()).auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
+    const { error } = await authClient.signIn.social({
+      provider: "google", callbackURL: next, errorCallbackURL: "/login?error=oauth_failed",
     });
     if (error) {
       onError(
-        /provider is not enabled|unsupported provider/i.test(error.message)
+        /provider is not enabled|unsupported provider/i.test((error.message || "Authentication failed. Please try again."))
           ? "Google sign-in isn't set up yet — use email and password for now."
-          : error.message
+          : (error.message || "Authentication failed. Please try again.")
       );
       setBusy(false);
     }

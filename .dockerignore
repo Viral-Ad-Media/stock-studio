@@ -12,6 +12,7 @@ coverage
 *.log
 .DS_Store
 .claude
+.migration-private
 CLAUDE.md
 AGENTS.md
 Dockerfile

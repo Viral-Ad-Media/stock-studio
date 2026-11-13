@@ -6,8 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, FilePlus2, Eye, CandlestickChart, LogOut, CreditCard, Menu, X, Globe2, Radar, Sigma, BookOpen, HelpCircle, ShieldCheck, Megaphone, Bell } from "lucide-react";
 import { useTour } from "@/components/guide/Tour";
 import ThemeToggle from "@/components/theme/ThemeToggle";
-import { getSupabase } from "@/lib/supabase/lazy";
-import { setRememberMe } from "@/lib/supabase/remember";
+import { authClient } from "@/lib/auth-client";
 import { clearAllOfflineData } from "@/lib/offline/store";
 import { usePwa } from "@/components/pwa/PwaProvider";
 
@@ -203,8 +202,8 @@ function Account({ userEmail, userName }: { userEmail: string | null; userName: 
   const router = useRouter();
   async function signOut() {
     await clearAllOfflineData();
-    await (await getSupabase()).auth.signOut();
-    setRememberMe(true); // clear the session-only flag
+    const { error } = await authClient.signOut();
+    if (error) throw new Error(error.message);
     router.push("/login");
     router.refresh();
   }

@@ -26,3 +26,4 @@ CLAUDE.md
 
 # Sweep tapes, local audit logs and pass locks
 .sweep-data/
+.migration-private/
