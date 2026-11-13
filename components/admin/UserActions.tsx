@@ -3,14 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiError } from "@/lib/shared";
+import { PLANS, PLAN_IDS, isPlanId } from "@/lib/plans";
 
-type Props = { userId: string; accessGranted: boolean; writesEnabled: boolean };
+type Props = { userId: string; accessGranted: boolean; enrolledPlan: string | null; writesEnabled: boolean };
 
 // Admin changes to one account. Every change needs a note; it goes to the
 // audit log with the change itself.
 export default function UserActions({
   userId,
   accessGranted,
+  enrolledPlan,
   writesEnabled,
 }: Props) {
   const router = useRouter();
@@ -75,6 +77,21 @@ export default function UserActions({
     )
       form.reset();
   }
+  async function onEnrol(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const value = f.get("plan");
+    const plan = isPlanId(value) ? value : null;
+    if (
+      await send(
+        "enrol",
+        { action: "enrol", plan, note: f.get("note") },
+        () => (plan ? `Enrolled in ${PLANS[plan].name}.` : "Enrolment removed."),
+      )
+    )
+      form.reset();
+  }
   async function onAccess(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
@@ -106,7 +123,54 @@ export default function UserActions({
           (the stocks_admin role&apos;s connection string).
         </p>
       )}
-      <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-4">
+        <form onSubmit={onEnrol} className="space-y-3">
+          <h3 className="text-sm font-medium text-slate-200">Plan enrolment</h3>
+          <p className="text-xs text-fg-subtle">
+            Set this once the program fee is received. The member can then
+            start (or switch to) that tier&apos;s monthly membership on their
+            Billing page.
+          </p>
+          <div>
+            <label htmlFor="enrol-plan" className="field-label">
+              Enrolled tier
+            </label>
+            <select
+              id="enrol-plan"
+              name="plan"
+              defaultValue={enrolledPlan ?? ""}
+              key={enrolledPlan ?? "none"}
+              className="input"
+            >
+              <option value="">Not enrolled</option>
+              {PLAN_IDS.map((id) => (
+                <option key={id} value={id}>
+                  {PLANS[id].name} (${PLANS[id].monthlyUsd}/month)
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="enrol-note" className="field-label">
+              Reason
+            </label>
+            <input
+              id="enrol-note"
+              name="note"
+              required
+              minLength={3}
+              maxLength={500}
+              className="input"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={disabled}
+            className="btn-primary w-full px-4 py-2 text-sm"
+          >
+            {busy === "enrol" ? "Saving…" : "Save enrolment"}
+          </button>
+        </form>
         <form onSubmit={onCredits} className="space-y-3">
           <h3 className="text-sm font-medium text-slate-200">Adjust credits</h3>
           <div>
@@ -190,7 +254,7 @@ export default function UserActions({
           <p className="text-xs text-fg-subtle">
             {accessGranted
               ? "The account keeps any trial time left, then loses access. Stripe isn't refunded by this."
-              : "Makes the account a Founding member (every Diamond feature) without a payment."}
+              : "Makes the account a Founding member (every feature, no monthly fee) without a payment."}
           </p>
           <div>
             <label htmlFor="access-note" className="field-label">

@@ -10,28 +10,24 @@ export function stripe(): Stripe {
   return _stripe;
 }
 
-// Hosted-Checkout prices, created in the Stripe dashboard. The credit pack
-// is a one-time payment; the plans are recurring prices, one monthly and
-// one yearly per plan, e.g. STRIPE_PRICE_GOLD_MONTHLY.
-export function priceFor(kind: "credits"): string {
-  const id = process.env.STRIPE_PRICE_CREDIT_PACK;
-  if (!id) throw new Error(`Stripe price for "${kind}" is not configured`);
-  return id;
-}
-
+// Hosted-Checkout prices, created in the Stripe dashboard: one recurring
+// monthly price per plan, e.g. STRIPE_PRICE_GOLD_MONTHLY. The program's
+// upfront fee is collected outside the app and has no price here.
 function planEnv(plan: PlanId, interval: BillingInterval): string {
   return `STRIPE_PRICE_${plan.toUpperCase()}_${interval === "year" ? "YEARLY" : "MONTHLY"}`;
 }
 
-export function planPrice(plan: PlanId, interval: BillingInterval): string {
-  const name = planEnv(plan, interval);
+export function planPrice(plan: PlanId): string {
+  const name = planEnv(plan, "month");
   const id = process.env[name];
   if (!id) throw new Error(`${name} is not configured`);
   return id;
 }
 
 // Reverse lookup for the webhook: which plan a subscription's price is.
-// Unknown prices return null and the webhook ignores them.
+// Unknown prices return null and the webhook ignores them. The yearly
+// variables are only read here, for subscriptions started before yearly
+// billing was withdrawn.
 export function planForPrice(priceId: string | null | undefined): { plan: PlanId; interval: BillingInterval } | null {
   if (!priceId) return null;
   for (const plan of PLAN_IDS) {

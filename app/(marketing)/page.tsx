@@ -200,7 +200,7 @@ const FAQ = [
   },
   {
     q: "How does the free trial work?",
-    a: `You get ${SITE.trialDays} days and ${SITE.trialCredits} starter credits, with no card required. The trial has Gold features. After that, pick Silver ($${PLANS.silver.monthlyUsd}/month), Gold ($${PLANS.gold.monthlyUsd}/month) or Diamond ($${PLANS.diamond.monthlyUsd}/month); each includes monthly credits, and you can cancel any time.`,
+    a: `You get ${SITE.trialDays} days and ${SITE.trialCredits} starter credits, with no card required. The trial has every feature except the trader's signals. After that, enrol in the Silver, Gold or Diamond tier of the coaching program: a program fee, then $${PLANS.silver.monthlyUsd}/month for Silver or $${PLANS.gold.monthlyUsd}/month for Gold and Diamond. Each includes monthly credits, and you can cancel the monthly membership any time.`,
   },
   {
     q: "What do the product previews show?",

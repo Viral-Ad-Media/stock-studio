@@ -2,20 +2,25 @@
 // the gates (pages and API routes), the Stripe webhook's credit grants, and
 // the pricing/billing pages. Client-safe: no database or Stripe imports.
 //
-// The signal pick rule itself (first 2 BUY calls a week for Gold, first BUY
-// of the month for Silver, plus follow-ups) lives in SQL,
-// stocks.signal_live_tiers(), so the web app and the Discord bot agree.
+// The plans are tiers of the coaching program. The upfront program fee is
+// collected outside the app; an admin then enrols the member in a tier
+// (profiles.enrolled_plan) and the app bills only the monthly fee.
+// Silver gets the trader's signals and the research core; Gold and Diamond
+// unlock everything in the app and differ only in coaching time.
 
 export const PLAN_IDS = ["silver", "gold", "diamond"] as const;
 export type PlanId = (typeof PLAN_IDS)[number];
+// Plans are sold monthly. "year" remains for subscriptions started before
+// yearly billing was withdrawn.
 export type BillingInterval = "month" | "year";
 
 // founding: bought the old one-time unlock (or was granted access by an
-// admin) and keeps every Diamond feature. trial: free trial, Gold features
-// without live signals. none: trial over and no plan.
+// admin) and keeps every feature. trial: free trial, every feature except
+// live signals. none: trial over and no plan.
 export type Tier = PlanId | "founding" | "trial" | "none";
 
-export type SignalAccess = "all" | "weekly" | "monthly" | "none";
+// Every paid tier sees every call live; the trial and lapsed accounts see none.
+export type SignalAccess = "all" | "none";
 
 export type Entitlements = {
   // Study formats this tier may queue; null = every format.
@@ -31,16 +36,16 @@ export type Entitlements = {
   leaps: boolean;
   journalAnalysis: boolean;
   signals: SignalAccess;
-  // Delay after which every signal is visible in the track record (Gold, Silver).
-  signalDelayDays: number | null;
-  packMultiplier: number; // credits per pack = base pack size x this (Diamond 1.5: 15 per $10)
 };
 
 export type Plan = {
   id: PlanId;
   name: string;
   monthlyUsd: number;
-  yearlyUsd: number;
+  // The program fee paid outside the app before an admin enrols the member.
+  upfront: string;
+  // Live sessions with the trader that come with the tier, if any.
+  coaching: string | null;
   monthlyCredits: number;
   // Unused plan credits carried into the next period, in months of allowance.
   carryOverMonths: number;
@@ -48,58 +53,61 @@ export type Plan = {
   highlights: string[];
 };
 
+// The trader who posts the signals and runs the coaching sessions.
+export const COACH_NAME = "Luqman";
+
 export const PLANS: Record<PlanId, Plan> = {
   silver: {
     id: "silver",
     name: "Silver",
-    monthlyUsd: 29,
-    yearlyUsd: 290,
+    monthlyUsd: 97,
+    upfront: "$497 one-time",
+    coaching: null,
     monthlyCredits: 10,
     carryOverMonths: 0,
-    tagline: "The research core, with one live pick a month.",
+    tagline: "Every signal live, with the research core.",
     highlights: [
-      "10 credits every month",
+      "Every signal, live, the moment it's posted",
+      "10 research credits every month",
       "Quick takes, full studies and comparisons",
       "Watchlist of up to 10 tickers",
       "Today, Market and earnings calendar",
       "Setup bot track record and a basic trading journal",
-      "The trader's pick of the month, live",
-      "Every other signal after 30 days",
     ],
   },
   gold: {
     id: "gold",
     name: "Gold",
-    monthlyUsd: 59,
-    yearlyUsd: 590,
+    monthlyUsd: 47,
+    upfront: "$5,000 program, $2,497 to start",
+    coaching: `Weekly session with ${COACH_NAME} every Thursday`,
     monthlyCredits: 30,
     carryOverMonths: 1,
-    tagline: "Almost everything, with the trader's weekly picks live.",
+    tagline: `Everything in the app, plus a weekly session with ${COACH_NAME}.`,
     highlights: [
-      "30 credits every month, unused credits roll over a month",
-      "Every study format",
-      "Watchlist of up to 50 tickers",
+      `A session with ${COACH_NAME} every Thursday`,
+      "Every signal, live, the moment it's posted",
+      "30 research credits every month, unused credits roll over a month",
+      "Every study format and an unlimited watchlist",
       "Live setup bots, gamma exposure and the LEAPS workspace",
       "Trading journal with decision analysis",
-      "The trader's 2 weekly picks, live, with their follow-ups",
-      "Every other signal after 7 days",
+      "The Sweep Scanner",
     ],
   },
   diamond: {
     id: "diamond",
     name: "Diamond",
-    monthlyUsd: 129,
-    yearlyUsd: 1290,
+    monthlyUsd: 47,
+    upfront: "$4,997 upfront",
+    coaching: `Sessions with ${COACH_NAME} Monday to Friday`,
     monthlyCredits: 75,
     carryOverMonths: 1,
-    tagline: "Everything, with every signal the moment it's posted.",
+    tagline: `Everything in the app, plus ${COACH_NAME} every weekday.`,
     highlights: [
-      "75 credits every month, unused credits roll over a month",
-      "15 credits in every $10 pack",
-      "Every study format and an unlimited watchlist",
-      "Everything in Gold, plus the Sweep Scanner",
+      `Sessions with ${COACH_NAME} Monday to Friday`,
+      "Everything in Silver and Gold",
+      "75 research credits every month, unused credits roll over a month",
       "Every signal, live, the moment it's posted",
-      "Up to 10 reports in progress at once",
     ],
   },
 };
@@ -107,7 +115,8 @@ export const PLANS: Record<PlanId, Plan> = {
 // Silver's study formats. Every other tier with access gets all of them.
 export const SILVER_VARIANTS = ["quick_take", "full", "comparison", "earnings_update", "movers_digest", "watchlist_entry"] as const;
 
-const DIAMOND: Entitlements = {
+// Everything in the app: Gold, Diamond and Founding members.
+const FULL: Entitlements = {
   variants: null,
   watchlistMax: null,
   maxOpenJobs: 10,
@@ -118,20 +127,9 @@ const DIAMOND: Entitlements = {
   leaps: true,
   journalAnalysis: true,
   signals: "all",
-  signalDelayDays: null,
-  packMultiplier: 1.5,
 };
 
-const GOLD: Entitlements = {
-  ...DIAMOND,
-  watchlistMax: 50,
-  maxOpenJobs: 5,
-  sweeps: false,
-  signals: "weekly",
-  signalDelayDays: 7,
-  packMultiplier: 1,
-};
-
+// Signals and the research core; the rest is locked until an upgrade.
 const SILVER: Entitlements = {
   variants: SILVER_VARIANTS,
   watchlistMax: 10,
@@ -142,39 +140,44 @@ const SILVER: Entitlements = {
   sweeps: false,
   leaps: false,
   journalAnalysis: false,
-  signals: "monthly",
-  signalDelayDays: 30,
-  packMultiplier: 1,
+  signals: "all",
 };
 
 export function entitlementsFor(tier: Tier): Entitlements {
   switch (tier) {
     case "diamond":
-    case "founding":
-      return DIAMOND;
     case "gold":
-      return GOLD;
+    case "founding":
+      return FULL;
     case "trial":
-      // Gold features, but the trader's calls never go out for free.
-      return { ...GOLD, signals: "none", signalDelayDays: null };
+      // Every feature, but the trader's calls never go out for free.
+      return { ...FULL, signals: "none" };
     case "silver":
       return SILVER;
     case "none":
-      return { ...SILVER, signals: "none", signalDelayDays: null };
+      return { ...SILVER, signals: "none" };
   }
 }
 
+const PLAN_RANK: Record<PlanId, number> = { silver: 0, gold: 1, diamond: 2 };
+
 // Super admins see everything; otherwise founding beats a subscription
-// (they keep Diamond even if they also subscribe), a live subscription
-// beats the trial.
+// (they keep every feature even if they also subscribe), a live subscription
+// beats the trial. A subscription never unlocks more than the tier an admin
+// enrolled the member in, so switching price in Stripe can't skip the
+// program fee.
 export function effectiveTier(input: {
   accessGranted: boolean;
   trialActive: boolean;
   plan: PlanId | null; // a live subscription's plan, or null
+  enrolledPlan?: PlanId | null;
   admin?: boolean;
 }): Tier {
   if (input.admin || input.accessGranted) return "founding";
-  if (input.plan) return input.plan;
+  if (input.plan) {
+    const enrolled = input.enrolledPlan;
+    return enrolled && PLAN_RANK[enrolled] < PLAN_RANK[input.plan] ? enrolled : input.plan;
+  }
   return input.trialActive ? "trial" : "none";
 }
 
@@ -182,7 +185,7 @@ export const TIER_LABEL: Record<Tier, string> = {
   silver: "Silver",
   gold: "Gold",
   diamond: "Diamond",
-  founding: "Founding Diamond",
+  founding: "Founding member",
   trial: "Free trial",
   none: "No plan",
 };
@@ -195,8 +198,8 @@ export const FEATURE_PLAN: Record<Feature, PlanId> = {
   setupsLive: "gold",
   journalAnalysis: "gold",
   allVariants: "gold",
-  sweeps: "diamond",
-  signalsLive: "diamond",
+  sweeps: "gold",
+  signalsLive: "silver",
 };
 
 export function canQueueVariant(ent: Entitlements, variant: string): boolean {
@@ -204,7 +207,8 @@ export function canQueueVariant(ent: Entitlements, variant: string): boolean {
 }
 
 // Credits granted for one paid invoice, and how many unused plan credits may
-// carry into the new period. Yearly plans grant the year's credits up front.
+// carry into the new period. A legacy yearly subscription gets the year's
+// credits up front.
 export function planCreditGrant(plan: PlanId, interval: BillingInterval): { credits: number; carryCap: number } {
   const p = PLANS[plan];
   const months = interval === "year" ? 12 : 1;
@@ -226,6 +230,8 @@ export type PlanFields = {
   // The member's subscription, if any (stocks.subscriptions).
   sub_plan?: string | null;
   sub_status?: string | null;
+  // The tier an admin enrolled the member in (profiles.enrolled_plan).
+  enrolled_plan?: string | null;
 };
 
 export type AccountPlan = { key: PlanKey; label: string; detail: string | null };
@@ -233,14 +239,20 @@ export type AccountPlan = { key: PlanKey; label: string; detail: string | null }
 const LIVE_STATUSES = ["active", "trialing", "past_due"];
 
 export function accountPlan(p: PlanFields, now = Date.now()): AccountPlan {
-  if (p.access_granted) return { key: "founding", label: "Founding Diamond", detail: null };
+  if (p.access_granted) return { key: "founding", label: "Founding member", detail: null };
+  const enrolled = isPlanId(p.enrolled_plan) ? p.enrolled_plan : null;
   if (isPlanId(p.sub_plan) && p.sub_status && LIVE_STATUSES.includes(p.sub_status)) {
-    return { key: p.sub_plan, label: PLANS[p.sub_plan].name, detail: p.sub_status === "past_due" ? "payment past due" : null };
+    const detail =
+      p.sub_status === "past_due" ? "payment past due" : enrolled && enrolled !== p.sub_plan ? `enrolled in ${PLANS[enrolled].name}` : null;
+    return { key: p.sub_plan, label: PLANS[p.sub_plan].name, detail };
   }
+  // Enrolled by an admin but hasn't started the monthly subscription yet.
+  const pending = enrolled ? `enrolled in ${PLANS[enrolled].name}, not subscribed` : null;
   const ends = p.trial_ends_at ? new Date(p.trial_ends_at).getTime() : null;
   const daysLeft = ends === null ? null : Math.ceil((ends - now) / 86_400_000);
   if (daysLeft !== null && daysLeft > 0) {
-    return { key: "trial", label: "Trial", detail: `${daysLeft} ${daysLeft === 1 ? "day" : "days"} left` };
+    const left = `${daysLeft} ${daysLeft === 1 ? "day" : "days"} left`;
+    return { key: "trial", label: "Trial", detail: pending ? `${left} · ${pending}` : left };
   }
-  return { key: "expired", label: "Trial expired", detail: null };
+  return { key: "expired", label: "Trial expired", detail: pending };
 }

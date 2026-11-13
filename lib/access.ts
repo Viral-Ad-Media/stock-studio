@@ -22,7 +22,7 @@ export async function requireAppAccess(): Promise<
     return {
       ok: false,
       response: NextResponse.json(
-        { error: "You don't have an active plan. Pick Silver, Gold or Diamond on the Billing page to keep queuing reports.", code: "no_access" },
+        { error: "You don't have an active plan. Start your membership on the Billing page to keep queuing reports.", code: "no_access" },
         { status: 402 }
       ),
     };
@@ -32,7 +32,7 @@ export async function requireAppAccess(): Promise<
 
 export function insufficientCreditsResponse() {
   return NextResponse.json(
-    { error: "Not enough credits for this report — buy a credit pack on the Billing page.", code: "no_credits" },
+    { error: "Not enough credits for this report. Your plan's credits refill at each renewal; see the Billing page.", code: "no_credits" },
     { status: 402 }
   );
 }

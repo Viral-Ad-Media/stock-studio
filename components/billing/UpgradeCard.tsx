@@ -11,7 +11,7 @@ export default function UpgradeCard({ title, body, plan, className = "" }: { tit
       </p>
       <p className="mt-2 text-sm text-slate-300">{body}</p>
       <Link href={`/billing?plan=${plan}`} className="btn-primary mt-4 inline-flex px-4 py-2 text-sm">
-        See {PLANS[plan].name} ({`$${PLANS[plan].monthlyUsd}/month`})
+        See {PLANS[plan].name}
       </Link>
     </div>
   );

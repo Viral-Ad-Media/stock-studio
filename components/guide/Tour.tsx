@@ -57,7 +57,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     target: "signals",
     title: "Signals",
-    body: "The program trader's calls as they're posted, with a permanent track record. Diamond sees every call live; Gold and Silver get weekly or monthly picks.",
+    body: "The program trader's calls as they're posted, with a permanent track record. Every plan sees every call live; the free trial doesn't include signals.",
   },
   {
     target: "billing",

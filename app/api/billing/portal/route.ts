@@ -4,8 +4,9 @@ import { getBillingState } from "@/lib/billing";
 import { stripe } from "@/lib/stripe";
 import { appOrigin } from "@/lib/origin";
 
-// Opens Stripe's customer portal: switch plan, update the card, see
-// invoices, cancel. Plan changes come back through the webhook.
+// Opens Stripe's customer portal: update the card, see invoices, cancel.
+// Plan switching must be off in the portal's settings: tiers change only
+// after an admin confirms the upgrade (checkout route, kind "switch").
 export async function POST(req: Request) {
   const user = await currentUser();
   const ws = await currentWorkspaceId();

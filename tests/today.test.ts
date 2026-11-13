@@ -43,8 +43,6 @@ test("CBOE source timestamps survive snapshot caching; unknown timezone stays un
 
 test("signals need a plan that includes them; a trial never does", () => {
   assert.equal(canReadSignals("none"), false);
-  assert.equal(canReadSignals("monthly"), true);
-  assert.equal(canReadSignals("weekly"), true);
   assert.equal(canReadSignals("all"), true);
 });
 

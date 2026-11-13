@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { sql } from "@/lib/db";
 import { currentUser, currentWorkspaceId } from "@/lib/workspace";
-import { packCreditsFor } from "@/lib/billing";
 import { getMembership } from "@/lib/membership";
-import { TIER_LABEL, isPlanId, planCreditGrant } from "@/lib/plans";
+import { PLANS, TIER_LABEL, isPlanId, planCreditGrant } from "@/lib/plans";
+import { SITE } from "@/lib/site";
 import BillingActions, { PlanPicker } from "@/components/BillingActions";
 import AutoRefresh from "@/components/AutoRefresh";
 import PageHeader from "@/components/ui/PageHeader";
@@ -35,7 +35,8 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   const ws = await currentWorkspaceId();
   if (!user || !ws) redirect("/login");
 
-  const { billing, tier, ent, admin } = await getMembership(user.id, ws);
+  const { billing, tier, admin } = await getMembership(user.id, ws);
+  const enrolled = billing.enrolledPlan;
   const sub = billing.subscription;
   const ledger = await sql`
     SELECT delta, reason, created_at FROM credits_ledger WHERE workspace_id = ${ws} ORDER BY id DESC LIMIT 20
@@ -47,16 +48,18 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   const accessLine = admin
     ? "Admin: every feature."
     : tier === "founding"
-      ? "Founding member: you bought Stock Studio before plans existed, so you keep every Diamond feature for life."
+      ? "Founding member: you bought Stock Studio before plans existed, so you keep every feature for life."
       : sub?.live
         ? sub.status === "past_due"
           ? "Your last payment didn't go through. Update your card with Manage plan to keep your plan."
           : sub.cancelAtPeriodEnd
             ? `Cancelled: your plan stays on until ${fmtDate(sub.currentPeriodEnd!)}.`
             : `Renews ${sub.currentPeriodEnd ? fmtDate(sub.currentPeriodEnd) : "automatically"}, billed ${sub.interval === "year" ? "yearly" : "monthly"}. ${planCreditGrant(sub.plan, sub.interval).credits} plan credits arrive with each renewal.`
-        : billing.trialActive
-          ? `Free trial with Gold features (signals not included) — ends ${fmtDate(billing.trialEndsAt!)}. Pick a plan to keep going.`
-          : "You don't have an active plan. Pick one below to keep queuing reports and see signals.";
+        : enrolled
+          ? `You're enrolled in ${PLANS[enrolled].name}. Start your $${PLANS[enrolled].monthlyUsd}/month membership below to switch it on.`
+          : billing.trialActive
+            ? `Free trial with every feature except signals. It ends ${fmtDate(billing.trialEndsAt!)}. Enrol in a plan to keep going.`
+            : "You don't have an active plan. Enrol in one below to keep queuing reports and see signals.";
   const showPlans = tier !== "founding" && !admin;
 
   return (
@@ -69,14 +72,14 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
           <>
             Every report costs credits when you queue it — see{" "}
             <a href="/pricing" className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300">pricing</a> for the per-format
-            schedule. Failed or removed reports are refunded automatically.
+            schedule. Your plan&apos;s credits refill at each renewal. Failed or removed reports are refunded automatically.
           </>
         }
       />
 
       {checkout === "success" && (
         <div className="card p-4 mb-4 text-sm text-emerald-400">
-          Payment received — it can take a few seconds to show up here.
+          Done. It can take a few seconds to show up here.
         </div>
       )}
 
@@ -92,11 +95,11 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
           <span className="text-lg font-semibold text-slate-100">{admin ? "Admin" : TIER_LABEL[tier]}</span>
         </div>
         <p className={`text-sm ${billing.hasAccess && sub?.status !== "past_due" ? "text-slate-400" : "text-amber-400"}`}>{accessLine}</p>
-        <BillingActions creditsPerPack={packCreditsFor(ent)} canManage={Boolean(sub?.stripeCustomerId)} />
+        <BillingActions canManage={Boolean(sub?.stripeCustomerId)} />
       </div>
 
       {showPlans && (
-        <PlanPicker current={sub?.live ? sub.plan : null} highlight={isPlanId(wanted) ? wanted : null} />
+        <PlanPicker current={sub?.live ? sub.plan : null} enrolled={enrolled} highlight={isPlanId(wanted) ? wanted : null} contactEmail={SITE.email} />
       )}
 
       <div className="card p-6 mb-6 max-w-2xl">

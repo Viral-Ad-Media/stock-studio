@@ -33,7 +33,7 @@ export default async function AdminUser({
   if (!u) notFound();
 
   const [p] =
-    await sql`SELECT p.active_workspace_id, p.trial_ends_at, p.access_granted, p.disabled_at, p.disabled_reason,
+    await sql`SELECT p.active_workspace_id, p.trial_ends_at, p.access_granted, p.enrolled_plan, p.disabled_at, p.disabled_reason,
       s.plan AS sub_plan, s.status AS sub_status
       FROM profiles p LEFT JOIN subscriptions s ON s.user_id = p.id WHERE p.id = ${id}`;
   const ws = p.active_workspace_id as string;
@@ -61,6 +61,7 @@ export default async function AdminUser({
     access_granted: Boolean(p.access_granted),
     trial_ends_at: p.trial_ends_at,
     sub_plan: p.sub_plan,
+    enrolled_plan: p.enrolled_plan,
     sub_status: p.sub_status,
   });
 
@@ -155,6 +156,7 @@ export default async function AdminUser({
       <UserActions
         userId={id}
         accessGranted={Boolean(p.access_granted)}
+        enrolledPlan={p.enrolled_plan ?? null}
         writesEnabled={adminWritesConfigured()}
       />
       <AccountActions
