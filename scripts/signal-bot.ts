@@ -13,9 +13,9 @@
  *   DISCORD_TOKEN          bot token
  *   INPUT_CHANNEL_ID       private channel the trader types in
  *   SIGNALS_CHANNEL_ID     member channel the bot posts to (every call)
- *   GOLD_SIGNALS_CHANNEL_ID   optional extra channel for Gold members
- *   SILVER_SIGNALS_CHANNEL_ID optional extra channel for Silver members
- *                          (every tier gets every call: stocks.signal_live_tiers())
+ *   GOLD_SIGNALS_CHANNEL_ID   optional Gold channel: the first 5 BUY calls a week and their follow-ups
+ *   SILVER_SIGNALS_CHANNEL_ID optional Silver channel: the first 3 BUY calls a week and their follow-ups
+ *                          (which calls are picks: stocks.signal_live_tiers())
  *   SIGNAL_POSTER_IDS      comma-separated Discord user IDs allowed to post (required)
  *   SIGNALS_DATABASE_URL   pooler URL for the stocks_signals role (insert/read only)
  *   SIGNAL_FOOTER          optional embed footer (default "I Hate 9-5 Signals")
@@ -61,8 +61,8 @@ const GOLD_CHANNEL_ID = process.env.GOLD_SIGNALS_CHANNEL_ID?.trim() || null;
 const SILVER_CHANNEL_ID = process.env.SILVER_SIGNALS_CHANNEL_ID?.trim() || null;
 const DESTINATIONS = [SIGNALS_CHANNEL_ID, GOLD_CHANNEL_ID, SILVER_CHANNEL_ID].filter((d): d is string => Boolean(d));
 const TIER_LABEL: Record<string, string> = {
-  ...(GOLD_CHANNEL_ID ? { [GOLD_CHANNEL_ID]: "Gold" } : {}),
-  ...(SILVER_CHANNEL_ID ? { [SILVER_CHANNEL_ID]: "Silver" } : {}),
+  ...(GOLD_CHANNEL_ID ? { [GOLD_CHANNEL_ID]: "Gold weekly pick" } : {}),
+  ...(SILVER_CHANNEL_ID ? { [SILVER_CHANNEL_ID]: "Silver weekly pick" } : {}),
 };
 const DATABASE_URL = required("SIGNALS_DATABASE_URL");
 const POSTERS = parsePosterIds(process.env.SIGNAL_POSTER_IDS);

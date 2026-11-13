@@ -150,7 +150,7 @@ async function SignalOverview({ userId, ws }: { userId: string; ws: string }) {
     // Check entitlement BEFORE querying the program-wide feed. A trial is
     // research access, not signal access. Fail closed if the check fails.
     if (!canReadSignals(ent.signals)) return <Panel title="Member signals" href="/billing"><p className="text-sm text-fg-subtle">Enrol in a plan to see the program trader&apos;s calls. Signals are not included in the free trial.</p></Panel>;
-    const rows = await sql.unsafe(SIGNAL_FEED_SQL, signalFeedParams(3));
+    const rows = await sql.unsafe(SIGNAL_FEED_SQL, signalFeedParams(ent.signals, ent.signalDelayDays, 3));
     return <Panel title="Member signals" href="/signals">
       {rows.length ? <ul className="divide-y divide-ink-800">{rows.map((r) => <li key={r.id} className="py-2 first:pt-0"><p className="font-mono text-sm font-semibold text-slate-100">{r.action} {r.ticker} {r.instrument}</p><p className="mt-1 text-sm text-slate-300">{r.detail}</p><p className="mt-1 text-xs text-fg-subtle">Posted {timestampET(r.posted_at)}</p></li>)}</ul> : <p className="text-sm text-fg-subtle">No trader calls have been posted yet.</p>}
       <p className="mt-3 text-xs text-fg-subtle">Source: program trader. General calls shared with members, not personalized advice. Trading involves loss risk; options can lose their full value. See Signals for the complete record.</p>

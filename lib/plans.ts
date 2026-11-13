@@ -2,11 +2,15 @@
 // the gates (pages and API routes), the Stripe webhook's credit grants, and
 // the pricing/billing pages. Client-safe: no database or Stripe imports.
 //
-// The plans are tiers of the coaching program. The upfront program fee is
+// The plans are tiers of the coaching program. The program price is
 // collected outside the app; an admin then enrols the member in a tier
 // (profiles.enrolled_plan) and the app bills only the monthly fee.
-// Silver gets the trader's signals and the research core; Gold and Diamond
-// unlock everything in the app and differ only in coaching time.
+// Silver gets the research core with the rest locked; Gold and Diamond
+// unlock every feature. Signals are limited per week on Silver and Gold.
+//
+// The signal pick rule itself (the first N BUY calls of each week, plus
+// their follow-ups) lives in SQL, stocks.signal_live_tiers(), so the web
+// app, push delivery and the Discord bot agree.
 
 export const PLAN_IDS = ["silver", "gold", "diamond"] as const;
 export type PlanId = (typeof PLAN_IDS)[number];
@@ -19,8 +23,14 @@ export type BillingInterval = "month" | "year";
 // live signals. none: trial over and no plan.
 export type Tier = PlanId | "founding" | "trial" | "none";
 
-// Every paid tier sees every call live; the trial and lapsed accounts see none.
-export type SignalAccess = "all" | "none";
+// all: every call live. gold / silver: that tier's weekly picks live, every
+// other call after the delay. none: no signals (trial and lapsed accounts).
+export type SignalAccess = "all" | "gold" | "silver" | "none";
+
+// Live BUY calls per week. Must match stocks.signal_live_tiers().
+export const SIGNALS_PER_WEEK = { silver: 3, gold: 5 } as const;
+// Days after which a call outside the weekly picks shows in the track record.
+export const SIGNAL_DELAY_DAYS = 7;
 
 export type Entitlements = {
   // Study formats this tier may queue; null = every format.
@@ -36,16 +46,20 @@ export type Entitlements = {
   leaps: boolean;
   journalAnalysis: boolean;
   signals: SignalAccess;
+  // Live BUY calls a week (Silver, Gold); null = unlimited or no signals.
+  signalsPerWeek: number | null;
+  // Delay after which every signal is visible in the track record (Silver, Gold).
+  signalDelayDays: number | null;
 };
 
 export type Plan = {
   id: PlanId;
   name: string;
   monthlyUsd: number;
-  // The program fee paid outside the app before an admin enrols the member.
-  upfront: string;
-  // Live sessions with the trader that come with the tier, if any.
-  coaching: string | null;
+  // The program price paid outside the app before an admin enrols the
+  // member, and the original price it is shown crossed out against.
+  programUsd: number;
+  originalProgramUsd: number;
   monthlyCredits: number;
   // Unused plan credits carried into the next period, in months of allowance.
   carryOverMonths: number;
@@ -53,21 +67,26 @@ export type Plan = {
   highlights: string[];
 };
 
-// The trader who posts the signals and runs the coaching sessions.
-export const COACH_NAME = "Luqman";
+export function usd(n: number): string {
+  return `$${n.toLocaleString("en-US")}`;
+}
+
+export const QA_SESSIONS = "Q&A sessions Thursday evenings at 7pm CST";
+export const LIVE_SESSIONS = "Live sessions 8:30am to 10:30am CST, Monday to Friday";
 
 export const PLANS: Record<PlanId, Plan> = {
   silver: {
     id: "silver",
     name: "Silver",
     monthlyUsd: 97,
-    upfront: "$497 one-time",
-    coaching: null,
+    programUsd: 497,
+    originalProgramUsd: 2497,
     monthlyCredits: 10,
     carryOverMonths: 0,
-    tagline: "Every signal live, with the research core.",
+    tagline: "The course, up to 3 signals a week and the research core.",
     highlights: [
-      "Every signal, live, the moment it's posted",
+      `Up to ${SIGNALS_PER_WEEK.silver} signals a week, live, with their follow-ups`,
+      "Access to the course",
       "10 research credits every month",
       "Quick takes, full studies and comparisons",
       "Watchlist of up to 10 tickers",
@@ -79,14 +98,14 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "gold",
     name: "Gold",
     monthlyUsd: 47,
-    upfront: "$5,000 program, $2,497 to start",
-    coaching: `Weekly session with ${COACH_NAME} every Thursday`,
+    programUsd: 2497,
+    originalProgramUsd: 7497,
     monthlyCredits: 30,
     carryOverMonths: 1,
-    tagline: `Everything in the app, plus a weekly session with ${COACH_NAME}.`,
+    tagline: "Every feature in the app, up to 5 signals a week and weekly Q&A.",
     highlights: [
-      `A session with ${COACH_NAME} every Thursday`,
-      "Every signal, live, the moment it's posted",
+      `Up to ${SIGNALS_PER_WEEK.gold} signals a week, live, with their follow-ups`,
+      QA_SESSIONS,
       "30 research credits every month, unused credits roll over a month",
       "Every study format and an unlimited watchlist",
       "Live setup bots, gamma exposure and the LEAPS workspace",
@@ -98,16 +117,18 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "diamond",
     name: "Diamond",
     monthlyUsd: 47,
-    upfront: "$4,997 upfront",
-    coaching: `Sessions with ${COACH_NAME} Monday to Friday`,
+    programUsd: 4997,
+    originalProgramUsd: 11497,
     monthlyCredits: 75,
     carryOverMonths: 1,
-    tagline: `Everything in the app, plus ${COACH_NAME} every weekday.`,
+    tagline: "Unlimited signals, daily live sessions and a free account review.",
     highlights: [
-      `Sessions with ${COACH_NAME} Monday to Friday`,
-      "Everything in Silver and Gold",
+      "Unlimited signals, live, the moment they're posted",
+      LIVE_SESSIONS,
+      QA_SESSIONS,
+      "Free account review",
       "75 research credits every month, unused credits roll over a month",
-      "Every signal, live, the moment it's posted",
+      "Every feature in Gold",
     ],
   },
 };
@@ -115,7 +136,7 @@ export const PLANS: Record<PlanId, Plan> = {
 // Silver's study formats. Every other tier with access gets all of them.
 export const SILVER_VARIANTS = ["quick_take", "full", "comparison", "earnings_update", "movers_digest", "watchlist_entry"] as const;
 
-// Everything in the app: Gold, Diamond and Founding members.
+// Every feature and every signal: Diamond and Founding members.
 const FULL: Entitlements = {
   variants: null,
   watchlistMax: null,
@@ -127,9 +148,19 @@ const FULL: Entitlements = {
   leaps: true,
   journalAnalysis: true,
   signals: "all",
+  signalsPerWeek: null,
+  signalDelayDays: null,
 };
 
-// Signals and the research core; the rest is locked until an upgrade.
+// Every feature, with the weekly signal picks.
+const GOLD: Entitlements = {
+  ...FULL,
+  signals: "gold",
+  signalsPerWeek: SIGNALS_PER_WEEK.gold,
+  signalDelayDays: SIGNAL_DELAY_DAYS,
+};
+
+// The research core and the weekly signal picks; the rest is locked until an upgrade.
 const SILVER: Entitlements = {
   variants: SILVER_VARIANTS,
   watchlistMax: 10,
@@ -140,22 +171,27 @@ const SILVER: Entitlements = {
   sweeps: false,
   leaps: false,
   journalAnalysis: false,
-  signals: "all",
+  signals: "silver",
+  signalsPerWeek: SIGNALS_PER_WEEK.silver,
+  signalDelayDays: SIGNAL_DELAY_DAYS,
 };
+
+const NO_SIGNALS = { signals: "none", signalsPerWeek: null, signalDelayDays: null } as const;
 
 export function entitlementsFor(tier: Tier): Entitlements {
   switch (tier) {
     case "diamond":
-    case "gold":
     case "founding":
       return FULL;
+    case "gold":
+      return GOLD;
     case "trial":
       // Every feature, but the trader's calls never go out for free.
-      return { ...FULL, signals: "none" };
+      return { ...FULL, ...NO_SIGNALS };
     case "silver":
       return SILVER;
     case "none":
-      return { ...SILVER, signals: "none" };
+      return { ...SILVER, ...NO_SIGNALS };
   }
 }
 
@@ -199,7 +235,7 @@ export const FEATURE_PLAN: Record<Feature, PlanId> = {
   journalAnalysis: "gold",
   allVariants: "gold",
   sweeps: "gold",
-  signalsLive: "silver",
+  signalsLive: "diamond",
 };
 
 export function canQueueVariant(ent: Entitlements, variant: string): boolean {

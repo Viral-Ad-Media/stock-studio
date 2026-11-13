@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Check, ArrowRight } from "lucide-react";
 import { creditCost } from "@/lib/shared";
-import { COACH_NAME, PLANS, PLAN_IDS } from "@/lib/plans";
+import { PLANS, PLAN_IDS, SIGNALS_PER_WEEK, SIGNAL_DELAY_DAYS, usd, type PlanId } from "@/lib/plans";
 import { SITE, absoluteUrl } from "@/lib/site";
 import Breadcrumbs from "@/components/marketing/Breadcrumbs";
 import MarketMotion from "@/components/marketing/MarketMotion";
@@ -11,7 +11,7 @@ import JsonLd, { ORGANIZATION_ID } from "@/components/seo/JsonLd";
 
 export const metadata: Metadata = {
   title: "Pricing",
-  description: `Try Stock Studio free for ${SITE.trialDays} days, then enrol in the Silver, Gold or Diamond tier of the coaching program. Every plan includes live signals and monthly research credits.`,
+  description: `Try Stock Studio free for ${SITE.trialDays} days, then enrol in the Silver, Gold or Diamond tier of the coaching program. Every plan includes live signals, the course and monthly research credits.`,
   alternates: { canonical: "/pricing" },
 };
 
@@ -47,11 +47,16 @@ const INCLUDED_FREE = [
 const yes = "Included";
 const no = "—";
 // Feature rows for the comparison table: [feature, Silver, Gold, Diamond].
+const was = (id: PlanId) => `${usd(PLANS[id].programUsd)} (was ${usd(PLANS[id].originalProgramUsd)})`;
 const COMPARE_ROWS: [string, string, string, string][] = [
-  ["Monthly membership", `$${PLANS.silver.monthlyUsd}`, `$${PLANS.gold.monthlyUsd}`, `$${PLANS.diamond.monthlyUsd}`],
-  ["Program fee", PLANS.silver.upfront, PLANS.gold.upfront, PLANS.diamond.upfront],
-  [`Sessions with ${COACH_NAME}`, no, "Every Thursday", "Monday to Friday"],
-  ["Live signals", "Every call", "Every call", "Every call"],
+  ["Program price", was("silver"), was("gold"), was("diamond")],
+  ["Monthly membership", usd(PLANS.silver.monthlyUsd), usd(PLANS.gold.monthlyUsd), usd(PLANS.diamond.monthlyUsd)],
+  ["Live signals", `Up to ${SIGNALS_PER_WEEK.silver} a week`, `Up to ${SIGNALS_PER_WEEK.gold} a week`, "Unlimited"],
+  ["Signal track record", `After ${SIGNAL_DELAY_DAYS} days`, `After ${SIGNAL_DELAY_DAYS} days`, "Live"],
+  ["Course access", yes, yes, yes],
+  ["Q&A sessions", no, "Thursdays, 7pm CST", "Thursdays, 7pm CST"],
+  ["Live sessions", no, no, "Monday to Friday, 8:30am to 10:30am CST"],
+  ["Account review", no, no, "Free"],
   ["Credits every month", `${PLANS.silver.monthlyCredits}`, `${PLANS.gold.monthlyCredits}`, `${PLANS.diamond.monthlyCredits}`],
   ["Unused plan credits", "Expire each month", "Roll over a month", "Roll over a month"],
   ["Study formats", "Quick take, full study, comparison", "Every format", "Every format"],
@@ -86,7 +91,7 @@ export default function PricingPage() {
       ...PLAN_IDS.map((id) => ({
         "@type": "Offer",
         name: `${PLANS[id].name} plan, monthly membership`,
-        description: `Program fee: ${PLANS[id].upfront}`,
+        description: `Program price: ${usd(PLANS[id].programUsd)}`,
         price: String(PLANS[id].monthlyUsd),
         priceCurrency: "USD",
         url: absoluteUrl("/pricing"),
@@ -112,8 +117,9 @@ export default function PricingPage() {
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-slate-300">
             Silver, Gold and Diamond are tiers of our coaching program: a
-            program fee when you enrol, then a monthly membership. Every plan
-            includes every signal live and monthly credits for research.
+            one-time program price when you enrol, then a monthly membership.
+            Every plan includes live signals, the course and monthly credits
+            for research.
           </p>
         </div>
       </div>
@@ -136,12 +142,18 @@ export default function PricingPage() {
               <h2 id={`${id}-heading`} className="text-sm font-semibold text-emerald-300">
                 {plan.name}
               </h2>
-              <p className="mt-2 text-4xl font-bold text-slate-100">
-                ${plan.monthlyUsd}
-                <span className="text-base font-normal text-fg-subtle">/month</span>
+              <p className="mt-2 flex flex-wrap items-baseline gap-x-3 text-4xl font-bold text-slate-100">
+                <s className="text-xl font-medium text-fg-subtle">
+                  <span className="sr-only">Original price </span>
+                  {usd(plan.originalProgramUsd)}
+                </s>
+                <span>
+                  <span className="sr-only">Current price </span>
+                  {usd(plan.programUsd)}
+                </span>
               </p>
               <p className="mt-1 text-sm text-fg-subtle">
-                Program fee: {plan.upfront}
+                one-time, then {usd(plan.monthlyUsd)}/month
               </p>
               <p className="mt-3 text-sm text-slate-300">{plan.tagline}</p>
               <ul className="mb-8 mt-6 space-y-3 text-sm text-slate-300">
@@ -168,7 +180,7 @@ export default function PricingPage() {
           Start a {SITE.trialDays}-day free trial
         </Link>{" "}
         with every feature except signals and {SITE.trialCredits} starter
-        credits, no card required. Once your program fee is received we switch
+        credits, no card required. Once your program payment is received we switch
         your tier on, and you start the monthly membership from your Billing
         page.
       </p>
@@ -199,10 +211,12 @@ export default function PricingPage() {
           </tbody>
         </table>
         <p className="mt-5 text-xs text-fg-subtle">
-          The program fee is paid when you enrol, outside the app; the monthly
-          membership is billed here and can be cancelled any time. Signals are
-          the trader&apos;s own calls, not personalized advice, and trading
-          involves risk of loss.
+          The program price is paid once when you enrol, outside the app; the
+          monthly membership is billed here and can be cancelled any time. Live
+          signals on Silver and Gold are the trader&apos;s first {SIGNALS_PER_WEEK.silver} or{" "}
+          {SIGNALS_PER_WEEK.gold} BUY calls each week (New York time), with the
+          follow-up calls on those tickers. Signals are the trader&apos;s own
+          calls, not personalized advice, and trading involves risk of loss.
         </p>
       </section>
 

@@ -22,6 +22,7 @@ next-env.d.ts
 
 # Local assistant/editor notes — kept local, not published.
 CLAUDE.md
+AGENTS.md
 .claude/
 
 # Sweep tapes, local audit logs and pass locks

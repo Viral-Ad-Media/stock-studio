@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Check } from "lucide-react";
-import { PLANS, PLAN_IDS, type PlanId } from "@/lib/plans";
+import { PLANS, PLAN_IDS, usd, type PlanId } from "@/lib/plans";
 
 // Starts a Stripe redirect (Checkout or the customer portal).
 async function go(path: string, body: unknown, setError: (e: string | null) => void): Promise<boolean> {
@@ -73,7 +73,7 @@ export function PlanPicker({
       <p className="mb-3 mt-1 max-w-[72ch] text-xs text-fg-subtle">
         {enrolled
           ? `You're enrolled in ${PLANS[enrolled].name}. To move to another tier, contact us; once the upgrade is confirmed you can switch here.`
-          : "Plans are tiers of the coaching program. Enrol with us first; once your program fee is received, your tier is switched on here and you start the monthly membership."}
+          : "Plans are tiers of the coaching program. Enrol with us first; once your program payment is received, your tier is switched on here and you start the monthly membership."}
       </p>
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         {PLAN_IDS.map((id) => {
@@ -94,7 +94,10 @@ export function PlanPicker({
                 ${p.monthlyUsd}
                 <span className="text-sm font-normal text-fg-subtle">/month</span>
               </p>
-              <p className="mt-1 text-xs text-fg-subtle">Program fee: {p.upfront}</p>
+              <p className="mt-1 text-xs text-fg-subtle">
+                Program price: <s><span className="sr-only">originally </span>{usd(p.originalProgramUsd)}</s>{" "}
+                <span className="text-slate-200">{usd(p.programUsd)}</span>
+              </p>
               <p className="mt-1 text-xs text-fg-subtle">{p.tagline}</p>
               <ul className="mt-3 mb-4 space-y-1.5 text-sm text-slate-300">
                 {p.highlights.map((h) => (
