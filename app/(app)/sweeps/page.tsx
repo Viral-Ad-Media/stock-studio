@@ -23,8 +23,8 @@ export default async function SweepsPage() {
       <div>
         <PageHeader title="Sweep Scanner" />
         <UpgradeCard
-          title="The Sweep Scanner is part of Diamond"
-          body="Track fast sweeps through known price levels and the reclaim or rejection that follows. It's in development now and opens to Diamond members first."
+          title="The Sweep Scanner is part of Gold and Diamond"
+          body="Track fast sweeps through known price levels and the reclaim or rejection that follows. It's in development now and opens to Gold and Diamond members first."
           plan={FEATURE_PLAN.sweeps}
         />
       </div>

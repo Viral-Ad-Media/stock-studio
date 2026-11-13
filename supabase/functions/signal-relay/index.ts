@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     const result = await runRelayPass({
       inputChannelId: input,
       destinations: [main, gold, silver].filter((d): d is string => Boolean(d)),
-      tierLabel: { ...(gold ? { [gold]: "Gold weekly pick" } : {}), ...(silver ? { [silver]: "Silver monthly pick" } : {}) },
+      tierLabel: { ...(gold ? { [gold]: "Gold" } : {}), ...(silver ? { [silver]: "Silver" } : {}) },
       posters,
       footer: env("SIGNAL_FOOTER") || "I Hate 9-5 Signals",
       disclaimer: Deno.env.get("SIGNAL_DISCLAIMER") ?? "Trading involves risk of loss. Not personalized financial advice.",

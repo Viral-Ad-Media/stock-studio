@@ -55,7 +55,7 @@ export async function GET() {
         ? sql
             .unsafe(
               SIGNAL_FEED_SQL,
-              signalFeedParams(membership.ent.signals, membership.ent.signalDelayDays, 30),
+              signalFeedParams(30),
             )
             .catch(() => [])
         : Promise.resolve([]),
@@ -128,7 +128,7 @@ export async function GET() {
           target: sig.target ? String(sig.target) : null,
           stop: sig.stop ? String(sig.stop) : null,
           detail: String(sig.detail ?? ""),
-          pick: Boolean(sig.pick),
+          pick: false,
         })),
       },
       { headers: { "Cache-Control": "private, no-store" } },

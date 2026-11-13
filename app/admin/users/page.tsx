@@ -21,6 +21,7 @@ type Extra = {
   disabled_at: string | null;
   sub_plan: string | null;
   sub_status: string | null;
+  enrolled_plan: string | null;
 };
 
 type Invite = {
@@ -60,7 +61,7 @@ export default async function AdminUsers({
   const ids = users.map((u) => u.id);
   const extras = ids.length
     ? ((await sql`
-        SELECT p.id, p.trial_ends_at, p.access_granted, p.disabled_at,
+        SELECT p.id, p.trial_ends_at, p.access_granted, p.enrolled_plan, p.disabled_at,
           coalesce((SELECT sum(delta) FROM credits_ledger l WHERE l.workspace_id = p.active_workspace_id), 0)::int AS balance,
           (SELECT count(*) FROM case_studies cs WHERE cs.workspace_id = p.active_workspace_id)::int AS studies,
           EXISTS (SELECT 1 FROM platform_admins a WHERE a.user_id = p.id) AS is_admin,
@@ -198,6 +199,7 @@ export default async function AdminUsers({
                   trial_ends_at: e?.trial_ends_at ?? null,
                   sub_plan: e?.sub_plan ?? null,
                   sub_status: e?.sub_status ?? null,
+                  enrolled_plan: e?.enrolled_plan ?? null,
                 },
                 now,
               );

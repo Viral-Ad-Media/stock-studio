@@ -171,7 +171,7 @@ export default function NewStudyForm({
           {allowed != null && formats.some((v) => !allowed.includes(v.value)) && (
             <p className="mt-2 text-xs text-fg-subtle">
               Your plan includes quick takes, full studies and comparisons.{" "}
-              <Link href="/billing?plan=gold" className="text-emerald-400 underline-offset-2 hover:underline">Upgrade to Gold</Link> for every format.
+              <Link href="/billing?plan=gold" className="text-emerald-400 underline-offset-2 hover:underline">Upgrade to Gold or Diamond</Link> for every format.
             </p>
           )}
         </fieldset>

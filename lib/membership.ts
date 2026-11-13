@@ -14,6 +14,7 @@ export const getMembership = cache(async (userId: string, workspaceId: string): 
     accessGranted: billing.accessGranted,
     trialActive: billing.trialActive,
     plan: billing.subscription?.live ? billing.subscription.plan : null,
+    enrolledPlan: billing.enrolledPlan,
     admin,
   });
   return { billing, admin, tier, ent: entitlementsFor(tier) };

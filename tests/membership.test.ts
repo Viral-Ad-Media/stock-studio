@@ -2,43 +2,60 @@ import { PGlite } from "@electric-sql/pglite";
 import { readFile, readdir } from "node:fs/promises";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { effectiveTier, entitlementsFor, planCreditGrant, canQueueVariant, PLANS } from "../lib/plans";
-import { SIGNAL_FEED_SQL, SIGNAL_HIDDEN_SQL, signalFeedParams, signalHiddenParams, canReadSignals } from "../lib/signal-feed";
+import { accountPlan, effectiveTier, entitlementsFor, planCreditGrant, canQueueVariant, FEATURE_PLAN, PLANS } from "../lib/plans";
+import { SIGNAL_FEED_SQL, signalFeedParams, canReadSignals } from "../lib/signal-feed";
 
-test("effective tier: founding beats a plan, a live plan beats the trial", () => {
+test("effective tier: founding beats a plan, a live plan beats the trial, enrolment caps a plan", () => {
   assert.equal(effectiveTier({ accessGranted: true, trialActive: false, plan: "silver" }), "founding");
   assert.equal(effectiveTier({ accessGranted: false, trialActive: true, plan: "gold" }), "gold");
   assert.equal(effectiveTier({ accessGranted: false, trialActive: true, plan: null }), "trial");
   assert.equal(effectiveTier({ accessGranted: false, trialActive: false, plan: null }), "none");
   assert.equal(effectiveTier({ accessGranted: false, trialActive: false, plan: null, admin: true }), "founding");
+  // Enrolment alone unlocks nothing: the monthly subscription has to be live.
+  assert.equal(effectiveTier({ accessGranted: false, trialActive: false, plan: null, enrolledPlan: "diamond" }), "none");
+  // Gold costs less a month than Silver, so a Silver enrolee who moves to
+  // the Gold price in Stripe still only gets Silver.
+  assert.equal(effectiveTier({ accessGranted: false, trialActive: false, plan: "gold", enrolledPlan: "silver" }), "silver");
+  assert.equal(effectiveTier({ accessGranted: false, trialActive: false, plan: "diamond", enrolledPlan: "gold" }), "gold");
+  assert.equal(effectiveTier({ accessGranted: false, trialActive: false, plan: "silver", enrolledPlan: "gold" }), "silver");
+  assert.equal(effectiveTier({ accessGranted: false, trialActive: false, plan: "gold", enrolledPlan: "gold" }), "gold");
 });
 
-test("entitlements follow the approved plan matrix", () => {
+test("entitlements follow the coaching plan matrix", () => {
   const diamond = entitlementsFor("diamond");
   const gold = entitlementsFor("gold");
   const silver = entitlementsFor("silver");
+  // Gold, Diamond and Founding unlock everything in the app.
+  assert.deepEqual(gold, diamond);
   assert.deepEqual(entitlementsFor("founding"), diamond);
-  assert.equal(diamond.signals, "all");
-  assert.equal(gold.signals, "weekly");
-  assert.equal(gold.signalDelayDays, 7);
-  assert.equal(silver.signals, "monthly");
-  assert.equal(silver.signalDelayDays, 30);
-  // The trial has Gold features, but never the trader's calls.
+  assert.deepEqual([diamond.gamma, diamond.leaps, diamond.sweeps, diamond.setupsLive, diamond.journalAnalysis], [true, true, true, true, true]);
+  assert.deepEqual([diamond.watchlistMax, diamond.maxOpenJobs, diamond.variants], [null, 10, null]);
+  // Silver: every signal live and the research core; the rest is locked.
+  assert.deepEqual([diamond.signals, gold.signals, silver.signals], ["all", "all", "all"]);
+  assert.deepEqual([silver.gamma, silver.leaps, silver.sweeps, silver.setupsLive, silver.journalAnalysis], [false, false, false, false, false]);
+  assert.deepEqual([silver.watchlistMax, silver.maxOpenJobs, silver.liveRefreshCooldownHours], [10, 3, 24]);
+  assert.equal(canQueueVariant(silver, "memo"), false);
+  assert.equal(canQueueVariant(silver, "full"), true);
+  assert.equal(canQueueVariant(gold, "memo"), true);
+  // Every locked feature points the member at Gold.
+  for (const f of ["gamma", "leaps", "sweeps", "setupsLive", "journalAnalysis", "allVariants"] as const) assert.equal(FEATURE_PLAN[f], "gold");
+  // The trial has every feature, but never the trader's calls.
   assert.equal(entitlementsFor("trial").signals, "none");
   assert.equal(entitlementsFor("trial").leaps, true);
   assert.equal(canReadSignals(entitlementsFor("trial").signals), false);
   assert.equal(canReadSignals(entitlementsFor("none").signals), false);
-  assert.deepEqual([diamond.watchlistMax, gold.watchlistMax, silver.watchlistMax], [null, 50, 10]);
-  assert.deepEqual([diamond.maxOpenJobs, gold.maxOpenJobs, silver.maxOpenJobs], [10, 5, 3]);
-  assert.deepEqual([diamond.sweeps, gold.sweeps, silver.sweeps], [true, false, false]);
-  assert.deepEqual([gold.gamma, gold.leaps, silver.gamma, silver.leaps], [true, true, false, false]);
-  assert.equal(canQueueVariant(silver, "memo"), false);
-  assert.equal(canQueueVariant(silver, "full"), true);
-  assert.equal(canQueueVariant(gold, "memo"), true);
-  assert.deepEqual([PLANS.silver.monthlyUsd, PLANS.gold.monthlyUsd, PLANS.diamond.monthlyUsd], [29, 59, 129]);
+  assert.equal(canReadSignals(silver.signals), true);
+  assert.deepEqual([PLANS.silver.monthlyUsd, PLANS.gold.monthlyUsd, PLANS.diamond.monthlyUsd], [97, 47, 47]);
   assert.deepEqual(planCreditGrant("gold", "month"), { credits: 30, carryCap: 30 });
   assert.deepEqual(planCreditGrant("silver", "month"), { credits: 10, carryCap: 0 });
-  assert.deepEqual(planCreditGrant("diamond", "year"), { credits: 900, carryCap: 900 });
+  assert.deepEqual(planCreditGrant("diamond", "month"), { credits: 75, carryCap: 75 });
+});
+
+test("admin plan label shows the enrolment beside the subscription", () => {
+  const base = { access_granted: false, trial_ends_at: null };
+  assert.deepEqual(accountPlan({ ...base, enrolled_plan: "gold" }), { key: "expired", label: "Trial expired", detail: "enrolled in Gold, not subscribed" });
+  assert.deepEqual(accountPlan({ ...base, enrolled_plan: "gold", sub_plan: "gold", sub_status: "active" }), { key: "gold", label: "Gold", detail: null });
+  assert.deepEqual(accountPlan({ ...base, enrolled_plan: "gold", sub_plan: "silver", sub_status: "active" }), { key: "silver", label: "Silver", detail: "enrolled in Gold" });
 });
 
 async function migrated(): Promise<PGlite> {
@@ -111,7 +128,7 @@ test("plan credits: one grant per invoice, Silver expiry, Gold rollover, upgrade
   }
 });
 
-test("signal picks: Gold gets 2 BUYs a week, Silver 1 a month, follow-ups included, the rest after the delay", async () => {
+test("signals: every call is live for every paid tier", async () => {
   const db = await migrated();
   try {
     // Backdate signals for the test: the chain trigger stamps posted_at itself.
@@ -121,52 +138,56 @@ test("signal picks: Gold gets 2 BUYs a week, Silver 1 a month, follow-ups includ
         "INSERT INTO stocks.signals(id,posted_at,action,ticker,author_discord_id,source_message_id,hash) OVERRIDING SYSTEM VALUE VALUES($1,$2,$3,$4,'123456',$5,'x')",
         [id, postedAt, action, ticker, String(100000 + id)],
       );
-    const now = Date.now();
-    const daysAgo = (d: number) => new Date(now - d * 86_400_000).toISOString();
-    // An old week: three BUYs, a follow-up on the first and on the third.
-    await add(1, "BUY", "AAA", "2026-09-01T14:00:00Z"); // week + month pick
-    await add(2, "BUY", "BBB", "2026-09-02T14:00:00Z"); // week pick
-    await add(3, "BUY", "CCC", "2026-09-03T14:00:00Z"); // not a pick
-    await add(4, "CLOSE", "AAA", "2026-09-04T14:00:00Z"); // follows a pick
-    await add(5, "EXIT", "CCC", "2026-09-04T15:00:00Z"); // follows a non-pick
-    await add(6, "BUY", "DDD", "2026-09-08T14:00:00Z"); // next week: week pick, not the month's first
-    const tiers = Object.fromEntries(
-      (await db.query<{ id: number; gold: boolean; silver: boolean }>("SELECT * FROM stocks.signal_live_tiers() ORDER BY id")).rows.map((r) => [Number(r.id), [r.gold, r.silver]]),
-    );
-    assert.deepEqual(tiers, {
-      1: [true, true],
-      2: [true, false],
-      3: [false, false],
-      4: [true, true],
-      5: [false, false],
-      6: [true, false],
-    });
+    await add(1, "BUY", "AAA", "2026-09-01T14:00:00Z");
+    await add(2, "BUY", "BBB", "2026-09-02T14:00:00Z");
+    await add(3, "BUY", "CCC", "2026-09-03T14:00:00Z"); // third BUY of the week: used to be Diamond-only
+    await add(4, "EXIT", "CCC", "2026-09-04T15:00:00Z");
+    await add(5, "BUY", "DDD", new Date(Date.now() - 3_600_000).toISOString()); // an hour old: no delay any more
+    const tiers = (await db.query<{ id: number; gold: boolean; silver: boolean }>("SELECT * FROM stocks.signal_live_tiers() ORDER BY id")).rows;
+    assert.deepEqual(tiers.map((r) => [Number(r.id), r.gold, r.silver]), [1, 2, 3, 4, 5].map((id) => [id, true, true]));
 
-    // Recent calls: the delay decides what a non-pick member sees.
-    await add(7, "BUY", "EEE", daysAgo(10));
-    await add(8, "BUY", "FFF", daysAgo(1));
-    await add(9, "BUY", "GGG", daysAgo(1));
-    await add(10, "BUY", "HHH", daysAgo(1));
     await db.exec("SET search_path TO stocks, public");
-    const feed = async (access: "all" | "weekly" | "monthly", delay: number | null) =>
-      (await db.query<{ id: number }>(SIGNAL_FEED_SQL, signalFeedParams(access, delay, 100))).rows.map((r) => Number(r.id)).sort((a, b) => a - b);
-    const hidden = async (access: "all" | "weekly" | "monthly", delay: number | null) =>
-      Number((await db.query<{ n: number }>(SIGNAL_HIDDEN_SQL, signalHiddenParams(access, delay))).rows[0].n);
-    assert.deepEqual(await feed("all", null), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    const recentGoldPicks = (await db.query<{ id: number }>("SELECT id FROM stocks.signal_live_tiers() WHERE gold AND id >= 8")).rows.map((r) => Number(r.id));
-    const gold = await feed("weekly", 7);
-    assert.ok(gold.includes(7), "older than 7 days is visible to Gold");
-    for (const id of [8, 9, 10]) assert.equal(gold.includes(id), recentGoldPicks.includes(id), `Gold sees #${id} only if it is a weekly pick`);
-    assert.equal(await hidden("weekly", 7), 3 - recentGoldPicks.length);
-    const silver = await feed("monthly", 30);
-    assert.ok([1, 2, 3, 4, 5, 6].every((id) => silver.includes(id)), "older than 30 days is visible to Silver");
-    assert.equal(silver.includes(10), false);
+    const feed = async (limit: number) => (await db.query<{ id: number }>(SIGNAL_FEED_SQL, signalFeedParams(limit))).rows.map((r) => Number(r.id));
+    assert.deepEqual(await feed(100), [5, 4, 3, 2, 1]);
+    assert.deepEqual(await feed(2), [5, 4]);
   } finally {
     await db.close();
   }
 });
 
-test("tier channels: a Gold/Silver pick is queued for those channels too, each drained in order", async () => {
+test("plan enrolment: only an admin sets it, with a note and an audit row", async () => {
+  const db = await migrated();
+  try {
+    const admin = "00000000-0000-0000-0000-000000000011";
+    const member = "00000000-0000-0000-0000-000000000012";
+    await db.query("INSERT INTO auth.users(id,email) VALUES($1,'admin@example.test'),($2,'member@example.test')", [admin, member]);
+    await db.query("INSERT INTO stocks.platform_admins(user_id) VALUES($1)", [admin]);
+    const enrolled = async () => (await db.query<{ enrolled_plan: string | null }>("SELECT enrolled_plan FROM stocks.profiles WHERE id=$1", [member])).rows[0].enrolled_plan;
+    assert.equal(await enrolled(), null);
+
+    await db.query("SELECT stocks.admin_set_enrolled_plan($1,$2,'gold','program fee received')", [admin, member]);
+    assert.equal(await enrolled(), "gold");
+    await assert.rejects(db.query("SELECT stocks.admin_set_enrolled_plan($1,$2,'platinum','typo')", [admin, member]), /unknown plan/);
+    await assert.rejects(db.query("SELECT stocks.admin_set_enrolled_plan($1,$2,'diamond','')", [admin, member]), /note is required/);
+    await assert.rejects(db.query("SELECT stocks.admin_set_enrolled_plan($1,$2,'diamond','not an admin')", [member, member]));
+    assert.equal(await enrolled(), "gold");
+    await db.query("SELECT stocks.admin_set_enrolled_plan($1,$2,NULL,'refunded the program fee')", [admin, member]);
+    assert.equal(await enrolled(), null);
+
+    const audit = (await db.query<{ detail: any }>("SELECT detail FROM stocks.admin_audit WHERE action='set_enrolled_plan' ORDER BY id")).rows.map((r) => [r.detail.plan_before, r.detail.plan_after]);
+    assert.deepEqual(audit, [[null, "gold"], ["gold", null]]);
+    // The app role can read the column but never write it.
+    assert.equal((await db.query<{ ok: boolean }>("SELECT has_column_privilege('stocks_app','stocks.profiles','enrolled_plan','UPDATE') AS ok")).rows[0].ok, false);
+    for (const role of ["anon", "authenticated", "stocks_app"]) {
+      assert.equal((await db.query<{ ok: boolean }>("SELECT has_function_privilege($1,'stocks.admin_set_enrolled_plan(uuid,uuid,text,text)','EXECUTE') AS ok", [role])).rows[0].ok, false);
+    }
+    assert.equal((await db.query<{ ok: boolean }>("SELECT has_function_privilege('stocks_admin','stocks.admin_set_enrolled_plan(uuid,uuid,text,text)','EXECUTE') AS ok")).rows[0].ok, true);
+  } finally {
+    await db.close();
+  }
+});
+
+test("tier channels: every call is queued for the Gold and Silver channels too, each drained in order", async () => {
   const db = await migrated();
   try {
     const record = (action: string, ticker: string, source: string) =>
@@ -174,18 +195,17 @@ test("tier channels: a Gold/Silver pick is queued for those channels too, each d
         JSON.stringify({ action, ticker, detail: "" }),
         source,
       ]);
-    await record("BUY", "AAA", "900001"); // first BUY: Gold + Silver pick
-    await record("BUY", "BBB", "900002"); // Gold pick (2nd this week) unless the week rolled over, never Silver
+    await record("BUY", "AAA", "900001");
+    await record("BUY", "BBB", "900002");
     await record("BUY", "CCC", "900003");
     await record("BUY", "AAA", "900001"); // replay: nothing new
     const outbox = async (dest: string) =>
       (await db.query<{ signal_id: number }>("SELECT signal_id FROM stocks.signal_outbox WHERE destination=$1 ORDER BY signal_id", [dest])).rows.map((r) => Number(r.signal_id));
     const ids = (await db.query<{ id: number }>("SELECT id FROM stocks.signals ORDER BY id")).rows.map((r) => Number(r.id));
-    const tiers = (await db.query<{ id: number; gold: boolean; silver: boolean }>("SELECT * FROM stocks.signal_live_tiers() ORDER BY id")).rows;
+    assert.equal(ids.length, 3);
     assert.deepEqual(await outbox("111111"), ids);
-    assert.deepEqual(await outbox("222222"), tiers.filter((t) => t.gold).map((t) => Number(t.id)));
-    assert.deepEqual(await outbox("333333"), tiers.filter((t) => t.silver).map((t) => Number(t.id)));
-    assert.equal((await outbox("333333")).length, 1);
+    assert.deepEqual(await outbox("222222"), ids);
+    assert.deepEqual(await outbox("333333"), ids);
 
     // Each destination drains independently with its own lease.
     const main = (await db.query<any>("SELECT * FROM stocks.claim_signal_delivery('111111')")).rows[0];

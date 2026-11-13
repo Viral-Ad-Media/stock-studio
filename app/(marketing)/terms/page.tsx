@@ -58,11 +58,12 @@ export default function TermsPage() {
       <p>
         New accounts receive a free trial period as described on our{" "}
         <Link href="/pricing">pricing page</Link>. After the trial, continued use requires a paid
-        plan (Silver, Gold or Diamond), billed monthly or yearly in advance through our payment
-        processor until you cancel. You can cancel at any time; your plan stays active until the end
-        of the period you have paid for. Each plan includes a credit allowance per period; unused plan
-        credits roll over or expire as described on the pricing page, while purchased credit packs do
-        not expire. Fees are non-refundable except where required by law or stated otherwise at
+        plan (Silver, Gold or Diamond). Each plan is a tier of our coaching program: a program fee
+        agreed and paid when you enrol, and a monthly membership billed in advance through our
+        payment processor until you cancel. You can cancel the monthly membership at any time; your
+        plan stays active until the end of the period you have paid for. Each plan includes a credit
+        allowance per period; unused plan credits roll over or expire as described on the pricing
+        page. Credit packs are no longer sold; credits from packs bought earlier do not expire. Fees are non-refundable except where required by law or stated otherwise at
         checkout. Members who paid the earlier one-time unlock fee keep the access it granted. We may
         change pricing prospectively with notice.
       </p>

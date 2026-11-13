@@ -33,11 +33,7 @@ export const SITE = {
     "Source-cited company research, thesis tracking, LEAPS scenario planning and trade decision review. Connect research to your actual journal fills.",
   operator: "Viral Ad Media",
   email: "viraladmediacontent@gmail.com",
-  // Displayed prices. Charged amounts come from the Stripe prices the
-  // checkout route uses — keep these in step with them. Plan prices live in
-  // lib/plans.ts.
-  creditPackPriceUsd: 10,
-  creditPackSize: 10,
+  // Plan prices live in lib/plans.ts.
   trialDays: 30,
   trialCredits: 5,
 } as const;

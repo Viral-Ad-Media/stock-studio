@@ -16,7 +16,7 @@ ${SITE.name} is operated by ${SITE.operator}. It produces educational business a
 ## Pages
 
 - [Home](${absoluteUrl("/")}): what Stock Studio does, its features, how it works, and FAQ
-- [Pricing](${absoluteUrl("/pricing")}): ${SITE.trialDays}-day free trial with ${SITE.trialCredits} credits, then Silver ($${PLANS.silver.monthlyUsd}/month), Gold ($${PLANS.gold.monthlyUsd}/month) or Diamond ($${PLANS.diamond.monthlyUsd}/month) plans with monthly credits, plus credit packs ($${SITE.creditPackPriceUsd} for ${SITE.creditPackSize} credits)
+- [Pricing](${absoluteUrl("/pricing")}): ${SITE.trialDays}-day free trial with ${SITE.trialCredits} credits, then the Silver ($${PLANS.silver.monthlyUsd}/month), Gold ($${PLANS.gold.monthlyUsd}/month) or Diamond ($${PLANS.diamond.monthlyUsd}/month) tier of the coaching program, each with a program fee paid at enrolment and monthly credits
 - [Start a free trial](${absoluteUrl("/signup")})
 - [Terms of Service](${absoluteUrl("/terms")})
 - [Privacy Policy](${absoluteUrl("/privacy")})

@@ -25,7 +25,7 @@ database. They show layout only, not real research or market data.
 | | |
 |---|---|
 | ![Marketing home page](docs/screenshots/home.png) | ![Pricing page with Silver, Gold and Diamond plans](docs/screenshots/pricing.png) |
-| **Home.** Public landing page with the product tour. | **Pricing.** Silver, Gold and Diamond plans, monthly or yearly. |
+| **Home.** Public landing page with the product tour. | **Pricing.** Silver, Gold and Diamond coaching tiers. |
 | ![Study page with research grade and live market data](docs/screenshots/study.png) | ![Watchlist with thesis status and triggers](docs/screenshots/watchlist.png) |
 | **Study.** Research grade, live quote since the as-of date, and the sourced report. | **Watchlist.** Thesis tracker (intact, weakening, broken), triggers and live prices. |
 | ![Today overview](docs/screenshots/today.png) | ![Trading journal with realized P&L curve](docs/screenshots/journal.png) |
@@ -57,7 +57,7 @@ On a phone the sidebar collapses into a menu and every page reflows to one colum
 | Trading desk | `/journal`, `/leaps` | Self-reported trading journal with P&L analytics and CSV import/export; LEAPS chain discovery and scenario modeling. |
 | Signals | `/signals` + Discord | The program trader's calls, relayed to Discord and kept in an append-only, hash-chained record. |
 | Offline PWA & push | `/offline`, `/billing` | Installable standalone PWA with Service Worker caching, IndexedDB workspace snapshot + FIFO mutation outbox, and RFC 8291/8292 Web Push alerts. |
-| Membership | `/pricing`, `/billing` | 30-day trial, then Silver, Gold or Diamond subscriptions with monthly credits, plus credit packs. |
+| Membership | `/pricing`, `/billing` | 30-day trial, then the Silver, Gold or Diamond coaching tier: a program fee paid outside the app, then a monthly subscription with credits. |
 | Operations | `/admin` | Super admin console: users, invites, jobs, audit log, system health, failure alerts. |
 
 ### Stack
@@ -65,7 +65,7 @@ On a phone the sidebar collapses into a menu and every page reflows to one colum
 - **App**: Next.js 16 (App Router, React 19), Tailwind. Runs locally on port 3200; deployed on Render (Vercel also works).
 - **Database**: hosted Postgres on Supabase, in an isolated `stocks` schema.
 - **Auth**: Supabase Auth (email/password and Google). Each signup gets its own workspace.
-- **Billing**: Stripe subscriptions and one-time credit packs.
+- **Billing**: Stripe monthly subscriptions, one per coaching tier.
 - **Research engine**: an automated Anthropic API worker, with a manual CLI fallback.
 - **Market data**: unauthenticated Yahoo Finance endpoints (no API key) first, with optional keyed fallbacks (Massive, Tiingo, Twelve Data, Finnhub, Alpaca) when Yahoo rate-limits the host; CBOE delayed option chains for LEAPS and gamma, with Massive or Finnhub standing in when CBOE fails.
 
@@ -341,8 +341,8 @@ writable when connectivity drops.
   - **Watchlist**: refreshed thesis status (`intact`, `weakening`, `broken`), raised to high urgency
     when a thesis weakens or breaks.
   - **Live signals**: enqueued by trigger (`stocks.signal_push_queue`) and drained by the worker
-    using `stocks.signal_push_recipients()`, enforcing the exact Diamond/Gold/Silver live-pick tier
-    rules and excluding trial, expired and disabled accounts. Signals older than 30 minutes are
+    using `stocks.signal_push_recipients()`, sending every call to every member on a live plan
+    and excluding trial, expired and disabled accounts. Signals older than 30 minutes are
     never pushed after an outage.
 - **Database migration.** Apply `supabase/migrations/20261111000000_pwa_push_notifications.sql`
   before enabling push in production, and generate VAPID keys with `npm run vapid-keys`.
@@ -476,9 +476,7 @@ All variables are listed in [`.env.example`](.env.example).
 | `ALPACA_KEY_ID` / `ALPACA_SECRET_KEY` | market data | Optional. Keys from a free Alpaca account (paper keys work). When Yahoo answers 429/5xx, charts, daily bars and movers come from Alpaca's IEX feed instead, and Yahoo is skipped for 10 minutes. Recommended on Render, whose shared IPs Yahoo rate-limits. IEX volumes are partial, and indices (`^GSPC`) aren't covered. |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | billing | |
 | `BILLING_DATABASE_URL` | billing (webhook only) | Neon pooled URL for the `stocks_billing` role, the only role allowed to grant access or credits. Set its password privately in Neon: `ALTER ROLE stocks_billing WITH PASSWORD '…';`. |
-| `STRIPE_PRICE_{SILVER,GOLD,DIAMOND}_{MONTHLY,YEARLY}` | billing | Recurring price ids of the six plan prices (amounts in `lib/plans.ts`). The webhook maps a subscription's price back to its plan with these, so an unknown price grants nothing. |
-| `STRIPE_PRICE_CREDIT_PACK` | billing | Price id of one credit pack. |
-| `STRIPE_CREDITS_PER_PACK` | billing | Credits granted per pack. Default 10. Diamond packs carry 50% more. |
+| `STRIPE_PRICE_{SILVER,GOLD,DIAMOND}_MONTHLY` | billing | Recurring monthly price ids of the three plans (amounts in `lib/plans.ts`: Silver $97, Gold $47, Diamond $47). The webhook maps a subscription's price back to its plan with these, so an unknown price grants nothing. The old `_YEARLY` variables are still read for subscriptions started before yearly billing was withdrawn. |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Web Push | Optional. P-256 VAPID keypair generated via `npm run vapid-keys`, plus optional `mailto:` or `https://` contact subject. Without them, push opt-in stays disabled while the offline PWA still works. |
 | `DISCORD_TOKEN`, `INPUT_CHANNEL_ID`, `SIGNALS_CHANNEL_ID`, `GOLD_SIGNALS_CHANNEL_ID`, `SILVER_SIGNALS_CHANNEL_ID`, `SIGNAL_POSTER_IDS`, `SIGNALS_DATABASE_URL` | signal relay only | Never on the web host. Set as Supabase function secrets for `signal-relay`, plus `SIGNAL_RELAY_SECRET`. See [`supabase/functions/signal-relay/README.md`](supabase/functions/signal-relay/README.md). |
 
@@ -581,15 +579,15 @@ other direction, the CLI refuses to claim a job the worker is holding.
 | Stage | How it works |
 |---|---|
 | **Trial** | Every signup gets 30 days plus 5 starter credits. The Postgres trigger `stocks.handle_new_user()` grants them server-side; nothing is read from client metadata. |
-| **Plans** | Silver, Gold and Diamond subscriptions (monthly or yearly), defined in `lib/plans.ts`: prices, monthly credits, and every feature gate. The member's tier is `founding` if `access_granted` (bought the old one-time unlock, or granted by an admin; keeps every Diamond feature), else the plan of a live subscription (`active`, `trialing`, `past_due`), else `trial` (Gold features, no signals) while the trial runs, else `none`. Pages and API routes read `getMembership()` (`lib/membership.ts`). |
+| **Plans** | Silver, Gold and Diamond are tiers of the coaching program, defined in `lib/plans.ts`: monthly price (Silver $97, Gold $47, Diamond $47), the program fee shown beside it, monthly credits, and every feature gate. The program fee is collected outside the app; an admin then sets `profiles.enrolled_plan` and the member starts that tier's monthly subscription. Silver has every signal live and the research core, with the rest locked; Gold and Diamond unlock everything and differ in coaching sessions and credits. The member's tier is `founding` if `access_granted` (bought the old one-time unlock, or granted by an admin; keeps every feature), else the plan of a live subscription (`active`, `trialing`, `past_due`) capped at the enrolled tier, else `trial` (every feature, no signals) while the trial runs, else `none`. Pages and API routes read `getMembership()` (`lib/membership.ts`). |
 | **Access** | `hasAccess = access_granted OR a live subscription OR trial_ends_at > now()`. |
-| **Plan credits** | Each paid plan invoice grants the plan's credits once (`grant_plan_credits`, keyed on the invoice id; yearly plans grant 12 months at once). Plan credits count as spent before purchased ones. At renewal, unused plan credits above the plan's carry cap expire (Silver: none carry; Gold and Diamond: up to one period's allowance). Purchased packs never expire. |
-| **Signals** | Diamond and Founding: every call live. Gold: the first 2 BUY calls of each week live, Silver: the first BUY call of each month, both with follow-ups on those tickers; every other call appears after 7 (Gold) or 30 (Silver) days. The rule is `stocks.signal_live_tiers()`, used by `/signals`, Today and the bot's Gold/Silver Discord channels. |
+| **Plan credits** | Each paid plan invoice grants the plan's credits once (`grant_plan_credits`, keyed on the invoice id). At renewal, unused plan credits above the plan's carry cap expire (Silver: none carry; Gold and Diamond: up to one period's allowance). Credit packs are no longer sold; credits from packs bought earlier never expire, and plan credits count as spent before them. |
+| **Signals** | Every paid tier and Founding members see every call live; trial and lapsed accounts see none. `stocks.signal_live_tiers()` is what push delivery and the bot's optional Gold/Silver Discord channels read. |
 | **Credits** | Charged **at queue time** in the same transaction as the job INSERT. If the balance is short the charge raises (SQLSTATE `SS402`) and the job never exists; the API returns 402. |
 | **Refunds** | Failed jobs (worker or CLI `fail`) are refunded automatically and idempotently. Jobs can be removed from the queue, and refunded, only while still `pending`. Once running, a job can't be cancelled. |
-| **Limits** | Per workspace, at most 3 (Silver), 5 (Gold) or 10 (Diamond) reports in progress and 30 queued per hour (`lib/limits.ts`). |
+| **Limits** | Per workspace, at most 3 (Silver) or 10 (Gold, Diamond) reports in progress and 30 queued per hour (`lib/limits.ts`). |
 | **Sweep jobs** | Refreshes and earnings updates queued by the watchlist sweep (`queue-refresh` / `queue-earnings`) are free, because the customer didn't ask for them. |
-| **Purchases** | `/billing` opens a hosted Stripe Checkout for a plan (subscription mode) or a credit pack. "Manage plan" opens the Stripe customer portal for plan switches, card updates and cancelling. |
+| **Purchases** | `/billing` opens a hosted Stripe Checkout for the tier the member is enrolled in, or switches a live subscription to it after an upgrade. "Manage plan" opens the Stripe customer portal for card updates, invoices and cancelling. |
 
 **The Stripe webhook is the only thing that grants access or purchased credits.** It connects as
 its own database account, `stocks_billing` (`BILLING_DATABASE_URL`). That is the only account
@@ -605,10 +603,15 @@ allowed to execute the two grant functions; the app's own account can't.
     `upsert_subscription()`, so event order doesn't matter.
   - `invoice.paid` for a subscription calls `grant_plan_credits()`: a full grant for the first
     invoice and each renewal, the difference for a prorated upgrade.
-- **Stripe setup**: create the three products with a monthly and a yearly recurring price each,
-  put the six price ids in the `STRIPE_PRICE_*` variables, add the subscription and invoice events
-  above to the webhook endpoint, and turn on the customer portal with plan switching between the
-  six prices (proration "invoice immediately", so upgrade credits arrive straight away).
+- **Stripe setup**: create the three products with one monthly recurring price each (Silver $97,
+  Gold $47, Diamond $47), put the three price ids in the `STRIPE_PRICE_*_MONTHLY` variables, and
+  add the subscription and invoice events above to the webhook endpoint. Turn on the customer
+  portal for card updates, invoices and cancelling, with **plan switching off**: Gold costs less a
+  month than Silver, so tiers must only change after an admin confirms the upgrade.
+- **Enrolling a member**: collect the program fee yourselves, then open the member in `/admin`
+  and set **Plan enrolment** to their tier. Their Billing page then offers that tier's monthly
+  membership (or "Switch to …" if they already subscribe to another tier). A subscription never
+  unlocks more than the enrolled tier.
 - The number of credits in a pack is stamped into the session metadata by our own server, never
   taken from the client.
 
@@ -773,7 +776,7 @@ app/
     jobs/               remove a job from the queue (refunds credits)
     live-refresh/       free live-quote refresh for studies and watchlist rows
     journal/ leaps/     journal entries, CSV import/export, LEAPS chain and saved scenarios
-    billing/checkout/   start a hosted Stripe Checkout (plan or credit pack)
+    billing/checkout/   start or switch the enrolled tier's monthly subscription
     billing/portal/     open the Stripe customer portal
     billing/webhook/    Stripe webhook — the only grant path
     admin/              super admin user, invite and job actions
@@ -787,7 +790,7 @@ lib/
   db.ts                 lazy postgres client (stocks_app, transaction pooler, prepare: false)
   workspace.ts          currentUser(), currentWorkspaceId()
   membership.ts         getMembership(): tier + entitlements per request
-  plans.ts              Silver/Gold/Diamond prices, credits and feature gates
+  plans.ts              Silver/Gold/Diamond prices, program fees, credits and feature gates
   billing.ts stripe.ts  billing state, charge/refund helpers, Stripe client
   shared.ts             client-safe types, VARIANTS, CREDIT_COSTS
   live-data.ts          live quote snapshots for studies and watchlist rows
@@ -842,8 +845,8 @@ tests/                  node:test suites, including a full migration replay on P
    Then set up [failure alerts](#failure-alerts): store a Discord webhook URL in Vault as
    `ops_alert_webhook_url` and run `supabase/ops-alerts.sql`.
 3. **Stripe** (details under [Billing](#billing)):
-   - Create the Silver, Gold and Diamond products with a monthly and a yearly recurring price
-     each, plus a one-time credit-pack price, and set the `STRIPE_PRICE_*` ids.
+   - Create the Silver ($97), Gold ($47) and Diamond ($47) products with one monthly recurring
+     price each, and set the `STRIPE_PRICE_*_MONTHLY` ids.
    - Add a webhook endpoint at `https://<host>/api/billing/webhook` for
      `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
      `charge.refunded`, `customer.subscription.created/updated/deleted` and `invoice.paid`.
@@ -912,7 +915,7 @@ Trade signals:
 | Jobs sit in `pending` forever | Either `engine_webhook_url` in Vault is still the placeholder, or the job is a web-research variant and `ENGINE_WEB_RESEARCH` is off (build it through the engine CLI). |
 | Study shows "We couldn't build this report" | The job failed and its credits were refunded. The real reason is in `jobs.result`: for example a refusal, output over the length limit, repeated timeouts, or invocations killed 3 times. For kills, check the host's function logs and keep `ENGINE_INVOCATION_BUDGET_MS` below the route's `maxDuration`. |
 | Browser console shows a CSP violation | The page is calling an origin not in `connect-src` in `next.config.mjs`; add it there. |
-| API returns 429 | The workspace hit a queue limit (`lib/limits.ts`): reports in progress for its plan (3 Silver, 5 Gold, 10 Diamond), or 30 queued in the last hour. The response says which one, with `Retry-After`. |
+| API returns 429 | The workspace hit a queue limit (`lib/limits.ts`): reports in progress for its plan (3 Silver, 10 Gold and Diamond), or 30 queued in the last hour. The response says which one, with `Retry-After`. |
 | API returns 402 | The trial has ended without a plan (`code: no_access`) or the balance is too low (`code: no_credits`). Both are handled on `/billing`. |
 | Webhook returns 500 `BILLING_DATABASE_URL is not set` (or a login failure) | The webhook's database account isn't configured. Set a password on `stocks_billing` and `BILLING_DATABASE_URL`. Stripe keeps retrying, so nothing is lost. |
 | Paid, but no access or credits | The webhook isn't reaching the app. Check the Stripe dashboard's delivery log, `STRIPE_WEBHOOK_SECRET`, and that the event carries Stock Studio metadata. |

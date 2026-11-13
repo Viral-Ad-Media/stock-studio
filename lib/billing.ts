@@ -1,7 +1,7 @@
 import { cache } from "react";
 import type { TransactionSql } from "postgres";
 import { sql } from "@/lib/db";
-import { isPlanId, type BillingInterval, type Entitlements, type PlanId } from "@/lib/plans";
+import { isPlanId, type BillingInterval, type PlanId } from "@/lib/plans";
 
 // Billing state reads + the two job-lifecycle credit hooks. Every *write* to
 // billing state goes through a SECURITY DEFINER RPC (stocks_billing
@@ -9,16 +9,6 @@ import { isPlanId, type BillingInterval, type Entitlements, type PlanId } from "
 // payments, or profiles.access_granted, so don't try to add one here.
 
 export { creditCost } from "@/lib/shared";
-
-// Credits granted per purchased pack (the pack's price lives in Stripe,
-// STRIPE_PRICE_CREDIT_PACK). The count is stamped into the Checkout Session
-// metadata by our own server, so the webhook never trusts a client number.
-export const CREDITS_PER_PACK = Number(process.env.STRIPE_CREDITS_PER_PACK ?? 10);
-
-// Credits in one pack for this member (Diamond packs carry 50% more).
-export function packCreditsFor(ent: Entitlements): number {
-  return Math.round(CREDITS_PER_PACK * ent.packMultiplier);
-}
 
 export type Subscription = {
   plan: PlanId;
@@ -28,10 +18,14 @@ export type Subscription = {
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
   stripeCustomerId: string;
+  stripeSubscriptionId: string;
 };
 
 export type BillingState = {
   accessGranted: boolean; // Founding member (old one-time unlock, or granted by an admin)
+  // The coaching tier an admin enrolled the member in after the program fee
+  // was paid outside the app. Checkout only sells this tier.
+  enrolledPlan: PlanId | null;
   trialEndsAt: string | null;
   trialActive: boolean;
   hasAccess: boolean;
@@ -41,7 +35,7 @@ export type BillingState = {
 
 export const getBillingState = cache(async (userId: string, workspaceId: string): Promise<BillingState> => {
   const [profile] = await sql`
-    SELECT access_granted, trial_ends_at, trial_ends_at > now() AS trial_active
+    SELECT access_granted, enrolled_plan, trial_ends_at, trial_ends_at > now() AS trial_active
     FROM profiles WHERE id = ${userId}
   `;
   const [{ balance }] = await sql`
@@ -49,7 +43,7 @@ export const getBillingState = cache(async (userId: string, workspaceId: string)
   `;
   const [sub] = await sql`
     SELECT plan, billing_interval, status, subscription_is_live(status) AS live,
-      current_period_end, cancel_at_period_end, stripe_customer_id
+      current_period_end, cancel_at_period_end, stripe_customer_id, stripe_subscription_id
     FROM subscriptions WHERE user_id = ${userId}
   `;
   const accessGranted = Boolean(profile?.access_granted);
@@ -64,10 +58,12 @@ export const getBillingState = cache(async (userId: string, workspaceId: string)
           currentPeriodEnd: sub.current_period_end ? new Date(sub.current_period_end).toISOString() : null,
           cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
           stripeCustomerId: String(sub.stripe_customer_id),
+          stripeSubscriptionId: String(sub.stripe_subscription_id),
         }
       : null;
   return {
     accessGranted,
+    enrolledPlan: isPlanId(profile?.enrolled_plan) ? profile.enrolled_plan : null,
     trialEndsAt: profile?.trial_ends_at ? new Date(profile.trial_ends_at).toISOString() : null,
     trialActive,
     hasAccess: accessGranted || trialActive || Boolean(subscription?.live),

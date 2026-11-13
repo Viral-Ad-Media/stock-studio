@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Check } from "lucide-react";
-import { PLANS, PLAN_IDS, type BillingInterval, type PlanId } from "@/lib/plans";
+import { PLANS, PLAN_IDS, type PlanId } from "@/lib/plans";
 
 // Starts a Stripe redirect (Checkout or the customer portal).
 async function go(path: string, body: unknown, setError: (e: string | null) => void): Promise<boolean> {
@@ -21,27 +21,21 @@ async function go(path: string, body: unknown, setError: (e: string | null) => v
   return false;
 }
 
-// Credit pack + "Manage plan" (portal) buttons.
-export default function BillingActions({ creditsPerPack, canManage }: { creditsPerPack: number; canManage: boolean }) {
-  const [busy, setBusy] = useState<string | null>(null);
+// "Manage plan" opens Stripe's customer portal: card, invoices, cancel.
+export default function BillingActions({ canManage }: { canManage: boolean }) {
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const run = async (key: string, path: string, body: unknown) => {
-    setBusy(key);
-    if (!(await go(path, body, setError))) setBusy(null);
+  if (!canManage) return null;
+  const open = async () => {
+    setBusy(true);
+    if (!(await go("/api/billing/portal", {}, setError))) setBusy(false);
   };
 
   return (
     <div>
-      <div className="flex flex-wrap gap-3">
-        {canManage && (
-          <button onClick={() => run("portal", "/api/billing/portal", {})} disabled={busy !== null} className="btn-primary text-sm px-5 py-2.5">
-            {busy === "portal" ? "Redirecting…" : "Manage plan"}
-          </button>
-        )}
-        <button onClick={() => run("credits", "/api/billing/checkout", { kind: "credits" })} disabled={busy !== null} className="btn-secondary text-sm px-5 py-2.5">
-          {busy === "credits" ? "Redirecting…" : `Buy ${creditsPerPack} credits`}
-        </button>
-      </div>
+      <button onClick={open} disabled={busy} className="btn-primary text-sm px-5 py-2.5">
+        {busy ? "Redirecting…" : "Manage plan"}
+      </button>
       {error && (
         <p role="alert" className="text-sm text-red-400 mt-3">
           {error}
@@ -51,53 +45,56 @@ export default function BillingActions({ creditsPerPack, canManage }: { creditsP
   );
 }
 
-// The three plans with a monthly/yearly switch. `current` marks the member's
-// live plan; with one, the other cards point to "Manage plan" instead of
-// starting a second subscription.
-export function PlanPicker({ current, highlight }: { current: PlanId | null; highlight: PlanId | null }) {
-  const [interval, setBillingInterval] = useState<BillingInterval>("month");
+// The three coaching tiers. The program fee is paid outside the app, so only
+// the tier an admin enrolled the member in (`enrolled`) can be started here;
+// the others point to the team. `current` is the member's live plan.
+export function PlanPicker({
+  current,
+  enrolled,
+  highlight,
+  contactEmail,
+}: {
+  current: PlanId | null;
+  enrolled: PlanId | null;
+  highlight: PlanId | null;
+  contactEmail: string;
+}) {
   const [busy, setBusy] = useState<PlanId | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function choose(plan: PlanId) {
+  async function start(plan: PlanId, kind: "plan" | "switch") {
     setBusy(plan);
-    if (!(await go("/api/billing/checkout", { kind: "plan", plan, interval }, setError))) setBusy(null);
+    if (!(await go("/api/billing/checkout", { kind, plan }, setError))) setBusy(null);
   }
 
   return (
     <section aria-labelledby="plans-heading" className="mb-6">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 id="plans-heading" className="text-sm font-semibold text-slate-300">Plans</h2>
-        <div role="radiogroup" aria-label="Billing period" className="inline-flex rounded-lg border border-ink-600 p-0.5 text-xs">
-          {(["month", "year"] as const).map((i) => (
-            <button
-              key={i}
-              type="button"
-              role="radio"
-              aria-checked={interval === i}
-              onClick={() => setBillingInterval(i)}
-              className={`rounded-md px-3 py-1.5 ${interval === i ? "bg-emerald-500/15 text-emerald-300" : "text-slate-300 hover:text-slate-100"}`}
-            >
-              {i === "month" ? "Monthly" : "Yearly · 2 months free"}
-            </button>
-          ))}
-        </div>
-      </div>
+      <h2 id="plans-heading" className="text-sm font-semibold text-slate-300">Plans</h2>
+      <p className="mb-3 mt-1 max-w-[72ch] text-xs text-fg-subtle">
+        {enrolled
+          ? `You're enrolled in ${PLANS[enrolled].name}. To move to another tier, contact us; once the upgrade is confirmed you can switch here.`
+          : "Plans are tiers of the coaching program. Enrol with us first; once your program fee is received, your tier is switched on here and you start the monthly membership."}
+      </p>
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         {PLAN_IDS.map((id) => {
           const p = PLANS[id];
           const isCurrent = current === id;
-          const price = interval === "month" ? p.monthlyUsd : p.yearlyUsd;
+          const isEnrolled = enrolled === id;
           return (
-            <div key={id} className={`card flex flex-col p-5 ${highlight === id || isCurrent ? "border-emerald-500/50" : ""}`}>
+            <div key={id} className={`card flex flex-col p-5 ${highlight === id || isCurrent || isEnrolled ? "border-emerald-500/50" : ""}`}>
               <div className="flex items-baseline justify-between gap-2">
                 <h3 className="font-semibold text-slate-100">{p.name}</h3>
-                {isCurrent && <span className="text-xs font-medium text-emerald-300">Your plan</span>}
+                {isCurrent ? (
+                  <span className="text-xs font-medium text-emerald-300">Your plan</span>
+                ) : (
+                  isEnrolled && <span className="text-xs font-medium text-emerald-300">Enrolled</span>
+                )}
               </div>
               <p className="mt-1 text-2xl font-bold text-slate-100">
-                ${price.toLocaleString("en-US")}
-                <span className="text-sm font-normal text-fg-subtle">/{interval === "month" ? "month" : "year"}</span>
+                ${p.monthlyUsd}
+                <span className="text-sm font-normal text-fg-subtle">/month</span>
               </p>
+              <p className="mt-1 text-xs text-fg-subtle">Program fee: {p.upfront}</p>
               <p className="mt-1 text-xs text-fg-subtle">{p.tagline}</p>
               <ul className="mt-3 mb-4 space-y-1.5 text-sm text-slate-300">
                 {p.highlights.map((h) => (
@@ -106,13 +103,19 @@ export function PlanPicker({ current, highlight }: { current: PlanId | null; hig
                   </li>
                 ))}
               </ul>
-              {!current && (
-                <button onClick={() => choose(id)} disabled={busy !== null} className={`${id === "gold" ? "btn-primary" : "btn-secondary"} mt-auto px-4 py-2 text-sm`}>
-                  {busy === id ? "Redirecting…" : `Choose ${p.name}`}
+              {isEnrolled && !isCurrent ? (
+                <button onClick={() => start(id, current ? "switch" : "plan")} disabled={busy !== null} className="btn-primary mt-auto px-4 py-2 text-sm">
+                  {busy === id ? "Working…" : current ? `Switch to ${p.name}` : `Start ${p.name} for $${p.monthlyUsd}/month`}
                 </button>
-              )}
-              {current && !isCurrent && (
-                <p className="mt-auto text-xs text-fg-subtle">Switch with &ldquo;Manage plan&rdquo; above. Stripe prorates the difference.</p>
+              ) : (
+                !isCurrent && (
+                  <a
+                    href={`mailto:${contactEmail}?subject=${encodeURIComponent(`${p.name} plan`)}`}
+                    className="btn-secondary mt-auto px-4 py-2 text-center text-sm"
+                  >
+                    {enrolled || current ? `Ask about ${p.name}` : `Enrol in ${p.name}`}
+                  </a>
+                )
               )}
             </div>
           );

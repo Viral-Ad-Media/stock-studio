@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       SELECT count(*)::int AS n, bool_or(ticker = ${ticker}) AS tracked FROM watchlist WHERE workspace_id = ${ws}
     `;
     if (!r.tracked && r.n >= max) {
-      return planRequiredResponse(`Your plan tracks up to ${max} tickers and your watchlist is full.`, max < 50 ? "gold" : "diamond");
+      return planRequiredResponse(`Your plan tracks up to ${max} tickers and your watchlist is full.`, "gold");
     }
   }
 

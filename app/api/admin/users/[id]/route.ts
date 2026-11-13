@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { sql, adminSql, adminWritesConfigured } from "@/lib/db";
 import { requireSuperAdminApi, adminErrorResponse, UUID_RE } from "@/lib/admin";
+import { isPlanId } from "@/lib/plans";
 
-// Super-admin changes to one user: credits, trial, comp access, disabled,
+// Super-admin changes to one user: credits, trial, plan enrolment, comp access, disabled,
 // admin role (POST) and removal (DELETE). All writes run as the stocks_admin
 // role through audited SECURITY DEFINER functions.
 export async function POST(
@@ -73,6 +74,16 @@ export async function POST(
           { status: 400 },
         );
       await adminSql`SELECT stocks.admin_set_access(${gate.user.id}::uuid, ${id}::uuid, ${body.granted}, ${note})`;
+      return NextResponse.json({ ok: true });
+    }
+    if (body.action === "enrol") {
+      // null removes the enrolment; otherwise one of the coaching tiers.
+      if (body.plan !== null && !isPlanId(body.plan))
+        return NextResponse.json(
+          { error: "plan must be silver, gold, diamond or null" },
+          { status: 400 },
+        );
+      await adminSql`SELECT stocks.admin_set_enrolled_plan(${gate.user.id}::uuid, ${id}::uuid, ${body.plan}, ${note})`;
       return NextResponse.json({ ok: true });
     }
     if (body.action === "disabled") {

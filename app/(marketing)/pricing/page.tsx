@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Check, ArrowRight } from "lucide-react";
 import { creditCost } from "@/lib/shared";
-import { PLANS, PLAN_IDS } from "@/lib/plans";
+import { COACH_NAME, PLANS, PLAN_IDS } from "@/lib/plans";
 import { SITE, absoluteUrl } from "@/lib/site";
 import Breadcrumbs from "@/components/marketing/Breadcrumbs";
 import MarketMotion from "@/components/marketing/MarketMotion";
@@ -11,7 +11,7 @@ import JsonLd, { ORGANIZATION_ID } from "@/components/seo/JsonLd";
 
 export const metadata: Metadata = {
   title: "Pricing",
-  description: `Try Stock Studio free for ${SITE.trialDays} days, then pick Silver ($${PLANS.silver.monthlyUsd}/month), Gold ($${PLANS.gold.monthlyUsd}/month) or Diamond ($${PLANS.diamond.monthlyUsd}/month). Every plan includes monthly research credits.`,
+  description: `Try Stock Studio free for ${SITE.trialDays} days, then enrol in the Silver, Gold or Diamond tier of the coaching program. Every plan includes live signals and monthly research credits.`,
   alternates: { canonical: "/pricing" },
 };
 
@@ -48,21 +48,22 @@ const yes = "Included";
 const no = "—";
 // Feature rows for the comparison table: [feature, Silver, Gold, Diamond].
 const COMPARE_ROWS: [string, string, string, string][] = [
+  ["Monthly membership", `$${PLANS.silver.monthlyUsd}`, `$${PLANS.gold.monthlyUsd}`, `$${PLANS.diamond.monthlyUsd}`],
+  ["Program fee", PLANS.silver.upfront, PLANS.gold.upfront, PLANS.diamond.upfront],
+  [`Sessions with ${COACH_NAME}`, no, "Every Thursday", "Monday to Friday"],
+  ["Live signals", "Every call", "Every call", "Every call"],
   ["Credits every month", `${PLANS.silver.monthlyCredits}`, `${PLANS.gold.monthlyCredits}`, `${PLANS.diamond.monthlyCredits}`],
   ["Unused plan credits", "Expire each month", "Roll over a month", "Roll over a month"],
-  [`Credits per $${SITE.creditPackPriceUsd} pack`, `${SITE.creditPackSize}`, `${SITE.creditPackSize}`, `${Math.round(SITE.creditPackSize * 1.5)}`],
   ["Study formats", "Quick take, full study, comparison", "Every format", "Every format"],
-  ["Watchlist", "10 tickers", "50 tickers", "Unlimited"],
-  ["Reports in progress at once", "3", "5", "10"],
+  ["Watchlist", "10 tickers", "Unlimited", "Unlimited"],
+  ["Reports in progress at once", "3", "10", "10"],
   ["Live data refresh", "Once a day per study", "Any time", "Any time"],
   ["Today, Market, earnings calendar", yes, yes, yes],
   ["Setup bots", "Track record", "Live matches + track record", "Live matches + track record"],
   ["Gamma exposure", no, yes, yes],
   ["LEAPS workspace", no, yes, yes],
   ["Trading journal", "Basic", "With decision analysis", "With decision analysis"],
-  ["Sweep Scanner", no, no, yes],
-  ["Live signals", "Pick of the month", "2 weekly picks", "Every call"],
-  ["Signal track record", "After 30 days", "After 7 days", "Live"],
+  ["Sweep Scanner", no, yes, yes],
 ];
 
 export default function PricingPage() {
@@ -84,18 +85,12 @@ export default function PricingPage() {
       },
       ...PLAN_IDS.map((id) => ({
         "@type": "Offer",
-        name: `${PLANS[id].name} plan, monthly`,
+        name: `${PLANS[id].name} plan, monthly membership`,
+        description: `Program fee: ${PLANS[id].upfront}`,
         price: String(PLANS[id].monthlyUsd),
         priceCurrency: "USD",
         url: absoluteUrl("/pricing"),
       })),
-      {
-        "@type": "Offer",
-        name: `${SITE.creditPackSize}-credit pack`,
-        price: String(SITE.creditPackPriceUsd),
-        priceCurrency: "USD",
-        url: absoluteUrl("/pricing"),
-      },
     ],
   };
 
@@ -116,9 +111,9 @@ export default function PricingPage() {
             Pick the plan that fits how you trade
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-slate-300">
-            Try Gold free for {SITE.trialDays} days. Then choose Silver, Gold or
-            Diamond. Every plan includes monthly credits for research, and you
-            can cancel any time.
+            Silver, Gold and Diamond are tiers of our coaching program: a
+            program fee when you enrol, then a monthly membership. Every plan
+            includes every signal live and monthly credits for research.
           </p>
         </div>
       </div>
@@ -146,7 +141,7 @@ export default function PricingPage() {
                 <span className="text-base font-normal text-fg-subtle">/month</span>
               </p>
               <p className="mt-1 text-sm text-fg-subtle">
-                or ${plan.yearlyUsd.toLocaleString("en-US")} a year (2 months free)
+                Program fee: {plan.upfront}
               </p>
               <p className="mt-3 text-sm text-slate-300">{plan.tagline}</p>
               <ul className="mb-8 mt-6 space-y-3 text-sm text-slate-300">
@@ -156,18 +151,26 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-              <Link href="/signup" className={`${featured ? "btn-primary" : "btn-secondary"} mt-auto w-full px-5 py-3`}>
-                Start free trial <ArrowRight className="h-4 w-4" aria-hidden />
-              </Link>
+              <a
+                href={`mailto:${SITE.email}?subject=${encodeURIComponent(`${plan.name} plan`)}`}
+                className={`${featured ? "btn-primary" : "btn-secondary"} mt-auto w-full px-5 py-3`}
+              >
+                Enrol in {plan.name} <ArrowRight className="h-4 w-4" aria-hidden />
+              </a>
             </section>
           );
         })}
       </div>
 
       <p className="mb-10 text-center text-sm text-fg-subtle">
-        The {SITE.trialDays}-day free trial has Gold features and{" "}
-        {SITE.trialCredits} starter credits, with no card required. Signals start
-        when you pick a plan.
+        Not ready to enrol?{" "}
+        <Link href="/signup" className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300">
+          Start a {SITE.trialDays}-day free trial
+        </Link>{" "}
+        with every feature except signals and {SITE.trialCredits} starter
+        credits, no card required. Once your program fee is received we switch
+        your tier on, and you start the monthly membership from your Billing
+        page.
       </p>
 
       <section aria-labelledby="compare-heading" className="card mb-10 overflow-x-auto p-8">
@@ -196,10 +199,10 @@ export default function PricingPage() {
           </tbody>
         </table>
         <p className="mt-5 text-xs text-fg-subtle">
-          Weekly picks are the trader&apos;s first 2 BUY calls each week, and the
-          monthly pick is the first BUY call each month (New York time). Follow-up
-          calls on those tickers are live too. Signals are the trader&apos;s own
-          calls, not personalized advice, and trading involves risk of loss.
+          The program fee is paid when you enrol, outside the app; the monthly
+          membership is billed here and can be cancelled any time. Signals are
+          the trader&apos;s own calls, not personalized advice, and trading
+          involves risk of loss.
         </p>
       </section>
 
