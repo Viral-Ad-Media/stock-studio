@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getSupabase } from "@/lib/supabase/lazy";
-import { setRememberMe } from "@/lib/supabase/remember";
+import { authClient } from "@/lib/auth-client";
 import AuthShell from "@/components/auth/AuthShell";
 import PasswordInput from "@/components/auth/PasswordInput";
 import GoogleButton from "@/components/auth/GoogleButton";
@@ -37,16 +36,15 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     setNotice(null);
-    setRememberMe(remember);
     try {
-      const { error } = await (await getSupabase()).auth.signInWithPassword({ email: email.trim(), password });
+      const { error } = await authClient.signIn.email({ email: email.trim(), password, rememberMe: remember });
       if (error) {
         setError(
-          /email not confirmed/i.test(error.message)
+          /email not (confirmed|verified)/i.test((error.message || "Authentication failed. Please try again."))
             ? "Please confirm your email first — check your inbox for the link we sent."
-            : /invalid login credentials/i.test(error.message)
+            : /invalid (login credentials|email or password)/i.test((error.message || "Authentication failed. Please try again."))
               ? "That email and password don't match. Check them, or reset your password."
-              : error.message
+              : (error.message || "Authentication failed. Please try again.")
         );
         setBusy(false);
         return;

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { MailCheck } from "lucide-react";
-import { getSupabase } from "@/lib/supabase/lazy";
+import { authClient } from "@/lib/auth-client";
 import AuthShell from "@/components/auth/AuthShell";
 
 export default function ForgotPasswordPage() {
@@ -22,14 +22,12 @@ export default function ForgotPasswordPage() {
     setBusy(true);
     setError(null);
     try {
-      const { error } = await (await getSupabase()).auth.resetPasswordForEmail(email.trim(), {
-        // The emailed link lands on /auth/callback, which exchanges the code for
-        // a short-lived recovery session and forwards to /reset-password.
-        redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+      const { error } = await authClient.requestPasswordReset({
+        email: email.trim(), redirectTo: "/reset-password",
       });
       // Same response whether or not the account exists — no email enumeration.
-      if (error && !/not found|no user/i.test(error.message)) {
-        setError(/rate limit/i.test(error.message) ? "Too many requests — wait a minute and try again." : error.message);
+      if (error && !/not found|no user/i.test((error.message || "Authentication failed. Please try again."))) {
+        setError(/rate limit/i.test((error.message || "Authentication failed. Please try again.")) ? "Too many requests — wait a minute and try again." : (error.message || "Authentication failed. Please try again."));
       } else {
         setSent(true);
       }

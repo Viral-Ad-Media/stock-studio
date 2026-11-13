@@ -22,8 +22,13 @@ const ENV = [
     key: "ADMIN_DATABASE_URL",
     what: "This console's write connection (stocks_admin)",
   },
-  { key: "NEXT_PUBLIC_SUPABASE_URL", what: "Supabase Auth" },
-  { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY", what: "Supabase Auth" },
+  { key: "AUTH_DATABASE_URL", what: "Better Auth database (stocks_auth)" },
+  { key: "BETTER_AUTH_SECRET", what: "Persistent session secret" },
+  { key: "BETTER_AUTH_URL", what: "Authentication origin" },
+  { key: "SMTP_HOST", what: "Account email server" },
+  { key: "SMTP_USER", what: "Account email login" },
+  { key: "SMTP_PASSWORD", what: "Account email password" },
+  { key: "AUTH_EMAIL_FROM", what: "Account email sender" },
   {
     key: "NEXT_PUBLIC_APP_URL",
     what: "Public URL for redirects, canonicals and the sitemap",
@@ -166,7 +171,7 @@ export default async function AdminSystem() {
         {alerts === null ? (
           <p className="text-sm text-fg-subtle">
             Alerts aren&rsquo;t set up yet. Apply the ops_alerts migration,
-            then run supabase/ops-alerts.sql.
+            then enable the host scheduler and configure OPS_ALERT_WEBHOOK_URL.
           </p>
         ) : (
           <>
